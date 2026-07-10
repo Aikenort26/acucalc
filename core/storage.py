@@ -1,4 +1,9 @@
-"""Volumen de almacenamiento: Art. 81 Res. 0330 + curva integral + NSR-10 J."""
+"""Volumen de almacenamiento: Art. 81 Res. 0330 + curva integral + NSR-10 J.
+
+Incluye la cadena real de tanques: captación → PTAP (sin almacenamiento) →
+tanque bajo → bombeo a caudal constante → tanque elevado → red. Cada tanque
+regula con su propia curva de suministro/consumo (balance_curve).
+"""
 import math
 from dataclasses import dataclass
 
@@ -25,26 +30,73 @@ def volume_art81(qmd_m3d: float, frac_regulacion: float = 1/3,
     return StorageResult("Art. 81 Res. 0330", vreg, vinc, vtot, _round_up_5(vtot))
 
 
+def balance_curve(supply_frac: list[float],
+                  demand_frac: list[float]) -> tuple[float, list[float]]:
+    """Fracción de regulación por curva integral: maxΔ−minΔ del acumulado
+    (suministro − consumo). Ambas listas: 24 fracciones horarias que suman 1."""
+    if len(supply_frac) != 24 or len(demand_frac) != 24:
+        raise ValueError("Se requieren 24 fracciones horarias de suministro y consumo")
+    acum, difs = 0.0, []
+    for s, d in zip(supply_frac, demand_frac):
+        acum += s - d
+        difs.append(acum)
+    return max(difs) - min(difs), difs
+
+
+def _normalize(window: list[float], nombre: str) -> list[float]:
+    total = sum(window)
+    if total <= 0:
+        raise ValueError(f"La ventana de {nombre} no puede ser vacía")
+    return [w / total for w in window]
+
+
 def volume_curva_integral(qmd_m3d: float, factores_hora: list[float],
                           suministro_hora: list[int], frac_incendio: float = 0.15,
                           dias_reserva: float = 1) -> StorageResult:
     if len(factores_hora) != 24 or len(suministro_hora) != 24:
         raise ValueError("Se requieren 24 factores de consumo y 24 flags de suministro")
-    total_f = sum(factores_hora)
-    total_s = sum(suministro_hora)
-    if total_s == 0:
-        raise ValueError("La ventana de suministro no puede ser vacía")
-    acum_dif, difs = 0.0, []
-    for f, s in zip(factores_hora, suministro_hora):
-        consumo = f / total_f
-        suministro = s / total_s
-        acum_dif += suministro - consumo
-        difs.append(acum_dif)
-    frac_reg = max(difs) - min(difs)
+    frac_reg, _ = balance_curve(_normalize(suministro_hora, "suministro"),
+                                _normalize(factores_hora, "consumo"))
     vreg = frac_reg * qmd_m3d
     vinc = vreg * frac_incendio
     vtot = (vreg + vinc) * dias_reserva
     return StorageResult("Curva integral", vreg, vinc, vtot, _round_up_5(vtot), frac_reg)
+
+
+@dataclass(frozen=True)
+class ChainResult:
+    bajo: StorageResult
+    elevado: StorageResult
+    total_redondeado: int
+
+
+def tank_chain(qmd_m3d: float, factores_consumo: list[float],
+               ventana_captacion: list[float], ventana_bombeo: list[float],
+               frac_incendio: float = 0.15, dias_reserva: float = 1) -> ChainResult:
+    """Cadena captación→tanque bajo→bombeo constante→tanque elevado→red.
+
+    - Tanque bajo: suministro = captación constante en su ventana;
+      consumo = bombeo constante en su ventana (Qb = QMD·24/h de bombeo).
+    - Tanque elevado: suministro = bombeo constante; consumo = patrón horario
+      de la población (factores).
+    """
+    if len(factores_consumo) != 24:
+        raise ValueError("Se requieren 24 factores de consumo")
+    capta = _normalize(ventana_captacion, "captación")
+    bombeo = _normalize(ventana_bombeo, "bombeo")
+    consumo = _normalize(factores_consumo, "consumo")
+
+    def _tank(nombre: str, supply, demand) -> StorageResult:
+        frac, _ = balance_curve(supply, demand)
+        vreg = frac * qmd_m3d
+        vinc = vreg * frac_incendio
+        vtot = (vreg + vinc) * dias_reserva
+        return StorageResult(nombre, vreg, vinc, vtot, _round_up_5(vtot), frac)
+
+    bajo = _tank("Tanque bajo (captación vs bombeo)", capta, bombeo)
+    elevado = _tank("Tanque elevado (bombeo vs consumo)", bombeo, consumo)
+    return ChainResult(bajo, elevado,
+                       bajo.v_total_redondeado + elevado.v_total_redondeado)
 
 
 def final_volume(a: StorageResult, b: StorageResult) -> int:
@@ -57,9 +109,12 @@ class TankDims:
     altura: float
     diametro: float   # opción cilíndrica
     lado: float       # opción planta cuadrada
+    ancho: float      # opción rectangular (largo = ratio·ancho)
+    largo: float
 
 
-def tank_dimensions(volumen: float, altura: float) -> TankDims:
+def tank_dimensions(volumen: float, altura: float, ratio: float = 1.0) -> TankDims:
     d = math.sqrt(4.0 * volumen / (math.pi * altura))
     lado = math.sqrt(volumen / altura)
-    return TankDims(volumen, altura, d, lado)
+    ancho = math.sqrt(volumen / (altura * ratio))
+    return TankDims(volumen, altura, d, lado, ancho, ratio * ancho)

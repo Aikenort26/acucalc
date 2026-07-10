@@ -39,12 +39,25 @@ class DemandConfig:
 
 
 @dataclass
+class TankSpec:
+    nombre: str = ""
+    tipo: str = "elevado"       # bajo|elevado
+    forma: str = "circular"     # circular|cuadrado|rectangular
+    volumen: float = 0.0
+    altura: float = 2.5
+    ratio: float = 1.5          # largo/ancho (solo rectangular)
+
+
+@dataclass
 class StorageConfig:
     frac_regulacion: float = 1 / 3
     frac_incendio: float = 0.15
     dias_reserva: float = 1.0
     factores_hora: list = field(default_factory=list)
-    suministro_hora: list = field(default_factory=list)
+    suministro_hora: list = field(default_factory=list)   # ventana de bombeo bajo→elevado
+    ventana_captacion: list = field(default_factory=list)
+    usar_cadena: bool = True
+    tanques: list = field(default_factory=list)           # TankSpec
 
 
 @dataclass
@@ -139,6 +152,7 @@ def load(path: str | Path) -> Project:
     p.demanda = DemandConfig(**d["demanda"])
     p.demanda.usos = [tuple(u) for u in p.demanda.usos]
     p.almacenamiento = StorageConfig(**d["almacenamiento"])
+    p.almacenamiento.tanques = [TankSpec(**t) for t in p.almacenamiento.tanques]
     p.bombeo = BombeoConfig(**d["bombeo"])
     p.tramos = [SegmentData(**t) for t in d["tramos"]]
     p.accesorios = [AccessoryData(**a) for a in d["accesorios"]]
