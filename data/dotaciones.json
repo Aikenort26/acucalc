@@ -1,0 +1,21 @@
+{
+  "res0330_art43": [
+    {"rango": "<1000", "dotacion": 140, "cita": "Art. 43 Res. 0330 de 2017 MVCT — altitud <1000 m.s.n.m."},
+    {"rango": "1000-2000", "dotacion": 130, "cita": "Art. 43 Res. 0330 de 2017 MVCT — altitud 1000-2000 m.s.n.m."},
+    {"rango": ">2000", "dotacion": 120, "cita": "Art. 43 Res. 0330 de 2017 MVCT — altitud >2000 m.s.n.m."}
+  ],
+  "otras_referencias": [
+    {"id": "res0844_2018", "nombre": "Res. 0844 de 2018 (esquemas diferenciales rurales)", "cita": "Resolución 0844 de 2018 MVCT, Art. 8: dotación neta máxima rural hasta 2000 m.s.n.m."},
+    {"id": "cra_conceptos", "nombre": "Conceptos CRA sobre consumo básico", "cita": "Resolución CRA 750 de 2016: consumo básico 16 m³/suscriptor/mes (~107 L/hab/d con 5 hab/suscriptor)"},
+    {"id": "minimo_vital", "nombre": "Mínimo vital de agua", "cita": "Corte Constitucional T-740 de 2011 y desarrollos distritales: mínimo vital ~50 L/hab/día"}
+  ],
+  "usos_default": [
+    {"actividad": "Tomar", "min": 2, "max": 5, "adoptada": 5},
+    {"actividad": "Lavar ropa", "min": 20, "max": 50, "adoptada": 15},
+    {"actividad": "Cocinar", "min": 2, "max": 4, "adoptada": 4},
+    {"actividad": "Descarga de baño", "min": 0, "max": 50, "adoptada": 20},
+    {"actividad": "Aseo vivienda", "min": 4, "max": 15, "adoptada": 10},
+    {"actividad": "Ducha", "min": 12, "max": 20, "adoptada": 15},
+    {"actividad": "Lavado de loza", "min": 10, "max": 25, "adoptada": 11}
+  ]
+}

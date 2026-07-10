@@ -1,0 +1,19 @@
+{
+  "Válvula de globo": 10,
+  "Válvula de mariposa": 5,
+  "Válvula de cheque": 2.5,
+  "Válvula de compuerta": 0.2,
+  "Codo radio corto": 0.9,
+  "Codo radio medio": 0.8,
+  "Codo radio grande": 0.6,
+  "Codo de 45": 0.4,
+  "Tee salida recta": 0.3,
+  "Tee salida lateral": 1.8,
+  "Unión": 0.3,
+  "Yee de 45 salida recta": 0.3,
+  "Yee de 45 salida lateral": 0.8,
+  "Entrada recta a tope": 0.5,
+  "Entrada boca acampanada": 0.1,
+  "Entrada con tubo entrante": 0.9,
+  "Salida": 1.0
+}
