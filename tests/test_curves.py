@@ -1,0 +1,104 @@
+import numpy as np
+import pytest
+from core import curves as cv
+
+
+def test_calibracion_lineal():
+    cal = cv.AxisCalibration(px1=100, val1=0.0, px2=500, val2=40.0, log=False)
+    assert abs(cal.to_data(100) - 0.0) < 1e-9
+    assert abs(cal.to_data(300) - 20.0) < 1e-9
+    assert abs(cal.to_data(500) - 40.0) < 1e-9
+
+
+def test_calibracion_log():
+    cal = cv.AxisCalibration(px1=0, val1=1.0, px2=300, val2=1000.0, log=True)
+    assert abs(cal.to_data(100) - 10.0) < 1e-6
+    assert abs(cal.to_data(200) - 100.0) < 1e-4
+
+
+def test_calibracion_invalida():
+    with pytest.raises(ValueError):
+        cv.AxisCalibration(px1=100, val1=0, px2=100, val2=40, log=False)
+    with pytest.raises(ValueError):
+        cv.AxisCalibration(px1=0, val1=-1, px2=10, val2=10, log=True)
+
+
+def test_pixel_a_datos():
+    calx = cv.AxisCalibration(0, 0.0, 600, 12.0, False)      # Q L/s
+    caly = cv.AxisCalibration(400, 0.0, 0, 40.0, False)      # H m (y invertida)
+    q, h = cv.pixel_to_data((300, 100), calx, caly)
+    assert abs(q - 6.0) < 1e-9
+    assert abs(h - 30.0) < 1e-9
+
+
+PUMP_QH = [(2.914167, 33.21), (4.041833, 31.90), (5.113333, 30.16), (6.467, 27.54),
+           (7.454667, 24.93), (8.837667, 20.46), (9.883, 15.67), (10.306833, 13.49)]
+PUMP_QE = [(2.914167, 0.256596), (4.041833, 0.341851), (5.113333, 0.408886),
+           (6.467, 0.472209), (7.454667, 0.49274), (8.837667, 0.479414),
+           (9.883, 0.410606), (10.306833, 0.368642)]
+
+
+def test_ajuste_qh():
+    fit = cv.fit_curve(PUMP_QH, degree=2)
+    assert fit.r2 > 0.99
+    assert abs(fit(5.113333) - 30.16) < 0.6      # pasa cerca de los puntos
+    assert fit(0.0) > fit(fit.q_max)              # H decrece con Q (curva típica de bomba)
+    assert fit(0.0) > 0.0
+
+
+def test_bep():
+    bep = cv.best_efficiency_point(PUMP_QE, degree=2)
+    assert 7.3 < bep.q < 8.6
+    assert 0.47 < bep.e < 0.52
+
+
+def test_punto_de_operacion():
+    fit = cv.fit_curve(PUMP_QH, degree=2)
+    # sistema sintético: H = 20 + 0.12·Q² (Q en L/s)
+    sistema = [(q / 10, 20 + 0.12 * (q / 10) ** 2) for q in range(0, 120)]
+    op = cv.operating_point(fit, sistema)
+    assert op is not None
+    q_op, h_op = op
+    assert abs(h_op - (20 + 0.12 * q_op**2)) < 0.05
+    assert abs(fit(q_op) - h_op) < 0.05
+    assert 6.5 < q_op < 7.5
+
+
+def test_punto_de_operacion_sin_cruce():
+    fit = cv.fit_curve(PUMP_QH, degree=2)
+    sistema = [(q / 10, 69.8 + 0.2 * (q / 10) ** 2) for q in range(0, 120)]
+    assert cv.operating_point(fit, sistema) is None
+
+
+def test_fit_pocos_puntos():
+    with pytest.raises(ValueError):
+        cv.fit_curve([(1, 1), (2, 2)], degree=2)
+
+
+def _synthetic_curve_image():
+    """Imagen 400x600 blanca con parábola roja y rejilla gris."""
+    img = np.full((400, 600, 3), 255, dtype=np.uint8)
+    for x in range(0, 600, 50):
+        img[:, x] = (200, 200, 200)
+    for y in range(0, 400, 50):
+        img[y, :] = (200, 200, 200)
+    for px in range(50, 550):
+        py = int(50 + 300 * ((px - 50) / 500) ** 2)
+        img[max(py - 2, 0):py + 3, px] = (255, 0, 0)   # RGB rojo
+    return img
+
+
+def test_deteccion_color():
+    img = _synthetic_curve_image()
+    pts = cv.detect_curve_by_color(img, target_rgb=(255, 0, 0), tolerance=60, n_points=20)
+    assert 15 <= len(pts) <= 20
+    # los puntos siguen la parábola: y crece con x
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    assert xs == sorted(xs)
+    assert ys[-1] > ys[0] + 200
+
+
+def test_deteccion_sin_match():
+    img = np.full((100, 100, 3), 255, dtype=np.uint8)
+    assert cv.detect_curve_by_color(img, (255, 0, 0), 40, 10) == []
