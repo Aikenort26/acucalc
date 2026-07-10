@@ -151,3 +151,8 @@ if rows:
         [r["Bomba"] for r in rows],
         index=[r["Bomba"] for r in rows].index(p.bomba_seleccionada)
         if p.bomba_seleccionada in [r["Bomba"] for r in rows] else 0)
+    st.session_state["tabla_bombas"] = [
+        {"nombre": r["Bomba"], "q_op": f"{r['Q_op [L/s]']:.2f}",
+         "h_op": f"{r['H_op [m]']:.2f}", "eta_op": f"{r['η(Q_op)']:.3f}",
+         "bep_q": f"{r['BEP Q [L/s]']:.2f}", "desv_bep": f"{r['Desv. BEP [%]']:.1f}",
+         "p_hp": f"{r['P absorbida [HP]']:.2f}"} for r in rows]

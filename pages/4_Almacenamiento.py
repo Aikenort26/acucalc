@@ -43,6 +43,9 @@ try:
 except ValueError as e:
     st.error(str(e)); st.stop()
 
+st.session_state["v_art81"] = a.v_total_redondeado
+st.session_state["v_curva"] = b.v_total_redondeado
+
 st.subheader("Resultados")
 res = pd.DataFrame([
     ["Regulación [m³]", a.v_regulacion, b.v_regulacion],
