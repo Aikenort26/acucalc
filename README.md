@@ -10,8 +10,14 @@ operación, y generación de la memoria técnica en LaTeX.
 ## Flujo de trabajo (7 páginas)
 
 1. **Proyecto** — metadatos, guardar/cargar (`.acucalc.json`)
-2. **Población** — censo, tasas de crecimiento, proyección por 5 métodos
-3. **Caudales** — dotación neta (3 modos), pérdidas, Qmed/QMD/QMH
+2. **Población** — proyecciones oficiales **DANE** embebidas (todos los municipios,
+   2018–2042, filtro departamento/municipio/área, actualizable subiendo el archivo
+   DANE nuevo) o censo manual; flujo diferenciado municipio (continúa desde el
+   último año DANE) vs corregimiento (tasas municipales sobre población base local
+   con año base ajustable); tasas por año, proyección por 5 métodos + promedio,
+   método sugerido por menor desviación
+3. **Caudales** — dotación neta (3 modos), pérdidas, Qmed/QMD/QMH; K1/K2
+   automáticos según el tamaño de la población proyectada (Par. 2 Art. 47)
 4. **Almacenamiento** — volumen (Art. 81 + curva integral), predimensionado de tanques
 5. **Bombeo** — tramos y accesorios ilimitados, pérdidas acumuladas, potencia, ariete, paneles
 6. **Curvas de bomba** — digitalización de catálogos, BEP, comparación multi-bomba

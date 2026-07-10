@@ -8,6 +8,10 @@ CTX = {
     "altitud": 150, "temperatura": 20.0,
     "pob_metodo": "Res. 0844 de 2018", "pob_justificacion": "Retorno poblacional",
     "pob_final": 1601.8, "horizonte": 2051, "censo": [(2018, 50848), (2042, 58864)],
+    "pob_tipo": "corregimiento/vereda",
+    "pob_fuente": ("proyecciones oficiales DANE — El Carmen de Bolívar (Bolívar), "
+                   "área Cabecera Municipal, serie 2018–2042"),
+    "year0": 2026,
     "dneta": 80.0, "dneta_modo": "usos", "dneta_justificacion": "",
     "dbruta": 88.89, "perdidas": 10.0, "k1": 1.3, "k2": 1.6,
     "qmed": 1.648, "qmd": 2.142, "qmh": 3.428,
@@ -32,6 +36,7 @@ def test_render_tex(tmp_path):
     assert "\\VAR{" not in tex and "\\BLOCK{" not in tex   # sin variables sin resolver
     assert "2.142" in tex          # QMD
     assert "Bomba A" in tex
+    assert "proyecciones oficiales DANE" in tex   # fuente censal en el reporte
 
 
 def test_render_crea_zip(tmp_path):

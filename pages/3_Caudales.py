@@ -42,13 +42,30 @@ else:
 p.demanda.justificacion = st.text_area("Justificación de la dotación (va al reporte)",
                                        p.demanda.justificacion)
 
+pob = st.session_state.get("pob_final", 0.0)
+
 c1, c2, c3 = st.columns(3)
 p.demanda.perdidas = c1.number_input("Pérdidas técnicas [%] (máx 25, Art. 44)",
                                      0.0, 60.0, p.demanda.perdidas * 100) / 100
-p.demanda.k1 = c2.number_input("K1 (Par. 2 Art. 47)", 1.0, 2.0, p.demanda.k1)
-p.demanda.k2 = c3.number_input("K2 (Par. 2 Art. 47)", 1.0, 2.5, p.demanda.k2)
+if pob > 0:
+    k1_max, k2_max = demand.k_factors(pob)
+    auto_k = st.checkbox(
+        f"K1/K2 automáticos según población de diseño "
+        f"({pob:,.0f} hab → K1={k1_max}, K2={k2_max} — Par. 2 Art. 47 Res. 0330)",
+        value=True)
+else:
+    k1_max, k2_max, auto_k = None, None, False
+if auto_k:
+    p.demanda.k1, p.demanda.k2 = k1_max, k2_max
+    c2.metric("K1 (Par. 2 Art. 47)", f"{p.demanda.k1}")
+    c3.metric("K2 (Par. 2 Art. 47)", f"{p.demanda.k2}")
+else:
+    p.demanda.k1 = c2.number_input("K1 (Par. 2 Art. 47)", 1.0, 2.0, p.demanda.k1)
+    p.demanda.k2 = c3.number_input("K2 (Par. 2 Art. 47)", 1.0, 2.5, p.demanda.k2)
+    if k1_max and (p.demanda.k1 > k1_max or p.demanda.k2 > k2_max):
+        st.warning(f"K1/K2 superan el máximo del Par. 2 Art. 47 para "
+                   f"{pob:,.0f} hab (K1≤{k1_max}, K2≤{k2_max})")
 
-pob = st.session_state.get("pob_final", 0.0)
 if pob <= 0:
     st.info("Calcula primero la población en la página 2.")
 else:

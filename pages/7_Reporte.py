@@ -31,6 +31,14 @@ ctx = {
     "pob_metodo": p.poblacion.metodo, "pob_justificacion": p.poblacion.justificacion,
     "pob_final": f"{pob_final:,.0f}", "horizonte": p.poblacion.horizon_year,
     "censo": p.censo,
+    "pob_tipo": ("cabecera municipal" if p.poblacion.tipo == "municipio"
+                 else "corregimiento/vereda"),
+    "pob_fuente": (f"proyecciones oficiales DANE — {p.poblacion.mpio} "
+                   f"({p.poblacion.dpto}), área {p.poblacion.area}, "
+                   f"serie {p.censo[0][0]}–{p.censo[-1][0]}"
+                   if p.poblacion.fuente == "dane" and p.censo
+                   else "censo ingresado manualmente"),
+    "year0": p.poblacion.year0,
     "dneta": f"{p.demanda.dneta:.0f}", "dneta_modo": p.demanda.modo,
     "dneta_justificacion": p.demanda.justificacion,
     "dbruta": f"{flows.dbruta:.1f}", "perdidas": f"{flows.perdidas*100:.0f}",
