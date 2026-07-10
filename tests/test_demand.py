@@ -34,6 +34,14 @@ def test_caudales_golden_salado():
     assert abs(r.qmh_lps - 3.42775) < 1e-3
 
 
+def test_flows_series_golden():
+    serie = [(2050, 1593.843), (2051, 1601.813)]
+    rs = demand.flows_series(serie, dneta=80, perdidas=0.10, k1=1.3, k2=1.6)
+    assert [t for t, _ in rs] == [2050, 2051]
+    assert abs(rs[-1][1].qmd_lps - 2.14234) < 1e-3
+    assert abs(rs[0][1].qmd_lps - 1.639757 * 1.3) < 1e-3
+
+
 def test_caudales_componentes():
     r = demand.flows(pop=1601.813, dneta=80, perdidas=0.10, k1=1.3, k2=1.6)
     c = demand.design_flows_by_component(r)

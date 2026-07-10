@@ -1,22 +1,47 @@
 import datetime as dt
 import streamlit as st
-from core import project as pj
-from pages_common import get_project
+from core import dane, project as pj
+from pages_common import get_project, num_input, clear_widget_state
 
 st.header("1 · Proyecto")
 p = get_project()
 
 c1, c2 = st.columns(2)
 with c1:
-    p.nombre = st.text_input("Nombre del proyecto", p.nombre)
-    p.departamento = st.text_input("Departamento", p.departamento)
-    p.municipio = st.text_input("Municipio", p.municipio)
-    p.corregimiento = st.text_input("Corregimiento / vereda", p.corregimiento)
+    p.nombre = st.text_input("Nombre del proyecto", p.nombre, key="w_txt_nombre")
+    dptos = dane.departamentos()
+    p.poblacion.dpto = st.selectbox(
+        "Departamento (DANE)", dptos,
+        index=dptos.index(p.poblacion.dpto) if p.poblacion.dpto in dptos else 0,
+        key="w_sel_dpto")
+    p.departamento = p.poblacion.dpto
+    mpios = dane.municipios(p.poblacion.dpto)
+    p.poblacion.mpio = st.selectbox(
+        "Municipio (DANE)", mpios,
+        index=mpios.index(p.poblacion.mpio) if p.poblacion.mpio in mpios else 0,
+        key="w_sel_mpio")
+    p.municipio = p.poblacion.mpio
+    p.poblacion.tipo = st.radio(
+        "El estudio es en:", ["municipio", "corregimiento"],
+        format_func={"municipio": "Cabecera municipal",
+                     "corregimiento": "Corregimiento / vereda"}.get,
+        index=["municipio", "corregimiento"].index(p.poblacion.tipo),
+        horizontal=True, key="w_radio_tipo")
+    if p.poblacion.tipo == "corregimiento":
+        p.corregimiento = st.text_input("Nombre del corregimiento / vereda",
+                                        p.corregimiento, key="w_txt_corr")
+    else:
+        p.corregimiento = ""
 with c2:
-    p.consultor = st.text_input("Consultor / entidad", p.consultor)
-    p.fecha = st.text_input("Fecha", p.fecha or dt.date.today().isoformat())
-    p.altitud = st.number_input("Altitud promedio [m.s.n.m.]", 0.0, 4500.0, float(p.altitud))
-    p.temperatura = st.number_input("Temperatura del agua [°C]", 0.0, 50.0, float(p.temperatura))
+    p.consultor = st.text_input("Consultor / entidad", p.consultor, key="w_txt_consultor")
+    p.fecha = st.text_input("Fecha", p.fecha or dt.date.today().isoformat(), key="w_txt_fecha")
+    p.altitud = num_input("Altitud promedio [m.s.n.m.]", "altitud", p.altitud,
+                          decimals=0, min_value=0.0, max_value=4500.0)
+    p.temperatura = num_input("Temperatura del agua [°C]", "temperatura", p.temperatura,
+                              decimals=1, min_value=0.0, max_value=50.0)
+
+st.caption("La serie de población DANE del municipio seleccionado alimenta la página "
+           "2 (tasas de crecimiento y proyección).")
 
 st.divider()
 c3, c4 = st.columns(2)
@@ -32,11 +57,12 @@ with c3:
 with c4:
     up = st.file_uploader("Cargar proyecto", type=["json"])
     if up is not None:
-        import json, tempfile, pathlib
+        import tempfile, pathlib
         tmp = pathlib.Path(tempfile.mkstemp(suffix=".json")[1])
         tmp.write_bytes(up.getvalue())
         try:
             st.session_state["project"] = pj.load(tmp)
+            clear_widget_state()
             st.success("Proyecto cargado. Revisa las demás páginas.")
             st.rerun()
         except pj.SchemaError as e:

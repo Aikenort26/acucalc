@@ -23,6 +23,7 @@ class PopulationConfig:
     dpto: str = ""
     mpio: str = ""
     area: str = ""                # ÁREA GEOGRÁFICA del DANE
+    flotante_pct: float = 0.0     # población flotante como fracción de la residente
 
 
 @dataclass

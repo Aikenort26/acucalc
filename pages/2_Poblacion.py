@@ -2,43 +2,38 @@ import datetime as dt
 import pandas as pd
 import streamlit as st
 from core import dane, population as pop
-from pages_common import get_project
+from pages_common import get_project, num_input, int_input
 
 st.header("2 · Proyección de población")
 p = get_project()
 cfg = p.poblacion
 
-# ---------- tipo de proyecto y fuente ----------
-c1, c2 = st.columns(2)
-cfg.tipo = c1.radio("Tipo de proyecto", ["municipio", "corregimiento"],
-                    format_func={"municipio": "Municipio (cabecera)",
-                                 "corregimiento": "Corregimiento / vereda"}.get,
-                    index=["municipio", "corregimiento"].index(cfg.tipo),
-                    horizontal=True)
-cfg.fuente = c2.radio("Fuente del censo", ["dane", "manual"],
+if not cfg.mpio:
+    st.info("Selecciona departamento y municipio en la página 1 · Proyecto.")
+    st.stop()
+
+tipo_txt = ("cabecera municipal" if cfg.tipo == "municipio"
+            else f"corregimiento/vereda {p.corregimiento or ''}".strip())
+st.info(f"Zona de estudio: **{tipo_txt}** — {cfg.mpio} ({cfg.dpto}). "
+        "Cambia municipio o tipo en la página 1.")
+
+cfg.fuente = st.radio("Fuente del censo", ["dane", "manual"],
                       format_func={"dane": "Proyecciones DANE (oficial)",
                                    "manual": "Censo manual"}.get,
                       index=["dane", "manual"].index(cfg.fuente),
-                      horizontal=True)
+                      horizontal=True, key="w_radio_fuente")
 
 # ---------- serie censal ----------
 if cfg.fuente == "dane":
     m = dane.meta()
     st.caption(f"Dataset DANE: {m['fuente']} · años {m['anos'][0]}–{m['anos'][1]} · "
                f"{m['municipios']} municipios · extraído {m['fecha_extraccion']}")
-    d1, d2, d3 = st.columns(3)
-    dptos = dane.departamentos()
-    cfg.dpto = d1.selectbox("Departamento", dptos,
-                            index=dptos.index(cfg.dpto) if cfg.dpto in dptos else 0)
-    mpios = dane.municipios(cfg.dpto)
-    cfg.mpio = d2.selectbox("Municipio", mpios,
-                            index=mpios.index(cfg.mpio) if cfg.mpio in mpios else 0)
     areas = dane.areas()
     default_area = ("Cabecera Municipal" if cfg.tipo == "municipio"
                     else "Centros Poblados y Rural Disperso")
-    cfg.area = d3.selectbox("Área geográfica", areas,
+    cfg.area = st.selectbox("Área geográfica DANE (para las tasas del municipio)", areas,
                             index=areas.index(cfg.area) if cfg.area in areas
-                            else areas.index(default_area))
+                            else areas.index(default_area), key="w_sel_area")
     p.censo = dane.series(cfg.dpto, cfg.mpio, cfg.area)
     with st.expander(f"Listado DANE — {cfg.mpio} ({cfg.area})", expanded=False):
         df_dane = pd.DataFrame(p.censo, columns=["Año", "Población"])
@@ -61,7 +56,8 @@ else:
     st.subheader("Censo manual")
     st.caption("Edita la tabla o pega desde Excel (columnas: año, población).")
     censo_df = pd.DataFrame(p.censo or [(2018, 0)], columns=["Año", "Población"])
-    censo_df = st.data_editor(censo_df, num_rows="dynamic", width="stretch")
+    censo_df = st.data_editor(censo_df, num_rows="dynamic", width="stretch",
+                              key="w_ed_censo")
     p.censo = [(int(r["Año"]), int(r["Población"]))
                for _, r in censo_df.iterrows() if r["Población"] > 0]
 
@@ -90,39 +86,47 @@ st.dataframe(tabla.style.format({"Aritmético": "{:.6f}", "Geométrico": "{:.6f}
 
 # ---------- población base y año base ----------
 st.subheader("Población base de la zona de estudio")
-ultimo_ano_dane = p.censo[-1][0]
 if cfg.tipo == "municipio":
     st.caption("El DANE ya proyecta el municipio: la proyección propia continúa "
                "desde el año base elegido de la serie oficial.")
     anos_serie = [a for a, _ in p.censo]
-    year0_default = ultimo_ano_dane if cfg.year0 not in anos_serie else cfg.year0
+    year0_default = p.censo[-1][0] if cfg.year0 not in anos_serie else cfg.year0
     cfg.year0 = st.selectbox("Año base (último DANE recomendado)", anos_serie,
-                             index=anos_serie.index(year0_default))
+                             index=anos_serie.index(year0_default), key="w_sel_year0")
     cfg.p0 = float(dict(p.censo)[cfg.year0])
     st.metric(f"Población base ({cfg.year0}, DANE)", f"{cfg.p0:,.0f} hab")
 else:
     st.caption("Sin detalle DANE a nivel de corregimiento: población base de visita "
                "de campo, certificado del municipio o conteo de viviendas.")
     b1, b2, b3, b4 = st.columns(4)
-    viviendas = b1.number_input("Viviendas", 0, 100000, 350)
-    hab_viv = b2.number_input("Hab/vivienda", 0.0, 20.0, 4.0)
-    p0_directo = b3.number_input("…o población directa (0 = usar viviendas)", 0.0, 1e7, 0.0)
+    viviendas = int_input("Viviendas", "viviendas", 350, container=b1,
+                          min_value=0, max_value=100000)
+    hab_viv = num_input("Hab/vivienda", "hab_viv", 4.0, decimals=1, container=b2,
+                        min_value=0.0, max_value=20.0)
+    p0_directo = num_input("…o población directa (0 = usar viviendas)", "p0_directo",
+                           0.0, decimals=0, container=b3, min_value=0.0, max_value=1e7)
     cfg.p0 = p0_directo if p0_directo > 0 else viviendas * hab_viv
-    cfg.year0 = b4.number_input("Año base (análisis)", 1990, 2100,
-                                int(cfg.year0) or dt.date.today().year)
+    cfg.year0 = int_input("Año base (análisis)", "year0",
+                          int(cfg.year0) or dt.date.today().year, container=b4,
+                          min_value=1990, max_value=2100)
     st.metric(f"Población base ({cfg.year0})", f"{cfg.p0:,.0f} hab")
 
-c4, c5 = st.columns(2)
-cfg.horizon_year = c4.number_input("Año horizonte (Art. 40: 25 años)", 2000, 2150,
-                                   max(int(cfg.horizon_year), int(cfg.year0) + 1))
-cfg.tasa_res0844 = c5.number_input("Tasa Res. 0844/2018 [%]", 0.0, 10.0,
-                                   cfg.tasa_res0844 * 100) / 100
+c4, c5, c6 = st.columns(3)
+cfg.horizon_year = int_input("Año horizonte (Art. 40: 25 años)", "horizonte",
+                             max(int(cfg.horizon_year), int(cfg.year0) + 1),
+                             container=c4, min_value=2000, max_value=2150)
+cfg.tasa_res0844 = num_input("Tasa Res. 0844/2018 [%]", "tasa0844",
+                             cfg.tasa_res0844 * 100, decimals=2, container=c5,
+                             min_value=0.0, max_value=10.0) / 100
+cfg.flotante_pct = num_input("Población flotante [%]", "flotante",
+                             cfg.flotante_pct * 100, decimals=1, container=c6,
+                             min_value=0.0, max_value=100.0) / 100
 
 if cfg.p0 <= 0:
     st.info("Define la población base.")
     st.stop()
 
-# ---------- proyección (formato memoria: 5 métodos + promedio) ----------
+# ---------- proyección (formato memoria: 5 métodos + promedio + flotante) ----------
 proj = pop.project(cfg.p0, int(cfg.year0), int(cfg.horizon_year), rates, cfg.tasa_res0844)
 df = pd.DataFrame({m: dict(s) for m, s in proj.series.items()})
 df["promedio"] = df.mean(axis=1)
@@ -142,8 +146,26 @@ st.caption(f"Sugerido: **{sugerido}** (menor desviación absoluta vs promedio de
 metodos = list(proj.series.keys())
 cfg.metodo = st.selectbox("Método de proyección adoptado", metodos,
                           index=metodos.index(cfg.metodo)
-                          if cfg.metodo in metodos else metodos.index(sugerido))
-cfg.justificacion = st.text_area("Justificación (va al reporte)", cfg.justificacion)
-pob_final = proj.series[cfg.metodo][-1][1]
-st.metric(f"Población de diseño {cfg.horizon_year}", f"{pob_final:,.0f} hab")
+                          if cfg.metodo in metodos else metodos.index(sugerido),
+                          key="w_sel_metodo")
+cfg.justificacion = st.text_area("Justificación (va al reporte)", cfg.justificacion,
+                                 key="w_txt_justif")
+
+serie_metodo = proj.series[cfg.metodo]
+serie_total = [(t, v * (1.0 + cfg.flotante_pct)) for t, v in serie_metodo]
+if cfg.flotante_pct > 0:
+    st.subheader("Población de diseño con flotante")
+    df_fl = pd.DataFrame(
+        [{"Año": t, "Residente (hab)": v, "Flotante (hab)": v * cfg.flotante_pct,
+          "Total (hab)": tot} for (t, v), (_, tot) in zip(serie_metodo, serie_total)])
+    st.dataframe(df_fl.style.format({"Residente (hab)": "{:,.0f}",
+                                     "Flotante (hab)": "{:,.0f}",
+                                     "Total (hab)": "{:,.0f}"}),
+                 hide_index=True, width="stretch")
+
+pob_final = serie_total[-1][1]
+st.metric(f"Población de diseño {cfg.horizon_year}"
+          + (f" (incluye {cfg.flotante_pct:.0%} flotante)" if cfg.flotante_pct else ""),
+          f"{pob_final:,.0f} hab")
 st.session_state["pob_final"] = pob_final
+st.session_state["pob_series"] = serie_total

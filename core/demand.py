@@ -49,6 +49,12 @@ def flows(pop: float, dneta: float, perdidas: float, k1: float = 1.3,
     return FlowResults(dneta, perdidas, dbruta, qmed, qmd, qmh, k1, k2, issues)
 
 
+def flows_series(pop_series: list[tuple[int, float]], dneta: float, perdidas: float,
+                 k1: float = 1.3, k2: float = 1.6) -> list[tuple[int, FlowResults]]:
+    """Caudales de diseño año a año para la serie de población proyectada."""
+    return [(t, flows(pob, dneta, perdidas, k1, k2)) for t, pob in pop_series]
+
+
 def design_flows_by_component(r: FlowResults) -> dict[str, float]:
     """Caudales de diseño por componente, Art. 47 Res. 0330 [L/s]."""
     return {
