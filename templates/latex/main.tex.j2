@@ -1,0 +1,112 @@
+\documentclass[12pt,letterpaper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage[margin=3cm]{geometry}
+\usepackage{graphicx,booktabs,amsmath,siunitx,float}
+\usepackage[hidelinks]{hyperref}
+
+\title{Memoria de Cálculo Hidráulico \\ Sistema de Acueducto de \VAR{corregimiento}}
+\author{\VAR{consultor}}
+\date{\VAR{fecha}}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Introducción}
+El presente documento contiene la memoria de cálculo hidráulico del sistema de
+acueducto de \VAR{corregimiento}, municipio de \VAR{municipio},
+departamento de \VAR{departamento}, elaborada conforme a la Resolución 0330 de
+2017 del Ministerio de Vivienda, Ciudad y Territorio.
+
+\section{Marco legal}
+\begin{itemize}
+  \item Resolución 0330 de 2017 (MVCT) — Reglamento Técnico RAS.
+  \item Resolución 0844 de 2018 (MVCT) — esquemas diferenciales para zonas rurales.
+  \item Decreto 1575 de 2007 — calidad del agua para consumo humano.
+  \item NSR-10, Título J — protección contra incendios.
+  \item Jurisprudencia de mínimo vital (Corte Constitucional, T-740 de 2011).
+\end{itemize}
+
+\section{Proyección de población}
+Periodo de diseño: 25 años (Art. 40, Res. 0330 de 2017), horizonte \VAR{horizonte}.
+Se evaluaron los métodos aritmético, geométrico, exponencial y de Wappaus, además
+de la tasa máxima de la Resolución 0844 de 2018.
+Método adoptado: \textbf{\VAR{pob_metodo}}. \VAR{pob_justificacion}
+Población de diseño: \textbf{\VAR{pob_final} habitantes}.
+\BLOCK{if "poblacion" in figuras}
+\begin{figure}[H]\centering
+\includegraphics[width=0.85\textwidth]{figures/poblacion.png}
+\caption{Proyección de población por método.}
+\end{figure}
+\BLOCK{endif}
+
+\section{Dotación y caudales de diseño}
+Dotación neta adoptada: \VAR{dneta} L/hab/día (modo: \VAR{dneta_modo}).
+\VAR{dneta_justificacion}
+Pérdidas técnicas: \VAR{perdidas}\,\% (máximo 25\,\%, Art. 44).
+Dotación bruta: \VAR{dbruta} L/hab/día.
+Con $K_1=\VAR{k1}$ y $K_2=\VAR{k2}$ (Par. 2, Art. 47):
+\[
+Q_{med}=\VAR{qmed}\ \mathrm{L/s};\quad QMD=\VAR{qmd}\ \mathrm{L/s};\quad QMH=\VAR{qmh}\ \mathrm{L/s}
+\]
+\begin{table}[H]\centering
+\caption{Caudales de diseño por componente (Art. 47, Res. 0330 de 2017).}
+\begin{tabular}{lr}\toprule
+Componente & $Q$ diseño [L/s] \\ \midrule
+\BLOCK{for c, q in componentes}
+\VAR{c} & \VAR{q} \\
+\BLOCK{endfor}
+\bottomrule\end{tabular}\end{table}
+
+\section{Volumen de almacenamiento}
+Método del Art. 81 (Res. 0330): \VAR{v_art81} m\textsuperscript{3}.
+Método de la curva integral: \VAR{v_curva} m\textsuperscript{3}.
+Volumen adoptado (máximo de ambos, incluye incendio NSR-10 Título J):
+\textbf{\VAR{v_final} m\textsuperscript{3}}.
+\BLOCK{if "curva_integral" in figuras}
+\begin{figure}[H]\centering
+\includegraphics[width=0.85\textwidth]{figures/curva_integral.png}
+\caption{Curva integral de consumo y suministro.}
+\end{figure}
+\BLOCK{endif}
+
+\section{Sistema de bombeo}
+Caudal de bombeo para \VAR{horas_bombeo} h/día de operación:
+$Q_b=\VAR{qb}$ L/s.
+\begin{table}[H]\centering
+\caption{Pérdidas por tramo (Darcy--Weisbach y Colebrook--White).}
+\begin{tabular}{lrrrrrr}\toprule
+Tramo & $L$ [m] & $D$ [mm] & Material & $V$ [m/s] & $h_f$ [m] & $h_l$ [m] \\ \midrule
+\BLOCK{for t in tramos}
+\VAR{t.nombre} & \VAR{t.L} & \VAR{t.D_mm} & \VAR{t.material} & \VAR{t.V} & \VAR{t.hf} & \VAR{t.hl} \\
+\BLOCK{endfor}
+\bottomrule\end{tabular}\end{table}
+Altura dinámica total: $H_d=\VAR{hd}$ m. Con eficiencia $\eta=\VAR{eficiencia}$,
+la potencia requerida es \textbf{\VAR{potencia_kw} kW (\VAR{potencia_hp} HP)}.
+
+\section{Selección de la bomba}
+\begin{table}[H]\centering
+\caption{Comparación de bombas evaluadas (puntos de operación contra la curva del sistema).}
+\begin{tabular}{lrrrrrr}\toprule
+Bomba & $Q_{op}$ [L/s] & $H_{op}$ [m] & $\eta(Q_{op})$ & $Q_{BEP}$ [L/s] & Desv. BEP [\%] & $P$ [HP] \\ \midrule
+\BLOCK{for b in bombas}
+\VAR{b.nombre} & \VAR{b.q_op} & \VAR{b.h_op} & \VAR{b.eta_op} & \VAR{b.bep_q} & \VAR{b.desv_bep} & \VAR{b.p_hp} \\
+\BLOCK{endfor}
+\bottomrule\end{tabular}\end{table}
+Bomba seleccionada: \textbf{\VAR{bomba_seleccionada}}.
+\BLOCK{if "curvas" in figuras}
+\begin{figure}[H]\centering
+\includegraphics[width=0.9\textwidth]{figures/curvas.png}
+\caption{Curva del sistema y curvas características de las bombas evaluadas.}
+\end{figure}
+\BLOCK{endif}
+
+\section{Conclusiones}
+El sistema se dimensionó para \VAR{pob_final} habitantes al año \VAR{horizonte},
+con un caudal máximo diario de \VAR{qmd} L/s, un volumen de almacenamiento de
+\VAR{v_final} m\textsuperscript{3} y un equipo de bombeo de \VAR{potencia_hp} HP,
+en cumplimiento de la Resolución 0330 de 2017.
+
+\end{document}
