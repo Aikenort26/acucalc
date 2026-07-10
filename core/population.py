@@ -72,3 +72,9 @@ def project(p0: float, year0: int, horizon_year: int, rates: GrowthRates,
     mean = sum(finals.values()) / len(finals)
     deviations = {m: (v - mean) / mean for m, v in finals.items()}
     return Projection(series, deviations)
+
+
+def suggest_method(proj: Projection) -> str:
+    """Método con menor desviación absoluta respecto al promedio de los 5
+    métodos en el año horizonte (comportamiento más cercano al promedio)."""
+    return min(proj.deviations, key=lambda m: abs(proj.deviations[m]))

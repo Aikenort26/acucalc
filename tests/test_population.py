@@ -54,6 +54,13 @@ def test_proyeccion_wappaus_2025():
     assert abs(proj.series["wappaus"][1][1] - 1402.427) < 0.05
 
 
+def test_suggest_method_golden():
+    # Salado: |desv| mínima es la del método aritmético (~-0.041)
+    r = pop.growth_rates(CENSO)
+    proj = pop.project(1400, 2024, 2051, r, 0.005)
+    assert pop.suggest_method(proj) == "aritmetico"
+
+
 def test_desviaciones():
     # Desviaciones recalculadas contra el modelo aritmético lineal (ver nota
     # en test_proyeccion_golden_salado); difieren de los valores crudos del

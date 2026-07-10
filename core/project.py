@@ -18,6 +18,11 @@ class PopulationConfig:
     tasa_res0844: float = 0.005
     metodo: str = ""           # aritmetico|geometrico|exponencial|wappaus|res0844
     justificacion: str = ""
+    tipo: str = "corregimiento"   # municipio|corregimiento
+    fuente: str = "dane"          # dane|manual
+    dpto: str = ""
+    mpio: str = ""
+    area: str = ""                # ÁREA GEOGRÁFICA del DANE
 
 
 @dataclass

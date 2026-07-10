@@ -16,6 +16,12 @@ def dotacion_usos(usos: list[tuple[str, float]]) -> float:
     return sum(v for _, v in usos)
 
 
+def k_factors(pob: float) -> tuple[float, float]:
+    """K1/K2 máximos según población de diseño (Par. 2 Art. 47 Res. 0330/2017):
+    ≤12.500 hab → (1.3, 1.6); >12.500 hab → (1.2, 1.5)."""
+    return (1.3, 1.6) if pob <= 12500 else (1.2, 1.5)
+
+
 @dataclass(frozen=True)
 class FlowResults:
     dneta: float

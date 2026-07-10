@@ -13,6 +13,12 @@ def test_dotacion_por_usos():
     assert demand.dotacion_usos(usos) == 80
 
 
+def test_k_factors_por_poblacion():
+    assert demand.k_factors(1601.8) == (1.3, 1.6)    # ≤12500 hab
+    assert demand.k_factors(12500) == (1.3, 1.6)
+    assert demand.k_factors(20000) == (1.2, 1.5)     # >12500 hab
+
+
 def test_dotacion_bruta_y_alerta_perdidas():
     r = demand.flows(pop=1601.813, dneta=80, perdidas=0.10, k1=1.3, k2=1.6)
     assert abs(r.dbruta - 88.8889) < 1e-3
