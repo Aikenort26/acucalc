@@ -18,17 +18,23 @@ operación, y generación de la memoria técnica en LaTeX.
    método sugerido por menor desviación
 3. **Caudales** — dotación neta (3 modos), pérdidas, Qmed/QMD/QMH; K1/K2
    automáticos según el tamaño de la población proyectada (Par. 2 Art. 47)
-4. **Almacenamiento** — cadena real captación→PTAP→tanque bajo→bombeo→tanque
-   elevado→red con balance de regulación por tanque (o tanque único Art. 81 +
-   curva integral); patrones horarios cargables desde Excel/CSV; predimensionado
-   por tanque con forma circular/cuadrada/rectangular y tipo bajo/elevado
+4. **Almacenamiento** — tren de N tanques en serie con ventana de entrada por
+   tanque: cada uno balancea su curva integral (la salida es la entrada del
+   siguiente; la del último, el consumo de la población) y su volumen se asigna
+   automáticamente; el caudal de cada bombeo intermedio sale de las horas de su
+   ventana; patrón horario cargable desde Excel/CSV; predimensionado con formas
+   circular/cuadrada/rectangular (o tanque único Art. 81 + curva integral)
 5. **Bombeo** — N sistemas nombrados, cada uno un paquete completo: tramos con
    catálogo normativo de tuberías (RDE/clase, DN50–1200: PEAD, PVC-U en
-   pulgadas, hierro dúctil K9/C, acero, GRP), accesorios, potencia, curva del
-   sistema, golpe de ariete con espesores del catálogo, paneles solares
-6. **Curvas de bomba** — por sistema: digitalización de catálogos o entrada
-   manual Q-H/Q-η, BEP, punto de diseño (Qb, Hd) marcado, puntos de operación
-   y selección por mayor eficiencia
+   pulgadas, hierro dúctil K9/C, acero, GRP) con **DN propuesto** (Bresse +
+   V ≤ 6 m/s Art. 56) y edición posterior; accesorios con Km visible; potencia;
+   golpe de ariete verificado automáticamente contra la **PN de cada tramo**
+   con recomendación de protecciones; arreglos paralelo/serie y leyes de afinidad
+6. **Curvas de bomba** — por sistema: digitalizador con **lupa en tiempo real**,
+   crosshair, auto-avance de calibración y puntos marcados sobre la imagen;
+   entrada manual Q-H/Q-η; regresiones H=A·Q²+B·Q+C y η=D·Q²+E·Q+F con
+   coeficientes y R²; doble gráfica Q-H/Q-η con punto de diseño (Qb, Hd) y de
+   operación; **catálogo de bombas desde Excel** con ranking por eficiencia
 7. **Reporte** — memoria LaTeX recalculada íntegramente desde el proyecto, con
    6 figuras generadas (proyección, comparación de métodos, caudales anuales,
    balance de tanques, curvas de bombeo por sistema y esquema del sistema);
