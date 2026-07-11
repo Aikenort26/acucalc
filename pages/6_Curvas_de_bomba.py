@@ -228,6 +228,58 @@ qe_df = c2.data_editor(pd.DataFrame(bomba.puntos_qe or [(0.0, 0.0)],
 bomba.puntos_qe = [(float(r["Q [L/s]"]), float(r["η [-]"]))
                    for _, r in qe_df.iterrows() if r["Q [L/s]"] or r["η [-]"]]
 
+# ---------- catálogo de bombas desde Excel ----------
+st.divider()
+with st.expander("📚 Catálogo de bombas (Excel) — evalúa y escoge la más eficiente"):
+    from core import pump_catalog as pc
+    st.download_button("⬇️ Plantilla del catálogo (.xlsx)", data=pc.template_xlsx(),
+                       file_name="catalogo_bombas.xlsx")
+    up_cat = st.file_uploader("Catálogo (columnas: Bomba | Q [L/s] | H [m] | eta)",
+                              type=["xlsx", "csv"], key=f"w_cat_{sel_sys}")
+    if up_cat is not None:
+        try:
+            candidatas = pc.parse(up_cat)
+        except ValueError as e:
+            st.error(str(e))
+            candidatas = []
+        if candidatas:
+            q_max_cat = max(qb_lps * 1.5,
+                            max(b.puntos_qh[-1][0] for b in candidatas))
+            sys_cat = [(q * 1000, h) for q, h in
+                       pu.system_curve(resuelto["sistema"], q_max_cat / 1000, n=30)]
+            ranking = []
+            for b in candidatas:
+                fit_c = cv.fit_curve(b.puntos_qh, 2)
+                op_c = cv.operating_point(fit_c, sys_cat)
+                e_fit_c = (cv.fit_curve(b.puntos_qe, 2)
+                           if len(b.puntos_qe) >= 3 else None)
+                eta_c = (e_fit_c(op_c[0]) if (op_c and e_fit_c) else float("nan"))
+                ranking.append({"Bomba": b.nombre,
+                                "Q_op [L/s]": op_c[0] if op_c else float("nan"),
+                                "H_op [m]": op_c[1] if op_c else float("nan"),
+                                "η(Q_op)": eta_c, "_pump": b})
+            df_rank = (pd.DataFrame(ranking).drop(columns="_pump")
+                       .sort_values("η(Q_op)", ascending=False))
+            st.dataframe(df_rank.style.format(precision=3, na_rep="sin cruce"),
+                         hide_index=True, width="stretch")
+            validas_cat = [r for r in ranking if r["η(Q_op)"] == r["η(Q_op)"]]
+            if validas_cat:
+                mejor_cat = max(validas_cat, key=lambda r: r["η(Q_op)"])
+                st.caption(f"Mejor del catálogo: **{mejor_cat['Bomba']}** "
+                           f"(η={mejor_cat['η(Q_op)']:.3f} en el punto de operación)")
+                cb1, cb2 = st.columns(2)
+                if cb1.button("✔ Usar la mejor", key=f"w_best_{sel_sys}"):
+                    if mejor_cat["Bomba"] not in [x.nombre for x in sys_d.bombas]:
+                        sys_d.bombas.append(mejor_cat["_pump"])
+                    sys_d.bomba_seleccionada = mejor_cat["Bomba"]
+                    st.session_state["sel_bomba_next"] = mejor_cat["Bomba"]
+                    st.rerun()
+                if cb2.button("➕ Añadir todas al sistema", key=f"w_all_{sel_sys}"):
+                    nombres_exist = {x.nombre for x in sys_d.bombas}
+                    sys_d.bombas.extend(r["_pump"] for r in ranking
+                                        if r["Bomba"] not in nombres_exist)
+                    st.rerun()
+
 # ---------- comparación de las bombas del sistema ----------
 st.divider()
 st.subheader(f"Curva del sistema '{sel_sys}' vs bombas candidatas")
