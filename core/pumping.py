@@ -126,6 +126,43 @@ def npsh_disponible(patm_m: float, h_succion: float, perdidas_succion: float,
 
 
 @dataclass(frozen=True)
+class ArregloResult:
+    n_bombas: int
+    tipo: str          # "paralelo" | "serie"
+    q_unit_lps: float  # caudal por bomba
+    h_unit: float      # altura por bomba
+
+
+def arreglo_bombas(q_total_lps: float, h_total: float, n: int,
+                   tipo: str) -> ArregloResult:
+    """Reparte el punto de diseño entre n bombas iguales.
+    Paralelo: Q se divide, H igual. Serie: H se divide, Q igual."""
+    if n < 1:
+        raise ValueError("n debe ser ≥ 1")
+    if tipo == "paralelo":
+        return ArregloResult(n, tipo, q_total_lps / n, h_total)
+    if tipo == "serie":
+        return ArregloResult(n, tipo, q_total_lps, h_total / n)
+    raise ValueError("tipo debe ser 'paralelo' o 'serie'")
+
+
+def afinidad(q1: float, h1: float, p1: float, n1: float,
+             n2: float) -> tuple[float, float, float]:
+    """Leyes de afinidad (mismo rodete): Q∝N, H∝N², P∝N³."""
+    if n1 <= 0:
+        raise ValueError("n1 debe ser > 0")
+    r = n2 / n1
+    return q1 * r, h1 * r**2, p1 * r**3
+
+
+def frecuencia_para_caudal(q_objetivo: float, q1: float, n1: float) -> float:
+    """Velocidad/frecuencia requerida para llevar el caudal q1 (a n1) a q_objetivo."""
+    if q1 <= 0:
+        raise ValueError("q1 debe ser > 0")
+    return n1 * q_objetivo / q1
+
+
+@dataclass(frozen=True)
 class PanelResult:
     cantidad: int
     area_total: float

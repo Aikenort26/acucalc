@@ -24,6 +24,17 @@ class PipeSpec:
     id_mm: float
     k_elast: float
     nota: str = ""
+    ks_mm: float = 0.0      # rugosidad absoluta
+    pn_mca: float = 0.0     # presión nominal
+    largo_m: float = 0.0    # longitud de presentación
+
+    @property
+    def dn_mm(self) -> float:
+        return self.dn * 25.4 if self.unidad_dn == "in" else self.dn
+
+    @property
+    def dn_in(self) -> float:
+        return self.dn if self.unidad_dn == "in" else self.dn / 25.4
 
 
 @lru_cache
@@ -51,7 +62,10 @@ def pipe(material: str, serie: str, dn: float) -> PipeSpec:
                      else float(row["dn"]))
             return PipeSpec(material, serie, row["dn"], m["unidad_dn"],
                             row["od_mm"], row["e_mm"], round(id_mm, 1),
-                            m["k_elast"], m.get("nota", ""))
+                            m["k_elast"], m.get("nota", ""),
+                            ks_mm=m.get("ks_mm", 0.0),
+                            pn_mca=m.get("pn_mca", {}).get(serie, 0.0),
+                            largo_m=m.get("largo_m", 0.0))
     raise KeyError(f"DN {dn} no existe en {material} {serie}")
 
 

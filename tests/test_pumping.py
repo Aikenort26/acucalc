@@ -94,6 +94,24 @@ def test_npsh_disponible():
     assert abs(n - (10.33 - 0.24 - 3.0 - 0.5)) < 1e-9
 
 
+def test_arreglo_bombas():
+    par = pu.arreglo_bombas(10.0, 80.0, 2, "paralelo")
+    assert par.q_unit_lps == 5.0 and par.h_unit == 80.0
+    ser = pu.arreglo_bombas(10.0, 80.0, 2, "serie")
+    assert ser.q_unit_lps == 10.0 and ser.h_unit == 40.0
+    import pytest
+    with pytest.raises(ValueError):
+        pu.arreglo_bombas(10, 80, 2, "mixto")
+
+
+def test_leyes_de_afinidad():
+    q2, h2, p2 = pu.afinidad(q1=10.0, h1=80.0, p1=7.0, n1=3500, n2=1750)
+    assert abs(q2 - 5.0) < 1e-9        # Q ∝ N
+    assert abs(h2 - 20.0) < 1e-9       # H ∝ N²
+    assert abs(p2 - 0.875) < 1e-9      # P ∝ N³
+    assert abs(pu.frecuencia_para_caudal(5.0, 10.0, 60.0) - 30.0) < 1e-9
+
+
 def test_paneles():
     r = pu.paneles_solares(potencia_kw=5.138662, panel_w=710, fs=3, area_panel_m2=2.9768)
     assert r.cantidad == 22

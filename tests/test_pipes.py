@@ -15,6 +15,14 @@ def test_pead_110_rde21():
     assert abs(s.e_mm - 5.2) < 1e-9              # 110/21 = 5.24 → 5.2
     assert abs(s.id_mm - (110 - 2 * 5.2)) < 1e-9
     assert s.k_elast == 111.11
+    assert s.ks_mm == 0.007 and s.pn_mca == 82 and s.largo_m == 12
+    assert abs(s.dn_in - 110 / 25.4) < 1e-6
+
+
+def test_propiedades_completas_pvc():
+    s = pipes.pipe("PVC-U", "RDE 26", 6)
+    assert s.pn_mca == 113 and s.ks_mm == 0.0015 and s.largo_m == 6
+    assert abs(s.dn_mm - 6 * 25.4) < 1e-6
 
 
 def test_pvc_4in_rde21():

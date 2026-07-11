@@ -4,6 +4,9 @@
   "unidad_dn": "mm",
   "base": "od",
   "k_elast": 111.11,
+  "ks_mm": 0.007,
+  "largo_m": 12,
+  "nota": "Rollos de 100 m disponibles hasta DN 110",
   "series": {
    "RDE 11": [
     {
@@ -433,6 +436,12 @@
      "e_mm": 57.1
     }
    ]
+  },
+  "pn_mca": {
+   "RDE 11": 163,
+   "RDE 13.6": 127,
+   "RDE 17": 102,
+   "RDE 21": 82
   }
  },
  "PVC-U": {
@@ -440,6 +449,8 @@
   "unidad_dn": "in",
   "base": "od",
   "k_elast": 18.0,
+  "ks_mm": 0.0015,
+  "largo_m": 6,
   "series": {
    "RDE 21": [
     {
@@ -642,6 +653,11 @@
      "e_mm": 18.8
     }
    ]
+  },
+  "pn_mca": {
+   "RDE 21": 141,
+   "RDE 26": 113,
+   "RDE 32.5": 88
   }
  },
  "Hierro dúctil": {
@@ -649,7 +665,9 @@
   "unidad_dn": "mm",
   "base": "id",
   "k_elast": 1.0,
-  "nota": "C-class: espesores referenciales — verificar con el fabricante",
+  "ks_mm": 0.25,
+  "largo_m": 6,
+  "nota": "C-class: espesores/PN referenciales — verificar con el fabricante",
   "series": {
    "K9": [
     {
@@ -825,6 +843,10 @@
      "e_mm": 12.2
     }
    ]
+  },
+  "pn_mca": {
+   "K9": 408,
+   "C-class (referencial)": 255
   }
  },
  "Acero comercial": {
@@ -832,6 +854,8 @@
   "unidad_dn": "in",
   "base": "od",
   "k_elast": 0.5,
+  "ks_mm": 0.045,
+  "largo_m": 6,
   "series": {
    "Sch 40 / STD": [
     {
@@ -925,6 +949,9 @@
      "e_mm": 9.53
     }
    ]
+  },
+  "pn_mca": {
+   "Sch 40 / STD": 510
   }
  },
  "GRP": {
@@ -932,7 +959,9 @@
   "unidad_dn": "mm",
   "base": "id",
   "k_elast": 8.3,
-  "nota": "Espesores referenciales PN10 SN5000 — verificar con el fabricante",
+  "ks_mm": 0.3,
+  "largo_m": 12,
+  "nota": "Espesores/PN referenciales PN10 SN5000 — verificar con el fabricante",
   "series": {
    "PN10 (referencial)": [
     {
@@ -991,6 +1020,9 @@
      "e_mm": 14.0
     }
    ]
+  },
+  "pn_mca": {
+   "PN10 (referencial)": 102
   }
  }
 }
