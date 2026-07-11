@@ -106,7 +106,7 @@ SAVES.mkdir(exist_ok=True)
 pj.save(p, SAVES / "Acueducto_San_Jacinto.acucalc.json")
 
 out = report.render(ctx, Path(tempfile.mkdtemp()) / "memoria")
-pdf = report.compile_pdf(out)
+pdf, log_tail = report.compile_pdf(out)
 OUT.mkdir(exist_ok=True)
 if pdf:
     shutil.copy(pdf, OUT / "memoria_sanjacinto.pdf")
@@ -126,4 +126,6 @@ for s in ctx["sistemas"]:
           f"{s['potencia_hp']} HP · bombas: "
           + "; ".join(f"{b['nombre']}: Q_op={b['q_op']} L/s H_op={b['h_op']} m "
                       f"η={b['eta_op']}" for b in s["bombas"]))
-print(f"PDF: {'OK → output/memoria_sanjacinto.pdf' if pdf else 'NO COMPILÓ'}")
+print(f"PDF: {'OK -> output/memoria_sanjacinto.pdf' if pdf else 'NO COMPILO'}")
+if not pdf:
+    print(log_tail[-800:])

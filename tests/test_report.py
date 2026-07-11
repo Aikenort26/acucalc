@@ -68,8 +68,20 @@ def test_render_crea_zip(tmp_path):
 
 def test_compilacion_detecta_latex(tmp_path):
     out = report.render(CTX, tmp_path)
+    pdf, log = report.compile_pdf(out)
     if shutil.which("pdflatex") or shutil.which("latexmk"):
-        pdf = report.compile_pdf(out)
         assert pdf is not None and pdf.exists()
+        assert log                                     # log siempre disponible
     else:
-        assert report.compile_pdf(out) is None
+        assert pdf is None and "PATH" in log
+
+
+def test_compilacion_fallida_da_log(tmp_path):
+    import shutil as sh
+    if not (sh.which("pdflatex") or sh.which("latexmk")):
+        return
+    (tmp_path / "main.tex").write_text(r"\documentclass{article}\begin{document}"
+                                       r"\errmessage{fallo}\end{document}",
+                                       encoding="utf-8")
+    pdf, log = report.compile_pdf(tmp_path)
+    assert log        # hay diagnóstico aunque falle o no genere PDF

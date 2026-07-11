@@ -27,8 +27,11 @@ def render(ctx: dict, out_dir: str | Path) -> Path:
     return out
 
 
-def compile_pdf(project_dir: Path) -> Path | None:
-    """Compila con latexmk o pdflatex (2 pasadas) si están en PATH."""
+def compile_pdf(project_dir: Path) -> tuple[Path | None, str]:
+    """Compila con latexmk o pdflatex (2 pasadas) si están en PATH.
+
+    Devuelve (ruta del PDF o None, cola del log LaTeX para diagnóstico).
+    En MiKTeX se habilita la autoinstalación de paquetes faltantes."""
     exe = shutil.which("latexmk")
     if exe:
         cmd = [exe, "-pdf", "-interaction=nonstopmode", "main.tex"]
@@ -36,13 +39,23 @@ def compile_pdf(project_dir: Path) -> Path | None:
     else:
         exe = shutil.which("pdflatex")
         if not exe:
-            return None
-        cmd = [exe, "-interaction=nonstopmode", "main.tex"]
+            return None, "No se encontró latexmk ni pdflatex en el PATH."
+        cmd = [exe, "-interaction=nonstopmode", "--enable-installer", "main.tex"]
         runs = 2
+    salida = ""
     for _ in range(runs):
-        subprocess.run(cmd, cwd=project_dir, capture_output=True, timeout=300)
+        try:
+            res = subprocess.run(cmd, cwd=project_dir, capture_output=True,
+                                 timeout=600)
+            salida = (res.stdout or b"").decode("utf-8", errors="replace")
+        except subprocess.TimeoutExpired:
+            return None, "La compilación superó los 10 minutos (timeout)."
+    log_file = project_dir / "main.log"
+    if log_file.exists():
+        salida = log_file.read_text(encoding="utf-8", errors="replace")
+    log_tail = salida[-3000:] if salida else ""
     pdf = project_dir / "main.pdf"
-    return pdf if pdf.exists() else None
+    return (pdf if pdf.exists() else None), log_tail
 
 
 def make_zip(project_dir: Path) -> Path:
