@@ -18,7 +18,11 @@
 El presente documento contiene la memoria de cálculo hidráulico del sistema de
 acueducto de \VAR{corregimiento}, municipio de \VAR{municipio},
 departamento de \VAR{departamento}, elaborada conforme a la Resolución 0330 de
-2017 del Ministerio de Vivienda, Ciudad y Territorio.
+2017 del Ministerio de Vivienda, Ciudad y Territorio. La memoria cubre la
+proyección de población, la determinación de la dotación y los caudales de
+diseño, el volumen de almacenamiento, el dimensionamiento hidráulico de los
+sistemas de bombeo y la selección de los equipos a partir de sus curvas
+características.
 
 \section{Marco legal}
 \begin{itemize}
@@ -33,14 +37,30 @@ departamento de \VAR{departamento}, elaborada conforme a la Resolución 0330 de
 Periodo de diseño: 25 años (Art. 40, Res. 0330 de 2017), horizonte \VAR{horizonte}.
 Zona de estudio: \VAR{pob_tipo}. Serie censal de referencia: \VAR{pob_fuente}.
 Año base de la proyección: \VAR{year0}.
-Se evaluaron los métodos aritmético, geométrico, exponencial y de Wappaus, además
-de la tasa máxima de la Resolución 0844 de 2018.
+
+Con la serie censal del municipio se calcularon las tasas de crecimiento por los
+métodos aritmético, geométrico, exponencial y de Wappaus, y se proyectó la
+población de la zona de estudio con cada método, junto con la tasa máxima de la
+Resolución 0844 de 2018. La comparación entre métodos se realiza por la
+desviación de cada proyección respecto al promedio de todas en el año horizonte.
+
 Método adoptado: \textbf{\VAR{pob_metodo}}. \VAR{pob_justificacion}
+\BLOCK{if flotante_pct}
+Se incluye una población flotante del \VAR{flotante_pct}\,\% sobre la población
+residente en todos los años de la proyección.
+\BLOCK{endif}
 Población de diseño: \textbf{\VAR{pob_final} habitantes}.
+
 \BLOCK{if "poblacion" in figuras}
 \begin{figure}[H]\centering
-\includegraphics[width=0.85\textwidth]{figures/poblacion.png}
-\caption{Proyección de población por método.}
+\includegraphics[width=0.9\textwidth]{figures/poblacion.png}
+\caption{Proyección de población por método de cálculo.}
+\end{figure}
+\BLOCK{endif}
+\BLOCK{if "metodos" in figuras}
+\begin{figure}[H]\centering
+\includegraphics[width=0.75\textwidth]{figures/metodos.png}
+\caption{Desviación de cada método respecto al promedio en el año horizonte.}
 \end{figure}
 \BLOCK{endif}
 
@@ -49,10 +69,31 @@ Dotación neta adoptada: \VAR{dneta} L/hab/día (modo: \VAR{dneta_modo}).
 \VAR{dneta_justificacion}
 Pérdidas técnicas: \VAR{perdidas}\,\% (máximo 25\,\%, Art. 44).
 Dotación bruta: \VAR{dbruta} L/hab/día.
-Con $K_1=\VAR{k1}$ y $K_2=\VAR{k2}$ (Par. 2, Art. 47):
+Los coeficientes de mayoración se adoptan según el tamaño de la población de
+diseño (Par. 2, Art. 47): $K_1=\VAR{k1}$ y $K_2=\VAR{k2}$.
 \[
 Q_{med}=\VAR{qmed}\ \mathrm{L/s};\quad QMD=\VAR{qmd}\ \mathrm{L/s};\quad QMH=\VAR{qmh}\ \mathrm{L/s}
 \]
+
+\BLOCK{if caudales_anuales}
+La proyección de caudales a lo largo del periodo de diseño, con la población de
+cada año, es la siguiente:
+\begin{table}[H]\centering
+\caption{Proyección de caudales de diseño en el periodo.}
+\begin{tabular}{rrrrr}\toprule
+Año & Población [hab] & $Q_{med}$ [L/s] & QMD [L/s] & QMH [L/s] \\ \midrule
+\BLOCK{for c in caudales_anuales}
+\VAR{c.ano} & \VAR{c.pob} & \VAR{c.qmed} & \VAR{c.qmd} & \VAR{c.qmh} \\
+\BLOCK{endfor}
+\bottomrule\end{tabular}\end{table}
+\BLOCK{endif}
+\BLOCK{if "caudales" in figuras}
+\begin{figure}[H]\centering
+\includegraphics[width=0.9\textwidth]{figures/caudales.png}
+\caption{Evolución de los caudales de diseño en el periodo.}
+\end{figure}
+\BLOCK{endif}
+
 \begin{table}[H]\centering
 \caption{Caudales de diseño por componente (Art. 47, Res. 0330 de 2017).}
 \begin{tabular}{lr}\toprule
@@ -63,52 +104,97 @@ Componente & $Q$ diseño [L/s] \\ \midrule
 \bottomrule\end{tabular}\end{table}
 
 \section{Volumen de almacenamiento}
+\BLOCK{if usar_cadena}
+El sistema opera en cadena: el agua captada pasa por la PTAP (sin
+almacenamiento), llega a un tanque bajo y desde allí se bombea a caudal
+constante a un tanque elevado, que realiza la regulación frente al consumo
+horario de la población. Cada tanque se verifica con su propia curva integral:
+el bajo balancea la captación contra el bombeo y el elevado balancea el bombeo
+contra el patrón de consumo.
+Volumen del tanque bajo: \VAR{v_bajo} m\textsuperscript{3}.
+Volumen del tanque elevado: \VAR{v_elevado} m\textsuperscript{3}.
+\BLOCK{else}
 Método del Art. 81 (Res. 0330): \VAR{v_art81} m\textsuperscript{3}.
 Método de la curva integral: \VAR{v_curva} m\textsuperscript{3}.
-Volumen adoptado (máximo de ambos, incluye incendio NSR-10 Título J):
+\BLOCK{endif}
+Volumen total adoptado (incluye incendio NSR-10 Título J):
 \textbf{\VAR{v_final} m\textsuperscript{3}}.
-\BLOCK{if "curva_integral" in figuras}
+
+\BLOCK{if "balance" in figuras}
 \begin{figure}[H]\centering
-\includegraphics[width=0.85\textwidth]{figures/curva_integral.png}
-\caption{Curva integral de consumo y suministro.}
+\includegraphics[width=0.95\textwidth]{figures/balance.png}
+\caption{Curvas acumuladas de suministro y consumo por tanque.}
 \end{figure}
 \BLOCK{endif}
 
-\section{Sistema de bombeo}
-Caudal de bombeo para \VAR{horas_bombeo} h/día de operación:
-$Q_b=\VAR{qb}$ L/s.
+\BLOCK{if tanques}
 \begin{table}[H]\centering
-\caption{Pérdidas por tramo (Darcy--Weisbach y Colebrook--White).}
+\caption{Predimensionamiento de tanques (volumen útil; añadir 0.30 m de borde libre).}
+\begin{tabular}{llllrr}\toprule
+Tanque & Tipo & Forma & Dimensiones & Volumen [m³] & Altura [m] \\ \midrule
+\BLOCK{for t in tanques}
+\VAR{t.nombre} & \VAR{t.tipo} & \VAR{t.forma} & \VAR{t.dim} & \VAR{t.volumen} & \VAR{t.altura} \\
+\BLOCK{endfor}
+\bottomrule\end{tabular}\end{table}
+\BLOCK{endif}
+
+\BLOCK{if "esquema" in figuras}
+\begin{figure}[H]\centering
+\includegraphics[width=0.95\textwidth]{figures/esquema.png}
+\caption{Esquema general del sistema.}
+\end{figure}
+\BLOCK{endif}
+
+\section{Sistemas de bombeo}
+Las pérdidas por fricción se calculan con Darcy--Weisbach y factor de fricción
+de Colebrook--White; las pérdidas menores, por coeficientes $K_m$ de accesorio.
+Los diámetros y espesores de tubería corresponden al catálogo normativo
+(RDE/clase) del material seleccionado. Con la altura dinámica total y la
+eficiencia del equipo se obtiene la potencia requerida, y la curva del sistema
+se construye barriendo el caudal sobre todos los tramos.
+
+\BLOCK{for s in sistemas}
+\subsection{\VAR{s.nombre}}
+Bomba de tipo \VAR{s.tipo_bomba}, operación de \VAR{s.horas} h/día.
+Caudal de bombeo $Q_b=\VAR{s.qb}$ L/s.
+\begin{table}[H]\centering
+\caption{Pérdidas por tramo — \VAR{s.nombre}.}
 \begin{tabular}{lrrrrrr}\toprule
 Tramo & $L$ [m] & $D$ [mm] & Material & $V$ [m/s] & $h_f$ [m] & $h_l$ [m] \\ \midrule
-\BLOCK{for t in tramos}
+\BLOCK{for t in s.tramos}
 \VAR{t.nombre} & \VAR{t.L} & \VAR{t.D_mm} & \VAR{t.material} & \VAR{t.V} & \VAR{t.hf} & \VAR{t.hl} \\
 \BLOCK{endfor}
 \bottomrule\end{tabular}\end{table}
-Altura dinámica total: $H_d=\VAR{hd}$ m. Con eficiencia $\eta=\VAR{eficiencia}$,
-la potencia requerida es \textbf{\VAR{potencia_kw} kW (\VAR{potencia_hp} HP)}.
+Altura dinámica total: $H_d=\VAR{s.hd}$ m. Con eficiencia $\eta=\VAR{s.eficiencia}$,
+la potencia requerida es \textbf{\VAR{s.potencia_kw} kW (\VAR{s.potencia_hp} HP)}.
 
-\section{Selección de la bomba}
+\BLOCK{if s.bombas}
 \begin{table}[H]\centering
-\caption{Comparación de bombas evaluadas (puntos de operación contra la curva del sistema).}
+\caption{Bombas evaluadas para \VAR{s.nombre} (punto de operación contra la curva del sistema).}
 \begin{tabular}{lrrrrrr}\toprule
 Bomba & $Q_{op}$ [L/s] & $H_{op}$ [m] & $\eta(Q_{op})$ & $Q_{BEP}$ [L/s] & Desv. BEP [\%] & $P$ [HP] \\ \midrule
-\BLOCK{for b in bombas}
+\BLOCK{for b in s.bombas}
 \VAR{b.nombre} & \VAR{b.q_op} & \VAR{b.h_op} & \VAR{b.eta_op} & \VAR{b.bep_q} & \VAR{b.desv_bep} & \VAR{b.p_hp} \\
 \BLOCK{endfor}
 \bottomrule\end{tabular}\end{table}
-Bomba seleccionada: \textbf{\VAR{bomba_seleccionada}}.
-\BLOCK{if "curvas" in figuras}
+Bomba seleccionada: \textbf{\VAR{s.bomba_seleccionada}} (criterio: mayor
+eficiencia en el punto de operación).
+\BLOCK{endif}
+\BLOCK{if s.fig}
 \begin{figure}[H]\centering
-\includegraphics[width=0.9\textwidth]{figures/curvas.png}
-\caption{Curva del sistema y curvas características de las bombas evaluadas.}
+\includegraphics[width=0.9\textwidth]{figures/\VAR{s.fig}}
+\caption{Curva del sistema, punto de diseño y curvas de bombas — \VAR{s.nombre}.}
 \end{figure}
 \BLOCK{endif}
+\BLOCK{endfor}
 
 \section{Conclusiones}
 El sistema se dimensionó para \VAR{pob_final} habitantes al año \VAR{horizonte},
-con un caudal máximo diario de \VAR{qmd} L/s, un volumen de almacenamiento de
-\VAR{v_final} m\textsuperscript{3} y un equipo de bombeo de \VAR{potencia_hp} HP,
-en cumplimiento de la Resolución 0330 de 2017.
+con un caudal máximo diario de \VAR{qmd} L/s y un volumen de almacenamiento de
+\VAR{v_final} m\textsuperscript{3}, en cumplimiento de la Resolución 0330 de 2017.
+\BLOCK{for s in sistemas}
+El sistema de bombeo \VAR{s.nombre} requiere un equipo de \VAR{s.potencia_hp} HP
+para \VAR{s.qb} L/s con altura dinámica de \VAR{s.hd} m.
+\BLOCK{endfor}
 
 \end{document}
