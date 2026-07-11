@@ -111,9 +111,15 @@ def build(p: Project) -> tuple[dict, dict]:
             eta = e_fit(op[0]) if (op and e_fit) else float("nan")
             pot = (998.29 * 9.81 * op[0] / 1000 * op[1] / eta / 745.7
                    if op and eta and eta > 0 else float("nan"))
-            bombas_fig.append({"nombre": bb.nombre, "fit": fit, "op": op})
+            bombas_fig.append({"nombre": bb.nombre, "fit": fit, "op": op,
+                               "e_fit": e_fit})
+            A, B, C = fit.coeffs
             bombas_tab.append({
                 "nombre": bb.nombre,
+                "h_eq": f"$H = {A:+.4f}Q^2 {B:+.4f}Q {C:+.3f}$",
+                "e_eq": (f"$\\eta = {e_fit.coeffs[0]:+.6f}Q^2 "
+                         f"{e_fit.coeffs[1]:+.5f}Q {e_fit.coeffs[2]:+.4f}$"
+                         if e_fit else "—"),
                 "q_op": f"{op[0]:.2f}" if op else "—",
                 "h_op": f"{op[1]:.2f}" if op else "—",
                 "eta_op": f"{eta:.3f}" if eta == eta else "—",

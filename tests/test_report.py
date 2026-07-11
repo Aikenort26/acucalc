@@ -36,7 +36,9 @@ CTX = {
                     "material": "PEAD", "V": "1.04", "hf": "3.756", "hl": "0.798"}],
         "bombas": [{"nombre": "Bomba A", "q_op": "5.30", "h_op": "74.50",
                     "eta_op": "0.490", "bep_q": "7.80", "desv_bep": "-32.1",
-                    "p_hp": "6.90"}],
+                    "p_hp": "6.90",
+                    "h_eq": "$H = -0.2817Q^2 +1.1244Q +32.094$",
+                    "e_eq": "$\\eta = -0.008639Q^2 +0.11837Q -0.0554$"}],
         "bomba_seleccionada": "Bomba A", "fig": ""}],
     "figuras": {},   # sin archivos en el test — los \BLOCK{if} deben omitir las figuras
 }

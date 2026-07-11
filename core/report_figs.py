@@ -115,8 +115,15 @@ def fig_balance(capta: list[float], bombeo: list[float], consumo: list[float]):
 def fig_sistema(sys_lps: list[tuple[float, float]],
                 bombas: list[dict], qb_lps: float, hd: float, titulo: str = ""):
     """Curva del sistema + curvas de bombas + punto de diseño y de operación.
-    bombas = [{"nombre", "fit": CurveFit, "op": (q, h) | None}]."""
-    fig, ax = plt.subplots(figsize=(8.5, 5))
+    bombas = [{"nombre", "fit": CurveFit, "op": (q, h)|None, "e_fit": CurveFit|None}].
+    Si alguna bomba trae e_fit se añade un panel inferior Q-η."""
+    con_eta = any(b.get("e_fit") for b in bombas)
+    if con_eta:
+        fig, (ax, ax2) = plt.subplots(2, 1, figsize=(8.5, 7.5), sharex=True,
+                                      height_ratios=[2, 1])
+    else:
+        fig, ax = plt.subplots(figsize=(8.5, 5))
+        ax2 = None
     ax.plot([q for q, _ in sys_lps], [h for _, h in sys_lps], "k--", lw=2,
             label="Curva del sistema")
     ax.plot(qb_lps, hd, "r*", ms=16, zorder=5,
@@ -124,10 +131,23 @@ def fig_sistema(sys_lps: list[tuple[float, float]],
     for b in bombas:
         fit = b["fit"]
         qs = np.linspace(fit.q_min, fit.q_max, 100)
-        ax.plot(qs, [fit(q) for q in qs], lw=1.6, label=b["nombre"])
+        linea, = ax.plot(qs, [fit(q) for q in qs], lw=1.6, label=b["nombre"])
         if b.get("op"):
-            ax.plot(*b["op"], "o", ms=8)
-    ax.set_xlabel("Q [L/s]"); ax.set_ylabel("H [m]")
+            ax.plot(*b["op"], "o", ms=8, color=linea.get_color())
+        e_fit = b.get("e_fit")
+        if ax2 is not None and e_fit:
+            qs_e = np.linspace(e_fit.q_min, e_fit.q_max, 100)
+            ax2.plot(qs_e, [e_fit(q) for q in qs_e], lw=1.6,
+                     color=linea.get_color(), label=b["nombre"])
+            if b.get("op"):
+                ax2.plot(b["op"][0], e_fit(b["op"][0]), "o", ms=8,
+                         color=linea.get_color())
+    ax.set_ylabel("H [m]")
+    if ax2 is not None:
+        ax2.set_xlabel("Q [L/s]"); ax2.set_ylabel("η [-]")
+        ax2.grid(alpha=0.3); ax2.legend(fontsize=7)
+    else:
+        ax.set_xlabel("Q [L/s]")
     if titulo:
         ax.set_title(titulo, fontsize=10)
     ax.grid(alpha=0.3); ax.legend(fontsize=8)

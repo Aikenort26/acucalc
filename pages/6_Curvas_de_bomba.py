@@ -236,43 +236,56 @@ q_max_lps = max(qb_lps * 1.5, max((b.puntos_qh[-1][0] for b in sys_d.bombas
 sys_pts = pu.system_curve(resuelto["sistema"], q_max=max(q_max_lps / 1000, 1e-4), n=30)
 sys_lps = [(q * 1000, h) for q, h in sys_pts]
 
+rows, ecuaciones, bombas_fig = [], [], []
+for b in sys_d.bombas:
+    if len(b.puntos_qh) < 3:
+        continue
+    fit = cv.fit_curve(b.puntos_qh, 2)
+    op = cv.operating_point(fit, sys_lps)
+    bep = cv.best_efficiency_point(b.puntos_qe, 2) if len(b.puntos_qe) >= 3 else None
+    e_fit = cv.fit_curve(b.puntos_qe, 2) if len(b.puntos_qe) >= 3 else None
+    bombas_fig.append({"nombre": f"{b.nombre} (R²={fit.r2:.3f})", "fit": fit,
+                       "op": op, "e_fit": e_fit})
+    A, B, C = fit.coeffs
+    ecu = {"Bomba": b.nombre,
+           "H(Q)": f"H = {A:+.4f}·Q² {B:+.4f}·Q {C:+.3f}  (R²={fit.r2:.4f})",
+           "η(Q)": (f"η = {e_fit.coeffs[0]:+.6f}·Q² {e_fit.coeffs[1]:+.5f}·Q "
+                    f"{e_fit.coeffs[2]:+.4f}  (R²={e_fit.r2:.4f})" if e_fit else "—"),
+           "H(Qb) [m]": fit(qb_lps) if fit.q_min <= qb_lps <= fit.q_max else float("nan"),
+           "η(Qb)": (e_fit(qb_lps) if e_fit and e_fit.q_min <= qb_lps <= e_fit.q_max
+                     else float("nan"))}
+    if op:
+        eta = e_fit(op[0]) if e_fit else float("nan")
+        pot = (998.29 * 9.81 * op[0] / 1000 * op[1] / eta / 745.7
+               if eta and eta > 0 else float("nan"))
+        rows.append({"Bomba": b.nombre, "Q_op [L/s]": op[0], "H_op [m]": op[1],
+                     "η(Q_op)": eta, "BEP Q [L/s]": bep.q if bep else float("nan"),
+                     "Desv. BEP [%]": (op[0] - bep.q) / bep.q * 100 if bep else float("nan"),
+                     "P absorbida [HP]": pot})
+        ecu["H(Q_op) [m]"], ecu["η(Q_op)"] = op[1], eta
+    else:
+        rows.append({"Bomba": b.nombre, "Q_op [L/s]": float("nan"),
+                     "H_op [m]": float("nan"), "η(Q_op)": float("nan"),
+                     "BEP Q [L/s]": bep.q if bep else float("nan"),
+                     "Desv. BEP [%]": float("nan"), "P absorbida [HP]": float("nan")})
+        ecu["H(Q_op) [m]"], ecu["η(Q_op)"] = float("nan"), float("nan")
+    ecuaciones.append(ecu)
+
 with plt.style.context("dark_background"):
-    fig, ax = plt.subplots(figsize=(9, 5.5))
+    from core import report_figs as rf
+    fig = rf.fig_sistema(sys_lps, bombas_fig, qb_lps, hd)
     fig.patch.set_alpha(0)
-    ax.set_facecolor("none")
-    ax.plot([q for q, _ in sys_lps], [h for _, h in sys_lps],
-            "w--", lw=2, label="Curva del sistema")
-    ax.plot(qb_lps, hd, "*", color="#FFD400", ms=18, zorder=5,
-            label=f"Punto de diseño ({qb_lps:.1f} L/s, {hd:.1f} m)")
-    rows = []
-    for b in sys_d.bombas:
-        if len(b.puntos_qh) < 3:
-            continue
-        fit = cv.fit_curve(b.puntos_qh, 2)
-        qs = np.linspace(fit.q_min, fit.q_max, 100)
-        ax.plot(qs, [fit(q) for q in qs], lw=1.8, label=f"{b.nombre} (R²={fit.r2:.3f})")
-        ax.plot(*zip(*b.puntos_qh), "o", ms=4, alpha=0.6)   # puntos digitalizados
-        op = cv.operating_point(fit, sys_lps)
-        bep = cv.best_efficiency_point(b.puntos_qe, 2) if len(b.puntos_qe) >= 3 else None
-        e_fit = cv.fit_curve(b.puntos_qe, 2) if len(b.puntos_qe) >= 3 else None
-        if op:
-            ax.plot(*op, "o", color="#00E5FF", ms=10, zorder=5)
-            eta = e_fit(op[0]) if e_fit else float("nan")
-            pot = (998.29 * 9.81 * op[0] / 1000 * op[1] / eta / 745.7
-                   if eta and eta > 0 else float("nan"))
-            rows.append({"Bomba": b.nombre, "Q_op [L/s]": op[0], "H_op [m]": op[1],
-                         "η(Q_op)": eta, "BEP Q [L/s]": bep.q if bep else float("nan"),
-                         "Desv. BEP [%]": (op[0] - bep.q) / bep.q * 100 if bep else float("nan"),
-                         "P absorbida [HP]": pot})
-        else:
-            rows.append({"Bomba": b.nombre, "Q_op [L/s]": float("nan"),
-                         "H_op [m]": float("nan"), "η(Q_op)": float("nan"),
-                         "BEP Q [L/s]": bep.q if bep else float("nan"),
-                         "Desv. BEP [%]": float("nan"), "P absorbida [HP]": float("nan")})
-    ax.set_xlabel("Q [L/s]"); ax.set_ylabel("H [m]"); ax.grid(alpha=0.25)
-    ax.legend(fontsize=8)
+    for ax in fig.axes:
+        ax.set_facecolor("none")
     st.pyplot(fig)
     plt.close(fig)
+
+if ecuaciones:
+    st.subheader("Regresiones polinómicas (H = A·Q²+B·Q+C · η = D·Q²+E·Q+F)")
+    st.dataframe(pd.DataFrame(ecuaciones).style.format(
+        {"H(Qb) [m]": "{:.2f}", "η(Qb)": "{:.3f}", "H(Q_op) [m]": "{:.2f}",
+         "η(Q_op)": "{:.3f}"}, na_rep="fuera de rango"),
+        hide_index=True, width="stretch")
 
 if rows:
     df_cmp = pd.DataFrame(rows)
