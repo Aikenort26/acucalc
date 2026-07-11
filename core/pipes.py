@@ -8,6 +8,10 @@ from pathlib import Path
 
 DATA = Path(__file__).resolve().parent.parent / "data" / "tuberias.json"
 
+# material del catálogo → clave de rugosidad en data/ks.json
+KS_KEY = {"PEAD PE100": "PEAD", "PVC-U": "PVC", "Hierro dúctil": "HD",
+          "Acero comercial": "Acero comercial", "GRP": "GRP"}
+
 
 @dataclass(frozen=True)
 class PipeSpec:

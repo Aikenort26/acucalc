@@ -1,9 +1,13 @@
-"""Modelo de proyecto ACUCALC y persistencia JSON (schema_version=1)."""
+"""Modelo de proyecto ACUCALC y persistencia JSON (schema_version=2).
+
+v2: el bombeo son N sistemas nombrados (`Project.bombeos`), cada uno un paquete
+completo (tramos, accesorios, parámetros, bombas candidatas). Los proyectos
+schema 1 se migran automáticamente al cargar (un sistema "Bombeo 1")."""
 import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class SchemaError(Exception):
@@ -63,10 +67,14 @@ class StorageConfig:
 @dataclass
 class SegmentData:
     nombre: str
-    tipo: str
+    tipo: str                  # succion|impulsion
     L: float
-    D_mm: float
-    material: str
+    D_mm: float                # diámetro interno de cálculo
+    material: str              # clave de data/ks.json (para fricción)
+    cat_material: str = ""     # material del catálogo de tuberías ("" = manual)
+    cat_serie: str = ""
+    cat_dn: float = 0.0
+    e_mm: float = 0.0          # espesor (del catálogo o manual) para ariete
 
 
 @dataclass
@@ -74,21 +82,6 @@ class AccessoryData:
     tipo: str
     cantidad: int
     tramo: str
-
-
-@dataclass
-class BombeoConfig:
-    horas: float = 10.0
-    he: float = 0.0
-    sumar_5m_ras: bool = False
-    eficiencia: float = 0.70
-    # ariete / paneles
-    espesor_mm: float = 0.0
-    k_elast: float = 18.0
-    pn_mca: float = 0.0
-    panel_w: float = 710.0
-    panel_area: float = 2.9768
-    panel_fs: float = 3.0
 
 
 @dataclass
@@ -106,9 +99,27 @@ class PumpData:
     puntos_qh: list = field(default_factory=list)
     puntos_qe: list = field(default_factory=list)
     imagen_b64: str = ""
-    cal: dict | None = None    # {"x": AxisCalData dict, "y": ..., "e": ...}
+    cal: dict | None = None    # {"X1": {...}, ...}
     modelo: str = ""
     fabricante: str = ""
+
+
+@dataclass
+class PumpSystemData:
+    nombre: str = "Bombeo 1"
+    tramos: list = field(default_factory=list)        # SegmentData
+    accesorios: list = field(default_factory=list)    # AccessoryData
+    horas: float = 10.0
+    he: float = 0.0
+    sumar_5m_ras: bool = False
+    eficiencia: float = 0.70
+    tipo_bomba: str = "superficie"    # superficie|sumergible
+    pn_mca: float = 0.0
+    panel_w: float = 710.0
+    panel_area: float = 2.9768
+    panel_fs: float = 3.0
+    bombas: list = field(default_factory=list)        # PumpData
+    bomba_seleccionada: str = ""
 
 
 @dataclass
@@ -125,11 +136,7 @@ class Project:
     poblacion: PopulationConfig = field(default_factory=PopulationConfig)
     demanda: DemandConfig = field(default_factory=DemandConfig)
     almacenamiento: StorageConfig = field(default_factory=StorageConfig)
-    bombeo: BombeoConfig = field(default_factory=BombeoConfig)
-    tramos: list = field(default_factory=list)        # SegmentData
-    accesorios: list = field(default_factory=list)    # AccessoryData
-    bombas: list = field(default_factory=list)        # PumpData
-    bomba_seleccionada: str = ""
+    bombeos: list = field(default_factory=list)       # PumpSystemData
 
 
 def save(p: Project, path: str | Path) -> None:
@@ -138,29 +145,59 @@ def save(p: Project, path: str | Path) -> None:
                           encoding="utf-8")
 
 
-def load(path: str | Path) -> Project:
-    raw = json.loads(Path(path).read_text(encoding="utf-8"))
-    if raw.get("schema_version") != SCHEMA_VERSION:
-        raise SchemaError(f"schema_version {raw.get('schema_version')} no soportada "
-                          f"(esperada {SCHEMA_VERSION})")
-    d = raw["project"]
-    p = Project(**{k: d[k] for k in ("nombre", "municipio", "departamento",
-                                     "corregimiento", "consultor", "fecha",
-                                     "altitud", "temperatura")})
-    p.censo = [tuple(x) for x in d["censo"]]
-    p.poblacion = PopulationConfig(**d["poblacion"])
-    p.demanda = DemandConfig(**d["demanda"])
-    p.demanda.usos = [tuple(u) for u in p.demanda.usos]
-    p.almacenamiento = StorageConfig(**d["almacenamiento"])
-    p.almacenamiento.tanques = [TankSpec(**t) for t in p.almacenamiento.tanques]
-    p.bombeo = BombeoConfig(**d["bombeo"])
-    p.tramos = [SegmentData(**t) for t in d["tramos"]]
-    p.accesorios = [AccessoryData(**a) for a in d["accesorios"]]
-    p.bombas = []
-    for b in d["bombas"]:
+def _pump_system_from_dict(s: dict) -> PumpSystemData:
+    sys = PumpSystemData(**{k: v for k, v in s.items()
+                            if k not in ("tramos", "accesorios", "bombas")})
+    sys.tramos = [SegmentData(**t) for t in s.get("tramos", [])]
+    sys.accesorios = [AccessoryData(**a) for a in s.get("accesorios", [])]
+    sys.bombas = []
+    for b in s.get("bombas", []):
         pump = PumpData(**b)
         pump.puntos_qh = [tuple(x) for x in pump.puntos_qh]
         pump.puntos_qe = [tuple(x) for x in pump.puntos_qe]
-        p.bombas.append(pump)
-    p.bomba_seleccionada = d.get("bomba_seleccionada", "")
+        sys.bombas.append(pump)
+    return sys
+
+
+def _migrate_v1(d: dict) -> dict:
+    """schema 1 → 2: tramos/accesorios/bombas sueltos pasan a un sistema único."""
+    bombeo = d.pop("bombeo", {})
+    sistema = {
+        "nombre": "Bombeo 1",
+        "tramos": d.pop("tramos", []),
+        "accesorios": d.pop("accesorios", []),
+        "bombas": d.pop("bombas", []),
+        "bomba_seleccionada": d.pop("bomba_seleccionada", ""),
+        "horas": bombeo.get("horas", 10.0),
+        "he": bombeo.get("he", 0.0),
+        "sumar_5m_ras": bombeo.get("sumar_5m_ras", False),
+        "eficiencia": bombeo.get("eficiencia", 0.70),
+        "pn_mca": bombeo.get("pn_mca", 0.0),
+        "panel_w": bombeo.get("panel_w", 710.0),
+        "panel_area": bombeo.get("panel_area", 2.9768),
+        "panel_fs": bombeo.get("panel_fs", 3.0),
+    }
+    d["bombeos"] = [sistema] if (sistema["tramos"] or sistema["bombas"]) else []
+    return d
+
+
+def load(path: str | Path) -> Project:
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    version = raw.get("schema_version")
+    if version not in (1, SCHEMA_VERSION):
+        raise SchemaError(f"schema_version {version} no soportada "
+                          f"(esperada 1 o {SCHEMA_VERSION})")
+    d = raw["project"]
+    if version == 1:
+        d = _migrate_v1(d)
+    p = Project(**{k: d.get(k, "") for k in ("nombre", "municipio", "departamento",
+                                             "corregimiento", "consultor", "fecha")},
+                altitud=d.get("altitud", 0.0), temperatura=d.get("temperatura", 20.0))
+    p.censo = [tuple(x) for x in d.get("censo", [])]
+    p.poblacion = PopulationConfig(**d.get("poblacion", {}))
+    p.demanda = DemandConfig(**d.get("demanda", {}))
+    p.demanda.usos = [tuple(u) for u in p.demanda.usos]
+    p.almacenamiento = StorageConfig(**d.get("almacenamiento", {}))
+    p.almacenamiento.tanques = [TankSpec(**t) for t in p.almacenamiento.tanques]
+    p.bombeos = [_pump_system_from_dict(s) for s in d.get("bombeos", [])]
     return p
