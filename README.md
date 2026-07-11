@@ -18,10 +18,21 @@ operación, y generación de la memoria técnica en LaTeX.
    método sugerido por menor desviación
 3. **Caudales** — dotación neta (3 modos), pérdidas, Qmed/QMD/QMH; K1/K2
    automáticos según el tamaño de la población proyectada (Par. 2 Art. 47)
-4. **Almacenamiento** — volumen (Art. 81 + curva integral), predimensionado de tanques
-5. **Bombeo** — tramos y accesorios ilimitados, pérdidas acumuladas, potencia, ariete, paneles
-6. **Curvas de bomba** — digitalización de catálogos, BEP, comparación multi-bomba
-7. **Reporte** — memoria LaTeX estructurada, compilación a PDF si hay LaTeX instalado
+4. **Almacenamiento** — cadena real captación→PTAP→tanque bajo→bombeo→tanque
+   elevado→red con balance de regulación por tanque (o tanque único Art. 81 +
+   curva integral); patrones horarios cargables desde Excel/CSV; predimensionado
+   por tanque con forma circular/cuadrada/rectangular y tipo bajo/elevado
+5. **Bombeo** — N sistemas nombrados, cada uno un paquete completo: tramos con
+   catálogo normativo de tuberías (RDE/clase, DN50–1200: PEAD, PVC-U en
+   pulgadas, hierro dúctil K9/C, acero, GRP), accesorios, potencia, curva del
+   sistema, golpe de ariete con espesores del catálogo, paneles solares
+6. **Curvas de bomba** — por sistema: digitalización de catálogos o entrada
+   manual Q-H/Q-η, BEP, punto de diseño (Qb, Hd) marcado, puntos de operación
+   y selección por mayor eficiencia
+7. **Reporte** — memoria LaTeX recalculada íntegramente desde el proyecto, con
+   6 figuras generadas (proyección, comparación de métodos, caudales anuales,
+   balance de tanques, curvas de bombeo por sistema y esquema del sistema);
+   compila a PDF si hay LaTeX instalado
 
 ## Normativa implementada
 
