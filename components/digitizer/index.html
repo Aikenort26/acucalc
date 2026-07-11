@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; overflow: hidden; background: transparent; }
+  #wrap { position: relative; display: inline-block; cursor: crosshair; }
+  #img { display: block; max-width: 100%; }
+  #overlay { position: absolute; left: 0; top: 0; pointer-events: none; }
+  #loupe { position: absolute; left: 8px; top: 8px; border: 2px solid #22C55E;
+           border-radius: 4px; background: #000; pointer-events: none; z-index: 10; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <img id="img" alt="curva"/>
+  <canvas id="overlay"></canvas>
+  <canvas id="loupe" width="180" height="180"></canvas>
+</div>
+<script>
+// Componente Streamlit vanilla: lupa en tiempo real + markers + click→(x,y).
+const ZOOM = 4, L = 180;
+let args = null;
+const img = document.getElementById('img'),
+      ov = document.getElementById('overlay'),
+      loupe = document.getElementById('loupe'),
+      wrap = document.getElementById('wrap');
+
+function send(type, data) {
+  window.parent.postMessage(Object.assign({isStreamlitMessage: true, type: type}, data), '*');
+}
+function setValue(v) { send('streamlit:setComponentValue', {value: v, dataType: 'json'}); }
+function frameHeight() { send('streamlit:setFrameHeight', {height: document.body.scrollHeight + 4}); }
+
+function drawMarkers() {
+  ov.width = img.clientWidth; ov.height = img.clientHeight;
+  const c = ov.getContext('2d');
+  c.clearRect(0, 0, ov.width, ov.height);
+  if (!args || !img.naturalWidth) return;
+  const s = img.clientWidth / img.naturalWidth;
+  const cross = (x, y, color, label) => {
+    x *= s; y *= s;
+    c.strokeStyle = color; c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(x - 9, y); c.lineTo(x + 9, y);
+    c.moveTo(x, y - 9); c.lineTo(x, y + 9);
+    c.stroke();
+    if (label) { c.fillStyle = color; c.font = 'bold 12px sans-serif'; c.fillText(label, x + 11, y - 6); }
+  };
+  const dot = (x, y, color) => {
+    x *= s; y *= s;
+    c.strokeStyle = color; c.lineWidth = 3;
+    c.beginPath(); c.arc(x, y, 5, 0, 6.2832); c.stroke();
+  };
+  (args.markers.cal || []).forEach(m => cross(m.x, m.y, '#FF3333', m.label));
+  (args.markers.qh || []).forEach(p => dot(p[0], p[1], '#00E5FF'));
+  (args.markers.qe || []).forEach(p => dot(p[0], p[1], '#4ADE80'));
+  if (args.markers.pending) cross(args.markers.pending[0], args.markers.pending[1], '#FFD400', '');
+}
+
+img.addEventListener('load', () => { drawMarkers(); frameHeight(); });
+
+wrap.addEventListener('mousemove', e => {
+  if (!img.naturalWidth) return;
+  const r = img.getBoundingClientRect();
+  const s = img.naturalWidth / img.clientWidth;
+  const px = (e.clientX - r.left) * s, py = (e.clientY - r.top) * s;
+  const lc = loupe.getContext('2d');
+  lc.imageSmoothingEnabled = false;
+  lc.fillStyle = '#fff'; lc.fillRect(0, 0, L, L);
+  const src = L / ZOOM;
+  lc.drawImage(img, px - src / 2, py - src / 2, src, src, 0, 0, L, L);
+  lc.strokeStyle = '#FFD400'; lc.lineWidth = 1;
+  lc.beginPath();
+  lc.moveTo(L / 2, 0); lc.lineTo(L / 2, L);
+  lc.moveTo(0, L / 2); lc.lineTo(L, L / 2);
+  lc.stroke();
+  lc.fillStyle = '#B45309'; lc.font = 'bold 11px monospace';
+  lc.fillText('(' + Math.round(px) + ', ' + Math.round(py) + ')', 4, L - 6);
+});
+
+wrap.addEventListener('click', e => {
+  if (!img.naturalWidth) return;
+  const r = img.getBoundingClientRect();
+  const s = img.naturalWidth / img.clientWidth;
+  setValue({x: Math.round((e.clientX - r.left) * s),
+            y: Math.round((e.clientY - r.top) * s), n: Date.now()});
+});
+
+window.addEventListener('message', e => {
+  const d = e.data;
+  if (d.type !== 'streamlit:render') return;
+  args = d.args;
+  if (img.getAttribute('src') !== args.image) img.setAttribute('src', args.image);
+  else { drawMarkers(); frameHeight(); }
+});
+
+send('streamlit:componentReady', {apiVersion: 1});
+frameHeight();
+</script>
+</body>
+</html>

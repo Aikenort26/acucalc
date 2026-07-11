@@ -9,6 +9,12 @@ from core import curves as cv, pumping as pu
 from core.project import PumpData
 from pages_common import page_setup, num_input
 
+try:
+    from components.digitizer import digitizer
+    DIGITIZER_OK = True
+except Exception:
+    DIGITIZER_OK = False
+
 p = page_setup()
 st.header("6 · Curvas de bomba — digitalización y punto de operación")
 
@@ -101,8 +107,11 @@ if img is not None:
     st.caption("1) Elige el modo · 2) haz click en la imagen · 3) afina el punto en el "
                "panel de zoom (±1 px) · 4) confirma. Los puntos confirmados quedan "
                "marcados sobre la imagen, como en automeris.io.")
-    modo = st.radio("Modo de click", ["Calibrar X1", "Calibrar X2", "Calibrar Y1",
-                                      "Calibrar Y2", "Punto Q-H", "Punto Q-E"],
+    if f"modo_next_{BK}" in st.session_state:      # auto-avance tras confirmar
+        st.session_state[f"w_radio_modo_{BK}"] = st.session_state.pop(f"modo_next_{BK}")
+    modo = st.radio("Modo de click (avanza solo al confirmar)",
+                    ["Calibrar X1", "Calibrar X2", "Calibrar Y1",
+                     "Calibrar Y2", "Punto Q-H", "Punto Q-E"],
                     horizontal=True, key=f"w_radio_modo_{BK}")
     o1, o2, o3 = st.columns(3)
     log_x = o1.checkbox("Eje X logarítmico", value=False, key=f"w_chk_lx_{BK}")
@@ -117,14 +126,36 @@ if img is not None:
     col_zoom, col_img = st.columns([1, 3])
 
     with col_img:
-        shown = _overlay(img, cal, pend)
-        click = streamlit_image_coordinates(shown, key=f"img_{BK}")
-        if click is not None:
-            nuevo_p = {"x": int(click["x"]), "y": int(click["y"])}
-            if nuevo_p != st.session_state.get(f"last_click_{BK}"):
-                st.session_state[f"last_click_{BK}"] = nuevo_p
-                st.session_state[pend_key] = dict(nuevo_p)
+        clasico = st.checkbox("Modo clásico (sin lupa en vivo)",
+                              value=not DIGITIZER_OK, disabled=not DIGITIZER_OK,
+                              key=f"w_chk_clasico_{BK}")
+        if not clasico:
+            marks_cal = []
+            for eje, v in (cal or {}).items():
+                if eje.startswith("X"):
+                    marks_cal.append({"x": v["px"], "y": v.get("py", img.height - 20),
+                                      "label": eje})
+                else:
+                    marks_cal.append({"x": v.get("px_x", 20), "y": v["px"],
+                                      "label": eje})
+            markers = {"cal": marks_cal,
+                       "qh": st.session_state.get(f"qh_px_{BK}", []),
+                       "qe": st.session_state.get(f"qe_px_{BK}", []),
+                       "pending": [pend["x"], pend["y"]] if pend else None}
+            click = digitizer(bomba.imagen_b64, markers, key=f"dg_{BK}")
+            if click and click.get("n") != st.session_state.get(f"last_click_{BK}"):
+                st.session_state[f"last_click_{BK}"] = click.get("n")
+                st.session_state[pend_key] = {"x": int(click["x"]), "y": int(click["y"])}
                 st.rerun()
+        else:
+            shown = _overlay(img, cal, pend)
+            click = streamlit_image_coordinates(shown, key=f"img_{BK}")
+            if click is not None:
+                nuevo_p = {"x": int(click["x"]), "y": int(click["y"])}
+                if nuevo_p != st.session_state.get(f"last_click_{BK}"):
+                    st.session_state[f"last_click_{BK}"] = nuevo_p
+                    st.session_state[pend_key] = dict(nuevo_p)
+                    st.rerun()
 
     with col_zoom:
         st.markdown("**Zoom de precisión**")
@@ -161,6 +192,9 @@ if img is not None:
                     cal[eje]["val"] = val
                     bomba.cal = cal
                     st.session_state[pend_key] = None
+                    st.session_state[f"modo_next_{BK}"] = {
+                        "X1": "Calibrar X2", "X2": "Calibrar Y1",
+                        "Y1": "Calibrar Y2", "Y2": "Punto Q-H"}[eje]
                     st.rerun()
             else:
                 if {"X1", "X2", "Y1", "Y2"} <= set(cal):
