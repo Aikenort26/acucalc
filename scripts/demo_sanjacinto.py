@@ -94,16 +94,13 @@ s2.bombas = [pj.PumpData(nombre=WKL.nombre, fabricante="KSB", modelo="WKL 125",
 s2.bomba_seleccionada = WKL.nombre
 p.bombeos = [s1, s2]
 
-# ---------- primer pase: volúmenes de la cadena → tanques ----------
-ctx, _ = report_ctx.build(p)
+# tren de tanques: semienterrado (entrada = pozo 5-14) + elevado (bombeo 6-15);
+# los volúmenes los asigna automáticamente el balance de cada tanque
 alm.tanques = [
-    pj.TankSpec("Tanque semienterrado", "bajo", "rectangular",
-                float(ctx["v_bajo"]) or 5.0, 2.5, 1.5),
-    pj.TankSpec("Tanque elevado", "elevado", "circular",
-                float(ctx["v_elevado"]), 2.5, 1.0),
+    pj.TankSpec("Tanque semienterrado", "bajo", "rectangular", 0, 2.5, 1.5, 5, 14),
+    pj.TankSpec("Tanque elevado", "elevado", "circular", 0, 2.5, 1.0, 6, 15),
 ]
 
-# ---------- segundo pase con tanques + salida ----------
 ctx, figuras = report_ctx.build(p)
 SAVES.mkdir(exist_ok=True)
 pj.save(p, SAVES / "Acueducto_San_Jacinto.acucalc.json")
@@ -120,8 +117,10 @@ print(f"Censo DANE {cfg.mpio} ({cfg.area}): {p.censo[0]} … {p.censo[-1]}")
 print(f"Población base {cfg.year0}: {cfg.p0:,.0f} hab · método: {cfg.metodo}")
 print(f"Población diseño {cfg.horizon_year}: {ctx['pob_final']} hab")
 print(f"Qmed=QMD=QMH: {ctx['qmd']} L/s (dotación 110, sin pérdidas, K=1)")
-print(f"Tanques: bajo {ctx['v_bajo']} m³ · elevado {ctx['v_elevado']} m³ "
-      f"· total {ctx['v_final']} m³")
+for tb in ctx["tanques_balance"]:
+    print(f"Tanque '{tb['nombre']}': entrada {tb['horas']} h · Q {tb['q_entrada']} L/s "
+          f"· frac {tb['frac']} · V {tb['v']} m³")
+print(f"Volumen total: {ctx['v_final']} m³")
 for s in ctx["sistemas"]:
     print(f"Sistema '{s['nombre']}': Qb={s['qb']} L/s · Hd={s['hd']} m · "
           f"{s['potencia_hp']} HP · bombas: "

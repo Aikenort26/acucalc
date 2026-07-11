@@ -35,17 +35,18 @@ def build(p: Project) -> tuple[dict, dict]:
 
     # ---------- almacenamiento ----------
     alm = p.almacenamiento
-    chain, a, b = None, None, None
-    if alm.usar_cadena and alm.factores_hora and alm.suministro_hora:
+    tren, a, b = None, None, None
+    if alm.usar_cadena and alm.factores_hora and alm.tanques:
         try:
-            chain = storage.tank_chain(qmd_m3d, alm.factores_hora,
-                                       alm.ventana_captacion or [1] * 24,
-                                       alm.suministro_hora, alm.frac_incendio,
-                                       alm.dias_reserva)
+            tren = storage.tank_train(
+                qmd_m3d, [(t.nombre, t.entrada_flags()) for t in alm.tanques],
+                alm.factores_hora, alm.frac_incendio, alm.dias_reserva)
+            for t, bal in zip(alm.tanques, tren):
+                t.volumen = float(bal.v_total_redondeado)
         except ValueError:
-            chain = None
-    if chain:
-        v_final = chain.total_redondeado
+            tren = None
+    if tren:
+        v_final = sum(bal.v_total_redondeado for bal in tren)
     elif alm.factores_hora and alm.suministro_hora:
         a = storage.volume_art81(qmd_m3d, alm.frac_regulacion, alm.frac_incendio,
                                  alm.dias_reserva)
@@ -71,11 +72,15 @@ def build(p: Project) -> tuple[dict, dict]:
     _save(rf.fig_metodos(proj.deviations, pop.suggest_method(proj)), "metodos")
     _save(rf.fig_caudales([(t, fr.qmed_lps, fr.qmd_lps, fr.qmh_lps)
                            for t, fr in serie_q]), "caudales")
-    if chain:
-        _save(rf.fig_balance(alm.ventana_captacion or [1] * 24, alm.suministro_hora,
-                             alm.factores_hora), "balance")
+    if tren:
+        pares = []
+        for i, t in enumerate(alm.tanques):
+            salida = (alm.tanques[i + 1].entrada_flags() if i + 1 < len(alm.tanques)
+                      else alm.factores_hora)
+            pares.append((t.nombre, t.entrada_flags(), salida))
+        _save(rf.fig_balance_train(pares), "balance")
     tipo_bomba_ppal = p.bombeos[0].tipo_bomba if p.bombeos else "superficie"
-    _save(rf.fig_esquema(tipo_bomba_ppal, cadena=bool(chain)), "esquema")
+    _save(rf.fig_esquema(tipo_bomba_ppal, cadena=bool(tren)), "esquema")
 
     # ---------- sistemas de bombeo ----------
     sistemas_ctx = []
@@ -166,11 +171,15 @@ def build(p: Project) -> tuple[dict, dict]:
             {"ano": t, "pob": f"{pob_t:,.0f}", "qmed": f"{fr.qmed_lps:.3f}",
              "qmd": f"{fr.qmd_lps:.3f}", "qmh": f"{fr.qmh_lps:.3f}"}
             for (t, fr), (_, pob_t) in list(zip(serie_q, serie_total))[::paso]],
-        "usar_cadena": bool(chain),
-        "v_bajo": chain.bajo.v_total_redondeado if chain else "—",
-        "v_elevado": chain.elevado.v_total_redondeado if chain else "—",
-        "v_art81": "—" if chain else (a.v_total_redondeado if a else "—"),
-        "v_curva": "—" if chain else (b.v_total_redondeado if b else "—"),
+        "usar_cadena": bool(tren),
+        "tanques_balance": ([{"nombre": bal.nombre,
+                              "horas": f"{bal.horas_entrada:.0f}",
+                              "q_entrada": f"{bal.q_entrada_lps:.2f}",
+                              "frac": f"{bal.frac_regulacion:.4f}",
+                              "v": bal.v_total_redondeado} for bal in tren]
+                            if tren else []),
+        "v_art81": "—" if tren else (a.v_total_redondeado if a else "—"),
+        "v_curva": "—" if tren else (b.v_total_redondeado if b else "—"),
         "v_final": v_final,
         "tanques": tanques_ctx,
         "sistemas": sistemas_ctx,

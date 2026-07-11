@@ -50,6 +50,15 @@ class TankSpec:
     volumen: float = 0.0
     altura: float = 2.5
     ratio: float = 1.5          # largo/ancho (solo rectangular)
+    entrada_ini: int = 5        # ventana de entrada (bombeo/gravedad que lo alimenta)
+    entrada_fin: int = 14       # inclusive; si fin < ini, la ventana cruza medianoche
+
+    def entrada_flags(self) -> list[int]:
+        if self.entrada_fin >= self.entrada_ini:
+            return [1 if self.entrada_ini <= h <= self.entrada_fin else 0
+                    for h in range(24)]
+        return [1 if (h >= self.entrada_ini or h <= self.entrada_fin) else 0
+                for h in range(24)]
 
 
 @dataclass

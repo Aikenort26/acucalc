@@ -64,6 +64,49 @@ def volume_curva_integral(qmd_m3d: float, factores_hora: list[float],
 
 
 @dataclass(frozen=True)
+class TankBalance:
+    nombre: str
+    frac_regulacion: float
+    q_entrada_lps: float     # caudal constante del bombeo/gravedad que lo alimenta
+    horas_entrada: float
+    v_regulacion: float
+    v_incendio: float
+    v_total: float
+    v_total_redondeado: int
+
+
+def tank_train(qmd_m3d: float, entradas: list[tuple[str, list[float]]],
+               factores_consumo: list[float], frac_incendio: float = 0.15,
+               dias_reserva: float = 1) -> list[TankBalance]:
+    """Cadena de N tanques en serie. `entradas` = [(nombre, ventana_entrada[24])]
+    en orden hidráulico. La salida de cada tanque es la ventana de entrada del
+    siguiente (bombeo intermedio a caudal constante = QMD·24/h de esa ventana);
+    la salida del último es el patrón horario de consumo de la población.
+    Balance de regulación por tanque con `balance_curve`."""
+    if not entradas:
+        raise ValueError("Se requiere al menos un tanque")
+    if len(factores_consumo) != 24:
+        raise ValueError("Se requieren 24 factores de consumo")
+    consumo = _normalize(factores_consumo, "consumo")
+    qmd_lps = qmd_m3d / 86.4
+    out = []
+    for i, (nombre, ventana) in enumerate(entradas):
+        supply = _normalize(ventana, f"entrada de '{nombre}'")
+        if i + 1 < len(entradas):
+            demand = _normalize(entradas[i + 1][1], f"entrada de '{entradas[i+1][0]}'")
+        else:
+            demand = consumo
+        frac, _ = balance_curve(supply, demand)
+        horas = sum(1 for w in ventana if w)
+        vreg = frac * qmd_m3d
+        vinc = vreg * frac_incendio
+        vtot = (vreg + vinc) * dias_reserva
+        out.append(TankBalance(nombre, frac, qmd_lps * 24.0 / horas if horas else 0.0,
+                               float(horas), vreg, vinc, vtot, _round_up_5(vtot)))
+    return out
+
+
+@dataclass(frozen=True)
 class ChainResult:
     bajo: StorageResult
     elevado: StorageResult

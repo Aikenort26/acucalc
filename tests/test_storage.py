@@ -78,3 +78,33 @@ def test_tank_chain_ventanas_invalidas():
     import pytest
     with pytest.raises(ValueError):
         storage.tank_chain(QMD_M3D, FACTORES, [0] * 24, SUPPLY, 0.15, 1)
+
+
+def test_tank_train_equivale_a_chain():
+    """El tren de 2 tanques reproduce exactamente la cadena bajo/elevado."""
+    entradas = [("Tanque bajo", [1] * 24), ("Tanque elevado", SUPPLY)]
+    tren = storage.tank_train(QMD_M3D, entradas, FACTORES, 0.15, 1)
+    chain = storage.tank_chain(QMD_M3D, FACTORES, [1] * 24, SUPPLY, 0.15, 1)
+    assert abs(tren[0].frac_regulacion - chain.bajo.frac_regulacion) < 1e-12
+    assert abs(tren[1].frac_regulacion - chain.elevado.frac_regulacion) < 1e-12
+    assert tren[1].v_total_redondeado == 110          # golden Bolívar 10 h
+    assert abs(tren[1].frac_regulacion - 0.516667) < 1e-4
+    # caudal del bombeo intermedio que alimenta al elevado: QMD·24/10
+    assert abs(tren[1].q_entrada_lps - (QMD_M3D / 86.4) * 2.4) < 1e-6
+    assert tren[1].horas_entrada == 10
+
+
+def test_tank_train_tres_tanques():
+    entradas = [("T1", [1] * 24),
+                ("T2", [1 if 5 <= h <= 14 else 0 for h in range(24)]),
+                ("T3", [1 if 6 <= h <= 17 else 0 for h in range(24)])]
+    tren = storage.tank_train(QMD_M3D, entradas, FACTORES, 0.15, 1)
+    assert len(tren) == 3
+    assert tren[2].horas_entrada == 12
+    assert all(t.v_total_redondeado % 5 == 0 for t in tren)
+
+
+def test_tank_train_vacio():
+    import pytest
+    with pytest.raises(ValueError):
+        storage.tank_train(QMD_M3D, [], FACTORES, 0.15, 1)

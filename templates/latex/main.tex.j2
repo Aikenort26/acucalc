@@ -105,14 +105,21 @@ Componente & $Q$ diseño [L/s] \\ \midrule
 
 \section{Volumen de almacenamiento}
 \BLOCK{if usar_cadena}
-El sistema opera en cadena: el agua captada pasa por la PTAP (sin
-almacenamiento), llega a un tanque bajo y desde allí se bombea a caudal
-constante a un tanque elevado, que realiza la regulación frente al consumo
-horario de la población. Cada tanque se verifica con su propia curva integral:
-el bajo balancea la captación contra el bombeo y el elevado balancea el bombeo
-contra el patrón de consumo.
-Volumen del tanque bajo: \VAR{v_bajo} m\textsuperscript{3}.
-Volumen del tanque elevado: \VAR{v_elevado} m\textsuperscript{3}.
+El sistema opera como un tren de tanques en serie: el agua captada pasa por la
+PTAP (sin almacenamiento) y recorre los tanques hasta la red. Cada tanque se
+verifica con su propia curva integral: su entrada es el bombeo (o gravedad) que
+lo alimenta, a caudal constante durante su ventana horaria, y su salida es la
+entrada del tanque siguiente o, en el último, el patrón horario de consumo de
+la población. El volumen asignado a cada tanque resulta de su propia fracción
+de regulación.
+\begin{table}[H]\centering
+\caption{Regulación por tanque (curva integral de cada balance).}
+\begin{tabular}{lrrrr}\toprule
+Tanque & Entrada [h/día] & $Q$ entrada [L/s] & Fracción reg. & $V$ asignado [m³] \\ \midrule
+\BLOCK{for tb in tanques_balance}
+\VAR{tb.nombre} & \VAR{tb.horas} & \VAR{tb.q_entrada} & \VAR{tb.frac} & \VAR{tb.v} \\
+\BLOCK{endfor}
+\bottomrule\end{tabular}\end{table}
 \BLOCK{else}
 Método del Art. 81 (Res. 0330): \VAR{v_art81} m\textsuperscript{3}.
 Método de la curva integral: \VAR{v_curva} m\textsuperscript{3}.

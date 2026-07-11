@@ -36,6 +36,19 @@ with st.popover("🗑 Eliminar este sistema"):
                                             else "➕ Nuevo sistema…")
         st.rerun()
 
+# ---------- sincronizar horas con la entrada de un tanque del tren ----------
+tanques_tren = [t for t in p.almacenamiento.tanques
+                if p.almacenamiento.usar_cadena]
+if tanques_tren:
+    opciones_tk = ["—"] + [f"{t.nombre} ({sum(t.entrada_flags())} h)"
+                           for t in tanques_tren]
+    sel_tk = st.selectbox("Sincronizar horas de bombeo con la entrada del tanque…",
+                          opciones_tk, key=f"w_sel_synctk_{K}")
+    if sel_tk != "—":
+        horas_tk = float(sum(tanques_tren[opciones_tk.index(sel_tk) - 1]
+                             .entrada_flags()))
+        st.session_state["w_horas_" + K] = horas_tk
+
 # ---------- parámetros del sistema ----------
 c0, c1, c2, c3, c4 = st.columns(5)
 sys_d.tipo_bomba = c0.selectbox("Tipo de bomba", ["superficie", "sumergible"],

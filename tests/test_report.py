@@ -19,7 +19,10 @@ CTX = {
     "caudales_anuales": [
         {"ano": 2026, "pob": "1,400", "qmed": "1.440", "qmd": "1.872", "qmh": "2.996"},
         {"ano": 2051, "pob": "1,602", "qmed": "1.648", "qmd": "2.142", "qmh": "3.428"}],
-    "usar_cadena": True, "v_bajo": 30, "v_elevado": 110,
+    "usar_cadena": True,
+    "tanques_balance": [
+        {"nombre": "T. bajo", "horas": "24", "q_entrada": "21.49", "frac": "0.0417", "v": 30},
+        {"nombre": "T. elevado", "horas": "10", "q_entrada": "51.57", "frac": "0.5167", "v": 110}],
     "v_art81": "—", "v_curva": "—", "v_final": 140,
     "tanques": [{"nombre": "T. bajo", "tipo": "bajo", "forma": "rectangular",
                  "dim": "3.00 × 4.50 m", "volumen": "30", "altura": "2.50"},
@@ -49,7 +52,8 @@ def test_render_tex(tmp_path):
     assert "Bomba A" in tex
     assert "proyecciones oficiales DANE" in tex             # fuente censal
     assert "Captación→T.Bajo" in tex                        # sistema de bombeo
-    assert "tanque bajo" in tex.lower()                     # cadena de tanques
+    assert "tren de tanques" in tex.lower()                 # cadena de tanques
+    assert "51.57" in tex                                   # Q de entrada por tanque
     assert "flotante" in tex.lower()                        # población flotante
     assert "includegraphics" not in tex                     # sin figuras si figuras={}
 

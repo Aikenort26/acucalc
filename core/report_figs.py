@@ -75,6 +75,23 @@ def _acum(v):
     return out
 
 
+def fig_balance_train(pares: list[tuple[str, list[float], list[float]]]):
+    """Curvas acumuladas entrada vs salida para N tanques.
+    pares = [(nombre, entrada[24], salida[24])] — se normalizan."""
+    n = lambda v: [x / sum(v) for x in v]
+    horas = list(range(24))
+    cnt = max(len(pares), 1)
+    fig, axes = plt.subplots(1, cnt, figsize=(5.5 * cnt, 4), squeeze=False)
+    for ax, (nombre, entrada, salida) in zip(axes[0], pares):
+        ax.plot(horas, _acum(n(entrada)), label="Entrada (suministro)")
+        ax.plot(horas, _acum(n(salida)), label="Salida (consumo)")
+        ax.set_title(nombre, fontsize=10)
+        ax.set_xlabel("Hora"); ax.set_ylabel("Fracción acumulada del día")
+        ax.grid(alpha=0.3); ax.legend(fontsize=8)
+    fig.tight_layout()
+    return fig
+
+
 def fig_balance(capta: list[float], bombeo: list[float], consumo: list[float]):
     """Curvas acumuladas de suministro/consumo por tanque (bajo y elevado).
     Entradas: 24 valores horarios (se normalizan)."""
