@@ -1,11 +1,12 @@
 import datetime as dt
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 from core import dane, population as pop
-from pages_common import get_project, num_input, int_input
+from pages_common import page_setup, num_input, int_input
 
+p = page_setup()
 st.header("2 · Proyección de población")
-p = get_project()
 cfg = p.poblacion
 
 if not cfg.mpio:
@@ -131,7 +132,21 @@ proj = pop.project(cfg.p0, int(cfg.year0), int(cfg.horizon_year), rates, cfg.tas
 df = pd.DataFrame({m: dict(s) for m, s in proj.series.items()})
 df["promedio"] = df.mean(axis=1)
 st.subheader("Proyección de población")
-st.line_chart(df)
+with plt.style.context("dark_background"):
+    fig, ax = plt.subplots(figsize=(9, 4.2))
+    fig.patch.set_alpha(0)
+    ax.set_facecolor("none")
+    for col in df.columns:
+        ax.plot(df.index, df[col], lw=2.2 if col == "promedio" else 1.6,
+                ls="--" if col == "promedio" else "-", label=col)
+    vmin, vmax = df.values.min(), df.values.max()
+    margen = (vmax - vmin) * 0.05 or 1
+    ax.set_ylim(vmin - margen, vmax + margen)          # zoom real, no desde 0
+    ax.set_xlim(df.index.min(), df.index.max())
+    ax.set_xlabel("Año"); ax.set_ylabel("Población [hab]")
+    ax.grid(alpha=0.25); ax.legend(fontsize=8)
+    st.pyplot(fig)
+    plt.close(fig)
 st.dataframe(df.style.format("{:,.0f}"), width="stretch")
 
 st.subheader("Desviaciones vs promedio (año horizonte)")

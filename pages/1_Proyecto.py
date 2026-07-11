@@ -1,10 +1,10 @@
 import datetime as dt
 import streamlit as st
 from core import dane, project as pj
-from pages_common import get_project, num_input, clear_widget_state
+from pages_common import (SAVES_DIR, page_setup, num_input, clear_widget_state)
 
+p = page_setup()
 st.header("1 · Proyecto")
-p = get_project()
 
 c1, c2 = st.columns(2)
 with c1:
@@ -55,7 +55,18 @@ with c3:
         mime="application/json",
     )
 with c4:
-    up = st.file_uploader("Cargar proyecto", type=["json"])
+    guardados = sorted(SAVES_DIR.glob("*.acucalc.json")) if SAVES_DIR.exists() else []
+    if guardados:
+        sel_g = st.selectbox("Proyectos guardados (saves/)",
+                             ["—"] + [g.name for g in guardados], key="w_sel_save")
+        if sel_g != "—" and st.button("📂 Abrir guardado"):
+            try:
+                st.session_state["project"] = pj.load(SAVES_DIR / sel_g)
+                clear_widget_state()
+                st.rerun()
+            except pj.SchemaError as e:
+                st.error(f"No se pudo cargar: {e}")
+    up = st.file_uploader("…o cargar archivo de proyecto", type=["json"])
     if up is not None:
         import tempfile, pathlib
         tmp = pathlib.Path(tempfile.mkstemp(suffix=".json")[1])

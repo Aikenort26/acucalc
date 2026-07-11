@@ -4,10 +4,10 @@ from pathlib import Path
 import streamlit as st
 from core import curves as cvs, demand, population as pop, pumping as pu
 from core import report, report_figs as rf, storage
-from pages_common import get_project
+from pages_common import page_setup
 
+p = page_setup()
 st.header("7 · Reporte — memoria de cálculo LaTeX")
-p = get_project()
 cfg = p.poblacion
 
 if not (p.nombre and len(p.censo) >= 2 and cfg.p0 > 0 and cfg.metodo):
@@ -174,17 +174,28 @@ st.caption(f"El reporte se genera recalculando todo desde el proyecto: població
            f"{v_final} m³ · {len(sistemas_ctx)} sistema(s) de bombeo · "
            f"{len(figuras)} figuras.")
 
-if st.button("📄 Generar memoria LaTeX"):
+import shutil as _sh
+hay_latex = bool(_sh.which("latexmk") or _sh.which("pdflatex"))
+if not hay_latex:
+    st.warning("No se detectó LaTeX (latexmk/pdflatex) en el PATH. Instala "
+               "[MiKTeX](https://miktex.org/download) para compilar el PDF "
+               "directamente desde la app; mientras tanto se entrega el proyecto "
+               ".zip para compilar en Overleaf.")
+
+if st.button("📄 Generar memoria" + (" (PDF)" if hay_latex else " (ZIP)"),
+             type="primary"):
     out = report.render(ctx, Path(tempfile.mkdtemp()) / "memoria")
-    with st.spinner("Compilando PDF (si hay LaTeX instalado)…"):
-        pdf = report.compile_pdf(out)
-    z = report.make_zip(out)
-    st.success("Proyecto LaTeX generado.")
-    st.download_button("⬇️ Descargar proyecto LaTeX (.zip para Overleaf)",
-                       data=z.read_bytes(), file_name=f"memoria_{p.nombre}.zip")
+    pdf = None
+    if hay_latex:
+        with st.spinner("Compilando PDF con LaTeX…"):
+            pdf = report.compile_pdf(out)
     if pdf:
-        st.download_button("⬇️ Descargar PDF compilado", data=pdf.read_bytes(),
-                           file_name=f"memoria_{p.nombre}.pdf")
-    else:
-        st.info("No se detectó LaTeX (latexmk/pdflatex) en el sistema — "
-                "usa el ZIP en Overleaf.")
+        st.success("Memoria compilada.")
+        st.download_button("⬇️ Descargar memoria (PDF)", data=pdf.read_bytes(),
+                           file_name=f"memoria_{p.nombre}.pdf", type="primary")
+    elif hay_latex:
+        st.error("La compilación LaTeX falló — descarga el ZIP y revisa el log "
+                 "en Overleaf.")
+    z = report.make_zip(out)
+    st.download_button("⬇️ Fuente LaTeX (.zip, editable/Overleaf)",
+                       data=z.read_bytes(), file_name=f"memoria_{p.nombre}.zip")

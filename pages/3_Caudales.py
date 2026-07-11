@@ -1,10 +1,10 @@
 import pandas as pd
 import streamlit as st
 from core import catalogs, demand
-from pages_common import get_project, num_input, show_issues
+from pages_common import page_setup, num_input, show_issues
 
+p = page_setup()
 st.header("3 · Dotación y caudales de diseño")
-p = get_project()
 refs = catalogs.dotacion_references()
 
 p.demanda.modo = st.radio(

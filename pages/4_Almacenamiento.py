@@ -3,10 +3,10 @@ import pandas as pd
 import streamlit as st
 from core import storage
 from core.project import TankSpec
-from pages_common import get_project, num_input
+from pages_common import page_setup, num_input
 
+p = page_setup()
 st.header("4 · Almacenamiento")
-p = get_project()
 cfg = p.almacenamiento
 flows = st.session_state.get("flows")
 if flows is None:
