@@ -72,3 +72,25 @@ def pipe(material: str, serie: str, dn: float) -> PipeSpec:
 def dn_label(spec_material: str, dn: float) -> str:
     u = _cat()[spec_material]["unidad_dn"]
     return f'{dn}"' if u == "in" else f"{dn:g} mm"
+
+
+def suggest_dn(material: str, serie: str, q_m3s: float,
+               v_max: float = 6.0, k_bresse: float = 1.2) -> float:
+    """DN comercial propuesto: primer diámetro cuyo interno no baja del
+    diámetro económico de Bresse (d = k·√Q) y cuya velocidad cumple
+    V ≤ v_max (Art. 56 Res. 0330). Si ninguno alcanza el Bresse, devuelve
+    el mayor DN que cumpla la velocidad."""
+    import math
+    d_bresse_mm = k_bresse * math.sqrt(max(q_m3s, 0.0)) * 1000.0
+    candidato_v = None
+    for dn in diameters(material, serie):
+        spec = pipe(material, serie, dn)
+        v = 4.0 * q_m3s / (math.pi * (spec.id_mm / 1000.0) ** 2)
+        if v <= v_max:
+            candidato_v = candidato_v or dn
+            if spec.id_mm >= d_bresse_mm:
+                return dn
+            candidato_v = dn   # el mayor que cumple V, por si Bresse no se alcanza
+    if candidato_v is not None:
+        return candidato_v
+    return diameters(material, serie)[-1]

@@ -55,3 +55,15 @@ def test_rango_dn_50_a_1200():
 def test_dn_inexistente():
     with pytest.raises(KeyError):
         pipes.pipe("PEAD PE100", "RDE 21", 999)
+
+
+def test_suggest_dn():
+    # San Jacinto: Qb ≈ 103 L/s → Bresse ≈ 385 mm → PEAD RDE21 DN 450 (ID 407)
+    dn = pipes.suggest_dn("PEAD PE100", "RDE 21", 0.10317)
+    spec = pipes.pipe("PEAD PE100", "RDE 21", dn)
+    import math
+    v = 4 * 0.10317 / (math.pi * (spec.id_mm / 1000) ** 2)
+    assert spec.id_mm >= 1.2 * math.sqrt(0.10317) * 1000 * 0.999
+    assert v <= 6.0
+    # caudal pequeño: 5.14 L/s → Bresse 86 mm → DN 110 (ID 99.6)
+    assert pipes.suggest_dn("PEAD PE100", "RDE 21", 5.1416e-3) == 110

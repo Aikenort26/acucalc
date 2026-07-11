@@ -55,25 +55,58 @@ st.caption(f"Diámetro económico Bresse (referencia): continuo "
            f"{pu.bresse_continuo(qb_lps/1000)*1000:.1f} mm · no continuo "
            f"{pu.bresse_no_continuo(qb_lps/1000, sys_d.horas)*1000:.1f} mm")
 
-# ---------- agregar tramo (catálogo en cascada) ----------
+# ---------- agregar / editar tramo (catálogo en cascada) ----------
 st.subheader("Tramos de tubería")
-with st.expander("➕ Agregar tramo", expanded=not sys_d.tramos):
+
+# precarga diferida del formulario cuando se pide editar un tramo
+editando = st.session_state.get(f"editing_{K}")
+pend_edit = st.session_state.pop(f"edit_next_{K}", None)
+if pend_edit is not None:
+    t0 = next(t for t in sys_d.tramos if t.nombre == pend_edit)
+    st.session_state[f"editing_{K}"] = pend_edit
+    st.session_state[f"w_nt_{K}"] = t0.nombre
+    st.session_state[f"w_sel_tt_{K}"] = t0.tipo
+    st.session_state["w_lt_" + K] = float(t0.L)
+    if t0.cat_material:
+        st.session_state[f"w_radio_mt_{K}"] = "Catálogo normativo"
+        st.session_state[f"w_sel_mat_{K}"] = t0.cat_material
+        st.session_state[f"w_sel_ser_{K}"] = t0.cat_serie
+        st.session_state[f"w_sel_dn_{K}"] = t0.cat_dn
+    else:
+        st.session_state[f"w_radio_mt_{K}"] = "Manual"
+        st.session_state["w_di_" + K] = float(t0.D_mm)
+        st.session_state[f"w_sel_ks_{K}"] = t0.material
+        st.session_state["w_em_" + K] = float(t0.e_mm)
+    editando = pend_edit
+
+with st.expander("➕ Agregar / ✏ editar tramo", expanded=not sys_d.tramos):
+    if editando:
+        st.caption(f"Editando **{editando}** — 'Guardar cambios' lo reemplaza.")
     a1, a2, a3 = st.columns(3)
     nombre_t = a1.text_input("Nombre", f"Tramo {len(sys_d.tramos) + 1}",
-                             key=f"w_txt_nt_{K}_{len(sys_d.tramos)}")
+                             key=f"w_nt_{K}")
     tipo_t = a2.selectbox("Tipo", ["impulsion", "succion"], key=f"w_sel_tt_{K}")
     L_t = num_input("Longitud [m]", f"lt_{K}", 100.0, decimals=1, container=a3,
                     min_value=0.1, max_value=100000.0)
     modo_t = st.radio("Dimensiones", ["Catálogo normativo", "Manual"],
                       horizontal=True, key=f"w_radio_mt_{K}")
+    etiqueta = "Guardar cambios" if editando else "Agregar tramo"
+    nuevo_tramo = None
     if modo_t == "Catálogo normativo":
         b1, b2, b3 = st.columns(3)
         mat = b1.selectbox("Material", pipes.materials(), key=f"w_sel_mat_{K}")
         ser = b2.selectbox("Serie / clase (RDE)", pipes.series(mat), key=f"w_sel_ser_{K}")
         dns = pipes.diameters(mat, ser)
+        dn_prop = pipes.suggest_dn(mat, ser, qb_lps / 1000)
+        if f"w_sel_dn_{K}" not in st.session_state:
+            st.session_state[f"w_sel_dn_{K}"] = dn_prop
+        if st.session_state[f"w_sel_dn_{K}"] not in dns:      # cambió material/serie
+            st.session_state[f"w_sel_dn_{K}"] = dn_prop
         dn = b3.selectbox("Diámetro nominal", dns,
                           format_func=lambda d: pipes.dn_label(mat, d),
                           key=f"w_sel_dn_{K}")
+        st.caption(f"Propuesto para Qb={qb_lps:.1f} L/s: "
+                   f"**{pipes.dn_label(mat, dn_prop)}** (≥ Bresse y V ≤ 6 m/s, Art. 56)")
         spec = pipes.pipe(mat, ser, dn)
         st.caption(
             f"DN **{spec.dn_mm:.0f} mm / {spec.dn_in:.2f}\"** · D interno "
@@ -81,11 +114,10 @@ with st.expander("➕ Agregar tramo", expanded=not sys_d.tramos):
             f"ks **{spec.ks_mm} mm** · PN **{spec.pn_mca:.0f} mca** · "
             f"largo de presentación **{spec.largo_m:.0f} m**"
             + (f" · {spec.nota}" if spec.nota else ""))
-        if st.button("Agregar tramo", key=f"w_add_t_{K}"):
-            sys_d.tramos.append(SegmentData(
+        if st.button(etiqueta, key=f"w_add_t_{K}"):
+            nuevo_tramo = SegmentData(
                 nombre_t, tipo_t, L_t, spec.id_mm, pipes.KS_KEY[mat],
-                cat_material=mat, cat_serie=ser, cat_dn=dn, e_mm=spec.e_mm))
-            st.rerun()
+                cat_material=mat, cat_serie=ser, cat_dn=dn, e_mm=spec.e_mm)
     else:
         b1, b2, b3 = st.columns(3)
         d_int = num_input("D interno [mm]", f"di_{K}", 79.5, decimals=1,
@@ -94,10 +126,22 @@ with st.expander("➕ Agregar tramo", expanded=not sys_d.tramos):
                               key=f"w_sel_ks_{K}")
         e_man = num_input("Espesor [mm] (ariete)", f"em_{K}", 5.0, decimals=1,
                           container=b3, min_value=0.0, max_value=100.0)
-        if st.button("Agregar tramo", key=f"w_add_tm_{K}"):
-            sys_d.tramos.append(SegmentData(nombre_t, tipo_t, L_t, d_int, mat_ks,
-                                            e_mm=e_man))
-            st.rerun()
+        if st.button(etiqueta, key=f"w_add_tm_{K}"):
+            nuevo_tramo = SegmentData(nombre_t, tipo_t, L_t, d_int, mat_ks, e_mm=e_man)
+    if nuevo_tramo is not None:
+        if editando:
+            idx = next(i for i, t in enumerate(sys_d.tramos) if t.nombre == editando)
+            sys_d.tramos[idx] = nuevo_tramo
+            for acc in sys_d.accesorios:
+                if acc.tramo == editando:
+                    acc.tramo = nuevo_tramo.nombre
+            st.session_state.pop(f"editing_{K}", None)
+        else:
+            sys_d.tramos.append(nuevo_tramo)
+        st.rerun()
+    if editando and st.button("✖ Cancelar edición", key=f"w_cancel_e_{K}"):
+        st.session_state.pop(f"editing_{K}", None)
+        st.rerun()
 
 if sys_d.tramos:
     filas = []
@@ -120,12 +164,16 @@ if sys_d.tramos:
                           "Largo present. [m]": None})
     st.dataframe(pd.DataFrame(filas).style.format(precision=2, na_rep="—"),
                  hide_index=True, width="stretch")
-    cdel1, cdel2 = st.columns([3, 1])
-    t_del = cdel1.selectbox("Eliminar tramo", ["—"] + [t.nombre for t in sys_d.tramos],
+    cdel1, cdel2, cdel3 = st.columns([3, 1, 1])
+    t_sel = cdel1.selectbox("Tramo a editar/eliminar",
+                            ["—"] + [t.nombre for t in sys_d.tramos],
                             key=f"w_sel_delt_{K}")
-    if t_del != "—" and cdel2.button("🗑 Eliminar", key=f"w_del_t_{K}"):
-        sys_d.tramos = [t for t in sys_d.tramos if t.nombre != t_del]
-        sys_d.accesorios = [a for a in sys_d.accesorios if a.tramo != t_del]
+    if t_sel != "—" and cdel2.button("✏ Editar", key=f"w_edit_t_{K}"):
+        st.session_state[f"edit_next_{K}"] = t_sel
+        st.rerun()
+    if t_sel != "—" and cdel3.button("🗑 Eliminar", key=f"w_del_t_{K}"):
+        sys_d.tramos = [t for t in sys_d.tramos if t.nombre != t_sel]
+        sys_d.accesorios = [a for a in sys_d.accesorios if a.tramo != t_sel]
         st.rerun()
 
 # ---------- accesorios (con Km visible) ----------
@@ -217,47 +265,49 @@ with st.expander("Arreglo de bombas y leyes de afinidad", expanded=False):
     b2.metric("H @ N₂", f"{h2:.2f} m")
     b3.metric("P @ N₂", f"{p2:.2f} HP")
 
-# ---------- golpe de ariete ----------
-with st.expander("Golpe de ariete (Joukowsky) — por tramo"):
-    sys_d.pn_mca = num_input("PN de la tubería [mca]", f"pn_{K}", sys_d.pn_mca,
-                             decimals=0, min_value=0.0, max_value=600.0)
-    rows_ar = []
+# ---------- golpe de ariete: verificación automática contra PN por tramo ----------
+with st.expander("Golpe de ariete (Joukowsky) — verificación PN por tramo",
+                 expanded=False):
+    rows_ar, fallan = [], []
     k_elast_manual = {"PVC": 18.0, "PEAD": 111.11, "HD": 1.0,
                       "Acero comercial": 0.5, "GRP": 8.3, "Concreto": 5.0,
                       "Hierro galvanizado": 1.0}
     for t, tr in zip(sys_d.tramos, r.tramos):
         if not t.e_mm:
             rows_ar.append({"Tramo": t.nombre, "e [mm]": None, "C [m/s]": None,
-                            "ΔH [mca]": None, "Hd+ΔH [mca]": None})
+                            "ΔH [mca]": None, "Hd+ΔH [mca]": None,
+                            "PN [mca]": None, "Cumple": "sin datos"})
             continue
-        k_el = (pipes.pipe(t.cat_material, t.cat_serie, t.cat_dn).k_elast
-                if t.cat_material else k_elast_manual.get(t.material, 18.0))
+        if t.cat_material:
+            spec = pipes.pipe(t.cat_material, t.cat_serie, t.cat_dn)
+            k_el, pn_t = spec.k_elast, spec.pn_mca
+        else:
+            k_el = k_elast_manual.get(t.material, 18.0)
+            pn_t = num_input(f"PN del tramo manual '{t.nombre}' [mca]",
+                             f"pn_{K}_{t.nombre}", 100.0, decimals=0,
+                             min_value=0.0, max_value=600.0)
         c = pu.celeridad(t.D_mm / 1000, t.e_mm / 1000, k_el)
         dp = pu.sobrepresion_ariete(c, tr.V)
+        total = r.hd + dp
+        ok = total <= pn_t if pn_t else None
+        if ok is False:
+            fallan.append((t.nombre, total, pn_t))
         rows_ar.append({"Tramo": t.nombre, "e [mm]": t.e_mm, "C [m/s]": c,
-                        "ΔH [mca]": dp, "Hd+ΔH [mca]": r.hd + dp})
+                        "ΔH [mca]": dp, "Hd+ΔH [mca]": total,
+                        "PN [mca]": pn_t or None,
+                        "Cumple": "✓" if ok else ("✗ FALLA" if ok is False else "—")})
     st.dataframe(pd.DataFrame(rows_ar).style.format(
         {"e [mm]": "{:.1f}", "C [m/s]": "{:.1f}", "ΔH [mca]": "{:.1f}",
-         "Hd+ΔH [mca]": "{:.1f}"}, na_rep="sin espesor"),
+         "Hd+ΔH [mca]": "{:.1f}", "PN [mca]": "{:.0f}"}, na_rep="—"),
         hide_index=True, width="stretch")
-    pn_cat = min((pipes.pipe(t.cat_material, t.cat_serie, t.cat_dn).pn_mca
-                  for t in sys_d.tramos if t.cat_material), default=0)
-    if pn_cat:
-        st.caption(f"PN mínima de los tramos de catálogo: {pn_cat:.0f} mca")
-    peor = max((row["Hd+ΔH [mca]"] or 0 for row in rows_ar), default=0)
-    pn_ref = sys_d.pn_mca or pn_cat
-    if pn_ref and peor > pn_ref:
-        st.warning(f"Hd + sobrepresión ({peor:.1f} mca) supera la PN "
-                   f"({pn_ref:.0f} mca) — revisar clase o protecciones.")
-
-# ---------- paneles ----------
-with st.expander("Paneles solares (pre-cálculo)"):
-    pc1, pc2, pc3 = st.columns(3)
-    sys_d.panel_w = num_input("Potencia panel [W]", f"pw_{K}", sys_d.panel_w,
-                              decimals=0, container=pc1, min_value=100.0, max_value=1500.0)
-    sys_d.panel_fs = num_input("Factor de seguridad", f"pfs_{K}", sys_d.panel_fs,
-                               decimals=1, container=pc2, min_value=1.0, max_value=5.0)
-    sys_d.panel_area = num_input("Área panel [m²]", f"pa_{K}", sys_d.panel_area,
-                                 decimals=2, container=pc3, min_value=0.5, max_value=5.0)
-    pan = pu.paneles_solares(r.potencia_kw, sys_d.panel_w, sys_d.panel_fs, sys_d.panel_area)
-    st.write(f"**{pan.cantidad} paneles** · área total {pan.area_total:.1f} m²")
+    if fallan:
+        lista = "; ".join(f"'{n}' ({tot:.1f} > PN {pn:.0f} mca)"
+                          for n, tot, pn in fallan)
+        st.error(f"Tramos que NO resisten la sobrepresión: {lista}.")
+        st.warning("Opciones: subir la clase de presión (RDE menor) del tramo, o "
+                   "incorporar protecciones contra transitorios: válvula de alivio "
+                   "o anticipadora de onda, cámara de aire/tanque hidroneumático, "
+                   "volante de inercia en la bomba, o válvula de cheque de cierre "
+                   "controlado. Verificar con análisis transitorio detallado.")
+    else:
+        st.success("Todos los tramos con datos resisten Hd + sobrepresión de Joukowsky.")

@@ -114,10 +114,6 @@ class PumpSystemData:
     sumar_5m_ras: bool = False
     eficiencia: float = 0.70
     tipo_bomba: str = "superficie"    # superficie|sumergible
-    pn_mca: float = 0.0
-    panel_w: float = 710.0
-    panel_area: float = 2.9768
-    panel_fs: float = 3.0
     bombas: list = field(default_factory=list)        # PumpData
     bomba_seleccionada: str = ""
 
@@ -146,8 +142,9 @@ def save(p: Project, path: str | Path) -> None:
 
 
 def _pump_system_from_dict(s: dict) -> PumpSystemData:
-    sys = PumpSystemData(**{k: v for k, v in s.items()
-                            if k not in ("tramos", "accesorios", "bombas")})
+    from dataclasses import fields as _fields
+    validos = {f.name for f in _fields(PumpSystemData)} - {"tramos", "accesorios", "bombas"}
+    sys = PumpSystemData(**{k: v for k, v in s.items() if k in validos})
     sys.tramos = [SegmentData(**t) for t in s.get("tramos", [])]
     sys.accesorios = [AccessoryData(**a) for a in s.get("accesorios", [])]
     sys.bombas = []
@@ -172,10 +169,6 @@ def _migrate_v1(d: dict) -> dict:
         "he": bombeo.get("he", 0.0),
         "sumar_5m_ras": bombeo.get("sumar_5m_ras", False),
         "eficiencia": bombeo.get("eficiencia", 0.70),
-        "pn_mca": bombeo.get("pn_mca", 0.0),
-        "panel_w": bombeo.get("panel_w", 710.0),
-        "panel_area": bombeo.get("panel_area", 2.9768),
-        "panel_fs": bombeo.get("panel_fs", 3.0),
     }
     d["bombeos"] = [sistema] if (sistema["tramos"] or sistema["bombas"]) else []
     return d

@@ -84,7 +84,7 @@ def test_migracion_v1(tmp_path):
     s = p.bombeos[0]
     assert s.nombre == "Bombeo 1"
     assert s.horas == 8.0 and s.he == 50.0 and s.sumar_5m_ras
-    assert s.pn_mca == 100.0
+    # los campos v1 pn_mca/panel_* ya no existen — deben ignorarse al cargar
     assert s.tramos[0].D_mm == 79.5 and s.tramos[0].e_mm == 0.0
     assert s.bombas[0].nombre == "B1" and s.bomba_seleccionada == "B1"
     assert p.poblacion.flotante_pct == 0.0     # default nuevo

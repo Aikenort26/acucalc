@@ -112,16 +112,16 @@ else:
                           min_value=1990, max_value=2100)
     st.metric(f"Población base ({cfg.year0})", f"{cfg.p0:,.0f} hab")
 
-c4, c5, c6 = st.columns(3)
-cfg.horizon_year = int_input("Año horizonte (Art. 40: 25 años)", "horizonte",
-                             max(int(cfg.horizon_year), int(cfg.year0) + 1),
-                             container=c4, min_value=2000, max_value=2150)
+cfg.horizon_year = int(cfg.year0) + 25
+c5, c6 = st.columns(2)
 cfg.tasa_res0844 = num_input("Tasa Res. 0844/2018 [%]", "tasa0844",
                              cfg.tasa_res0844 * 100, decimals=2, container=c5,
                              min_value=0.0, max_value=10.0) / 100
 cfg.flotante_pct = num_input("Población flotante [%]", "flotante",
                              cfg.flotante_pct * 100, decimals=1, container=c6,
                              min_value=0.0, max_value=100.0) / 100
+st.caption(f"Año horizonte: **{cfg.horizon_year}** = año base {cfg.year0} + 25 años "
+           "(periodo de diseño, Art. 40 Res. 0330 de 2017)")
 
 if cfg.p0 <= 0:
     st.info("Define la población base.")

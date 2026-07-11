@@ -162,13 +162,3 @@ def frecuencia_para_caudal(q_objetivo: float, q1: float, n1: float) -> float:
     return n1 * q_objetivo / q1
 
 
-@dataclass(frozen=True)
-class PanelResult:
-    cantidad: int
-    area_total: float
-
-
-def paneles_solares(potencia_kw: float, panel_w: float, fs: float,
-                    area_panel_m2: float) -> PanelResult:
-    n = math.ceil(potencia_kw * 1000.0 * fs / panel_w)
-    return PanelResult(n, n * area_panel_m2)

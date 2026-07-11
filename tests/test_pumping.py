@@ -112,7 +112,3 @@ def test_leyes_de_afinidad():
     assert abs(pu.frecuencia_para_caudal(5.0, 10.0, 60.0) - 30.0) < 1e-9
 
 
-def test_paneles():
-    r = pu.paneles_solares(potencia_kw=5.138662, panel_w=710, fs=3, area_panel_m2=2.9768)
-    assert r.cantidad == 22
-    assert abs(r.area_total - 65.4896) < 1e-3
