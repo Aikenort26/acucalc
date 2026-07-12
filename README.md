@@ -7,6 +7,17 @@ de población, dotación y caudales de diseño, volumen de almacenamiento,
 sistema de bombeo multi-tramo, digitalización de curvas de bomba y punto de
 operación, y generación de la memoria técnica en LaTeX.
 
+> ⚠️ **Aviso — revisión profesional obligatoria.** ACUCALC entrega un
+> predimensionamiento automatizado según la metodología de la Resolución 0330
+> de 2017. **Toda la información que produce esta aplicación — resultados en
+> pantalla, memoria PDF/LaTeX y este mismo repositorio — debe ser revisada,
+> verificada y validada por el ingeniero proyectista responsable** antes de
+> usarse en diseño definitivo, construcción u operación de un sistema real.
+> No reemplaza el diseño estructural/geotécnico detallado, el análisis de
+> transitorios hidráulicos con software especializado, ni el juicio
+> profesional del responsable del proyecto. Ver la sección "Recomendaciones y
+> limitaciones" que la app agrega automáticamente a cada memoria generada.
+
 ## Flujo de trabajo (7 páginas)
 
 1. **Proyecto** — metadatos, guardar/cargar (`.acucalc.json`)
@@ -79,7 +90,7 @@ la app entrega el proyecto como `.zip` listo para subir a Overleaf.
 .venv/Scripts/python -m pytest -v
 ```
 
-53 tests cubren toda la lógica de `core/` (sin Streamlit), incluyendo golden
+Más de 90 tests cubren toda la lógica de `core/` (sin Streamlit), incluyendo golden
 tests contra los valores reales de la memoria de cálculo de El Salado
 (`docs/specs/2026-07-10-acucalc-v1-design.md`). Dos desviaciones deliberadas
 frente al Excel original están documentadas en `docs/plans/2026-07-10-acucalc-v1.md`
@@ -98,14 +109,14 @@ ACUCALC/
 │   ├── population.py       # tasas y proyección de población
 │   ├── demand.py           # dotación y caudales de diseño
 │   ├── storage.py          # volumen de almacenamiento y tanques
-│   ├── pumping.py          # bombeo multi-tramo, Bresse, ariete, paneles
+│   ├── pumping.py          # bombeo multi-tramo, Bresse, ariete, arreglos/afinidad
 │   ├── curves.py           # digitalizador de curvas (implementación propia)
 │   ├── project.py          # modelo de proyecto + JSON versionado
 │   └── report.py           # generador de memoria LaTeX
 ├── pages/                  # 7 páginas Streamlit (solo UI, sin fórmulas)
 ├── templates/latex/        # plantilla Jinja2 de la memoria (Res. 0330)
 ├── data/                   # catálogos JSON (agua, ks, km, dotaciones)
-├── tests/                  # 53 tests pytest
+├── tests/                  # +90 tests pytest
 ├── docs/specs/, docs/plans/ # spec de diseño y plan de implementación
 ├── requirements.txt, run.bat
 └── LICENSE
