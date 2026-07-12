@@ -67,8 +67,10 @@ def volume_curva_integral(qmd_m3d: float, factores_hora: list[float],
 class TankBalance:
     nombre: str
     frac_regulacion: float
-    q_entrada_lps: float     # caudal constante del bombeo/gravedad que lo alimenta
+    q_entrada_lps: float          # caudal constante del bombeo/gravedad que lo alimenta
     horas_entrada: float
+    q_salida_lps: float | None    # caudal constante de salida (None = red, variable)
+    horas_salida: float | None    # None = último tanque (consumo variable de la red)
     v_regulacion: float
     v_incendio: float
     v_total: float
@@ -81,7 +83,8 @@ def tank_train(qmd_m3d: float, entradas: list[tuple[str, list[float]]],
     """Cadena de N tanques en serie. `entradas` = [(nombre, ventana_entrada[24])]
     en orden hidráulico. La salida de cada tanque es la ventana de entrada del
     siguiente (bombeo intermedio a caudal constante = QMD·24/h de esa ventana);
-    la salida del último es el patrón horario de consumo de la población.
+    la salida del último es el patrón horario de consumo de la población (Q
+    variable, no constante — `q_salida_lps`/`horas_salida` quedan en None).
     Balance de regulación por tanque con `balance_curve`."""
     if not entradas:
         raise ValueError("Se requiere al menos un tanque")
@@ -92,17 +95,23 @@ def tank_train(qmd_m3d: float, entradas: list[tuple[str, list[float]]],
     out = []
     for i, (nombre, ventana) in enumerate(entradas):
         supply = _normalize(ventana, f"entrada de '{nombre}'")
-        if i + 1 < len(entradas):
-            demand = _normalize(entradas[i + 1][1], f"entrada de '{entradas[i+1][0]}'")
-        else:
+        es_ultimo = i + 1 >= len(entradas)
+        if es_ultimo:
             demand = consumo
+            horas_salida, q_salida = None, None
+        else:
+            ventana_sig = entradas[i + 1][1]
+            demand = _normalize(ventana_sig, f"entrada de '{entradas[i+1][0]}'")
+            horas_salida = float(sum(1 for w in ventana_sig if w))
+            q_salida = qmd_lps * 24.0 / horas_salida if horas_salida else 0.0
         frac, _ = balance_curve(supply, demand)
         horas = sum(1 for w in ventana if w)
         vreg = frac * qmd_m3d
         vinc = vreg * frac_incendio
         vtot = (vreg + vinc) * dias_reserva
         out.append(TankBalance(nombre, frac, qmd_lps * 24.0 / horas if horas else 0.0,
-                               float(horas), vreg, vinc, vtot, _round_up_5(vtot)))
+                               float(horas), q_salida, horas_salida,
+                               vreg, vinc, vtot, _round_up_5(vtot)))
     return out
 
 
@@ -161,3 +170,40 @@ def tank_dimensions(volumen: float, altura: float, ratio: float = 1.0) -> TankDi
     lado = math.sqrt(volumen / altura)
     ancho = math.sqrt(volumen / (altura * ratio))
     return TankDims(volumen, altura, d, lado, ancho, ratio * ancho)
+
+
+def round_up_step(value: float, step: float = 0.1) -> float:
+    """Redondea hacia arriba al múltiplo de `step` (10 cm por defecto) — nunca
+    subdimensiona: una dimensión constructiva real no puede ser menor a la
+    calculada, solo igual o mayor."""
+    return round(math.ceil(value / step - 1e-9) * step, 10)
+
+
+@dataclass(frozen=True)
+class ConstructiveTank:
+    forma: str
+    altura: float
+    diametro: float | None = None    # circular
+    lado: float | None = None        # cuadrado
+    ancho: float | None = None       # rectangular
+    largo: float | None = None       # rectangular
+    volumen_real: float = 0.0        # con dimensiones redondeadas (≥ objetivo)
+
+
+def dimensioned_tank(volumen_objetivo: float, altura: float, forma: str,
+                     ratio: float = 1.0, step: float = 0.1) -> ConstructiveTank:
+    """Dimensiones constructivas redondeadas a `step` m (10 cm por defecto,
+    siempre hacia arriba) y el volumen real resultante para esa forma."""
+    raw = tank_dimensions(volumen_objetivo, altura, ratio)
+    h = round_up_step(altura, step)
+    if forma == "circular":
+        d = round_up_step(raw.diametro, step)
+        return ConstructiveTank("circular", h, diametro=d,
+                                volumen_real=math.pi / 4.0 * d**2 * h)
+    if forma == "cuadrado":
+        lado = round_up_step(raw.lado, step)
+        return ConstructiveTank("cuadrado", h, lado=lado, volumen_real=lado**2 * h)
+    ancho = round_up_step(raw.ancho, step)
+    largo = round_up_step(raw.largo, step)
+    return ConstructiveTank("rectangular", h, ancho=ancho, largo=largo,
+                            volumen_real=ancho * largo * h)

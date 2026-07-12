@@ -108,3 +108,39 @@ def test_tank_train_vacio():
     import pytest
     with pytest.raises(ValueError):
         storage.tank_train(QMD_M3D, [], FACTORES, 0.15, 1)
+
+
+def test_tank_train_q_salida():
+    """El primer tanque de una cadena de 2 entrega al segundo con Q constante
+    (QMD·24/10); el último no tiene salida constante (red, consumo variable)."""
+    entradas = [("Tanque bajo", [1] * 24), ("Tanque elevado", SUPPLY)]
+    tren = storage.tank_train(QMD_M3D, entradas, FACTORES, 0.15, 1)
+    assert tren[0].horas_salida == 10
+    assert abs(tren[0].q_salida_lps - (QMD_M3D / 86.4) * 2.4) < 1e-6
+    assert tren[0].q_salida_lps == tren[1].q_entrada_lps      # continuidad
+    assert tren[0].horas_salida == tren[1].horas_entrada
+    assert tren[-1].q_salida_lps is None
+    assert tren[-1].horas_salida is None
+
+
+def test_round_up_step():
+    assert storage.round_up_step(5.53, 0.1) == 5.6
+    assert storage.round_up_step(5.50, 0.1) == 5.5           # exacto no sube
+    assert storage.round_up_step(2.401, 0.1) == 2.5
+
+
+def test_dimensioned_tank_circular():
+    ct = storage.dimensioned_tank(60, 2.5, "circular")
+    assert ct.diametro == 5.6                                 # 5.53 → 5.6
+    assert ct.altura == 2.5
+    assert ct.volumen_real >= 60
+    import math
+    assert abs(ct.volumen_real - math.pi / 4 * 5.6**2 * 2.5) < 1e-9
+
+
+def test_dimensioned_tank_rectangular_siempre_alcanza_volumen():
+    for v in (30, 110, 430, 2225):
+        ct = storage.dimensioned_tank(v, 2.5, "rectangular", ratio=1.5)
+        assert ct.volumen_real >= v
+        assert abs(ct.ancho * 10 - round(ct.ancho * 10)) < 1e-6
+        assert abs(ct.largo * 10 - round(ct.largo * 10)) < 1e-6

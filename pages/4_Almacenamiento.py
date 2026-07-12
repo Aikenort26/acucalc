@@ -93,15 +93,19 @@ else:
             TankSpec("Tanque elevado", "elevado", "circular", 0, 2.5, 1.0, 6, 15),
         ]
     df_tk = st.data_editor(pd.DataFrame(
-        [{"Orden": i + 1, "Nombre": t.nombre, "Tipo": t.tipo, "Forma": t.forma,
-          "Altura útil [m]": t.altura, "Largo/ancho": t.ratio,
+        [{"Orden": i + 1, "Nombre": t.nombre, "Tipo": t.tipo,
+          "Tipo constructivo": t.tipo_constructivo, "Forma": t.forma,
+          "Cantidad": t.cantidad, "Altura útil [m]": t.altura, "Largo/ancho": t.ratio,
           "Entrada desde [h]": t.entrada_ini, "Entrada hasta [h]": t.entrada_fin}
          for i, t in enumerate(cfg.tanques)]),
         num_rows="dynamic", width="stretch", key="w_ed_tren",
         column_config={
             "Tipo": st.column_config.SelectboxColumn(options=["bajo", "elevado"]),
+            "Tipo constructivo": st.column_config.SelectboxColumn(
+                options=["superficial", "enterrado", "semienterrado", "elevado"]),
             "Forma": st.column_config.SelectboxColumn(
                 options=["circular", "cuadrado", "rectangular"]),
+            "Cantidad": st.column_config.NumberColumn(min_value=1, max_value=20, step=1),
             "Entrada desde [h]": st.column_config.NumberColumn(min_value=0, max_value=23),
             "Entrada hasta [h]": st.column_config.NumberColumn(min_value=0, max_value=23)})
     volumenes_previos = {t.nombre: t.volumen for t in cfg.tanques}
@@ -110,7 +114,9 @@ else:
                             float(r["Altura útil [m]"] or 2.5),
                             float(r["Largo/ancho"] or 1.0),
                             int(r["Entrada desde [h]"] or 0),
-                            int(r["Entrada hasta [h]"] or 23))
+                            int(r["Entrada hasta [h]"] or 23),
+                            int(r["Cantidad"] or 1),
+                            str(r["Tipo constructivo"] or "superficial"))
                    for _, r in df_tk.sort_values("Orden").iterrows() if r["Nombre"]]
 
     if not cfg.tanques:
@@ -129,16 +135,22 @@ else:
 
     st.subheader("Regulación por tanque (volúmenes asignados automáticamente)")
     st.dataframe(pd.DataFrame(
-        [{"Tanque": b.nombre, "Entrada [h/día]": b.horas_entrada,
-          "Q entrada [L/s]": b.q_entrada_lps, "Fracción regulación": b.frac_regulacion,
+        [{"Tanque": b.nombre,
+          "Entrada [h/día]": b.horas_entrada, "Q entrada [L/s]": b.q_entrada_lps,
+          "Salida [h/día]": (b.horas_salida if b.horas_salida is not None else None),
+          "Q salida [L/s]": (b.q_salida_lps if b.q_salida_lps is not None else None),
+          "Fracción regulación": b.frac_regulacion,
           "Regulación [m³]": b.v_regulacion, "Incendio [m³]": b.v_incendio,
           "V asignado [m³]": b.v_total_redondeado} for b in tren])
-        .style.format({"Q entrada [L/s]": "{:.2f}", "Fracción regulación": "{:.4f}",
-                       "Regulación [m³]": "{:.2f}", "Incendio [m³]": "{:.2f}",
-                       "Entrada [h/día]": "{:.0f}"}),
+        .style.format({"Q entrada [L/s]": "{:.2f}", "Q salida [L/s]": "{:.2f}",
+                       "Fracción regulación": "{:.4f}", "Regulación [m³]": "{:.2f}",
+                       "Incendio [m³]": "{:.2f}", "Entrada [h/día]": "{:.0f}",
+                       "Salida [h/día]": "{:.0f}"}, na_rep="red (variable)"),
         hide_index=True, width="stretch")
-    st.caption("El Q de entrada de cada tanque es el caudal del bombeo que lo alimenta "
-               "(QMD·24/h de su ventana) — sincronizable en la página 5.")
+    st.caption("Q entrada/salida = QMD·24/horas de la ventana respectiva (caudal "
+               "constante del bombeo). El último tanque entrega a la red con "
+               "consumo variable según el patrón horario, no un caudal constante — "
+               "sincronizable con la página 5.")
     v_final = sum(b.v_total_redondeado for b in tren)
     st.session_state["tank_train"] = tren
 
@@ -161,14 +173,33 @@ st.session_state["v_almacenamiento"] = v_final
 
 # ---------- predimensionado ----------
 st.subheader("Predimensionado de tanques")
+st.caption("Cada fila puede dividirse en **N unidades** del mismo tipo (ej. 2 tanques "
+           "circulares en paralelo en vez de 1 grande). Las dimensiones se redondean "
+           "hacia arriba a **10 cm** y el volumen total real se recalcula con esas "
+           "dimensiones constructivas (siempre ≥ el volumen requerido).")
 dims_rows = []
+v_real_total = 0.0
 for t in cfg.tanques:
-    d = storage.tank_dimensions(t.volumen or 1.0, t.altura, t.ratio)
-    dim = (f"Ø {d.diametro:.2f} m" if t.forma == "circular"
-           else f"lado {d.lado:.2f} m" if t.forma == "cuadrado"
-           else f"{d.ancho:.2f} × {d.largo:.2f} m")
-    dims_rows.append({"Tanque": t.nombre, "Tipo": t.tipo, "Forma": t.forma,
-                      "Volumen [m³]": t.volumen, "Altura [m]": t.altura,
-                      "Dimensiones": dim})
-st.dataframe(pd.DataFrame(dims_rows), hide_index=True, width="stretch")
-st.caption("Añadir 0.30 m de borde libre (volúmenes = volumen útil de líquido).")
+    v_unitario_obj = (t.volumen or 1.0) / max(t.cantidad, 1)
+    ct = storage.dimensioned_tank(v_unitario_obj, t.altura, t.forma, t.ratio)
+    dim = (f"Ø {ct.diametro:.1f} m" if ct.forma == "circular"
+           else f"lado {ct.lado:.1f} m" if ct.forma == "cuadrado"
+           else f"{ct.ancho:.1f} × {ct.largo:.1f} m")
+    v_real_unidad = ct.volumen_real
+    v_real_fila = v_real_unidad * t.cantidad
+    v_real_total += v_real_fila
+    dims_rows.append({"Tanque": t.nombre, "Tipo": t.tipo,
+                      "Tipo constructivo": t.tipo_constructivo, "Forma": t.forma,
+                      "Cantidad": t.cantidad, "Dimensiones (c/u)": dim,
+                      "Altura [m]": ct.altura, "V requerido [m³]": t.volumen,
+                      "V real (c/u) [m³]": v_real_unidad,
+                      "V real total [m³]": v_real_fila})
+st.dataframe(pd.DataFrame(dims_rows).style.format(
+    {"Altura [m]": "{:.1f}", "V requerido [m³]": "{:.0f}",
+     "V real (c/u) [m³]": "{:.2f}", "V real total [m³]": "{:.2f}"}),
+    hide_index=True, width="stretch")
+st.metric("Volumen total real construido (dimensiones redondeadas a 10 cm)",
+          f"{v_real_total:.1f} m³",
+          delta=f"{v_real_total - v_final:+.1f} m³ vs. requerido")
+st.caption("Añadir 0.30 m de borde libre adicional en la construcción "
+           "(volúmenes = volumen útil de líquido).")

@@ -1,3 +1,4 @@
+import base64
 import datetime as dt
 import streamlit as st
 from core import dane, project as pj
@@ -42,6 +43,27 @@ with c2:
 
 st.caption("La serie de población DANE del municipio seleccionado alimenta la página "
            "2 (tasas de crecimiento y proyección).")
+
+with st.expander("Logos de portada del informe", expanded=False):
+    l1, l2 = st.columns(2)
+    up_cli = l1.file_uploader("Logo del cliente/entidad", type=["png", "jpg", "jpeg"],
+                              key="w_up_logo_cli")
+    if up_cli is not None:
+        p.logo_cliente_b64 = base64.b64encode(up_cli.getvalue()).decode()
+    if p.logo_cliente_b64:
+        l1.image(base64.b64decode(p.logo_cliente_b64), width=160)
+        if l1.button("Quitar logo del cliente", key="w_rm_logo_cli"):
+            p.logo_cliente_b64 = ""
+            st.rerun()
+    up_con = l2.file_uploader("Logo del consultor", type=["png", "jpg", "jpeg"],
+                              key="w_up_logo_con")
+    if up_con is not None:
+        p.logo_consultor_b64 = base64.b64encode(up_con.getvalue()).decode()
+    if p.logo_consultor_b64:
+        l2.image(base64.b64decode(p.logo_consultor_b64), width=160)
+        if l2.button("Quitar logo del consultor", key="w_rm_logo_con"):
+            p.logo_consultor_b64 = ""
+            st.rerun()
 
 st.divider()
 c3, c4 = st.columns(2)

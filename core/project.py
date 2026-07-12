@@ -45,13 +45,15 @@ class DemandConfig:
 @dataclass
 class TankSpec:
     nombre: str = ""
-    tipo: str = "elevado"       # bajo|elevado
+    tipo: str = "elevado"       # bajo|elevado (rol hidráulico en la cadena)
     forma: str = "circular"     # circular|cuadrado|rectangular
     volumen: float = 0.0
     altura: float = 2.5
     ratio: float = 1.5          # largo/ancho (solo rectangular)
     entrada_ini: int = 5        # ventana de entrada (bombeo/gravedad que lo alimenta)
     entrada_fin: int = 14       # inclusive; si fin < ini, la ventana cruza medianoche
+    cantidad: int = 1           # número de unidades constructivas de este tanque
+    tipo_constructivo: str = "superficial"  # superficial|enterrado|semienterrado|elevado
 
     def entrada_flags(self) -> list[int]:
         if self.entrada_fin >= self.entrada_ini:
@@ -137,6 +139,8 @@ class Project:
     fecha: str = ""
     altitud: float = 0.0
     temperatura: float = 20.0
+    logo_cliente_b64: str = ""       # logo para la portada del informe
+    logo_consultor_b64: str = ""
     censo: list = field(default_factory=list)
     poblacion: PopulationConfig = field(default_factory=PopulationConfig)
     demanda: DemandConfig = field(default_factory=DemandConfig)
