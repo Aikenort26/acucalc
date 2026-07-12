@@ -106,7 +106,7 @@ if img is not None:
     st.subheader("Calibración y captura de puntos")
     st.caption("1) Elige el modo · 2) haz click en la imagen · 3) afina el punto en el "
                "panel de zoom (±1 px) · 4) confirma. Los puntos confirmados quedan "
-               "marcados sobre la imagen, como en automeris.io.")
+               "marcados sobre la imagen.")
     if f"modo_next_{BK}" in st.session_state:      # auto-avance tras confirmar
         st.session_state[f"w_radio_modo_{BK}"] = st.session_state.pop(f"modo_next_{BK}")
     modo = st.radio("Modo de click (avanza solo al confirmar)",
@@ -247,6 +247,35 @@ if img is not None:
             st.session_state[f"qh_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
             st.session_state[pend_key] = None
             st.rerun()
+
+# ---------- importar puntos desde CSV (de cualquier herramienta externa) ----------
+with st.expander("📥 Importar puntos desde CSV"):
+    st.caption("Dos columnas sin encabezado o con encabezado libre: la primera "
+               "columna es Q, la segunda es H (o η). Sirve para pegar puntos "
+               "digitalizados con cualquier herramienta externa.")
+    ic1, ic2 = st.columns(2)
+    up_qh = ic1.file_uploader("CSV de puntos Q-H", type=["csv"], key=f"w_csv_qh_{BK}")
+    if up_qh is not None:
+        try:
+            df_imp = pd.read_csv(up_qh, header=None, comment="#")
+            if df_imp.iloc[0].apply(lambda v: isinstance(v, str)).any():
+                df_imp = df_imp.iloc[1:]
+            nuevos = [(float(r[0]), float(r[1])) for _, r in df_imp.iterrows()]
+            bomba.puntos_qh = sorted(set(bomba.puntos_qh) | set(nuevos))
+            st.success(f"{len(nuevos)} puntos Q-H importados.")
+        except Exception as e:
+            st.error(f"No se pudo leer el CSV: {e}")
+    up_qe = ic2.file_uploader("CSV de puntos Q-η", type=["csv"], key=f"w_csv_qe_{BK}")
+    if up_qe is not None:
+        try:
+            df_imp = pd.read_csv(up_qe, header=None, comment="#")
+            if df_imp.iloc[0].apply(lambda v: isinstance(v, str)).any():
+                df_imp = df_imp.iloc[1:]
+            nuevos = [(float(r[0]), float(r[1])) for _, r in df_imp.iterrows()]
+            bomba.puntos_qe = sorted(set(bomba.puntos_qe) | set(nuevos))
+            st.success(f"{len(nuevos)} puntos Q-η importados.")
+        except Exception as e:
+            st.error(f"No se pudo leer el CSV: {e}")
 
 # ---------- tablas de puntos (siempre editables) ----------
 st.subheader("Puntos de la bomba (editables)")

@@ -99,7 +99,7 @@ ACUCALC/
 │   ├── demand.py           # dotación y caudales de diseño
 │   ├── storage.py          # volumen de almacenamiento y tanques
 │   ├── pumping.py          # bombeo multi-tramo, Bresse, ariete, paneles
-│   ├── curves.py           # digitalizador de curvas (tipo WebPlotDigitizer)
+│   ├── curves.py           # digitalizador de curvas (implementación propia)
 │   ├── project.py          # modelo de proyecto + JSON versionado
 │   └── report.py           # generador de memoria LaTeX
 ├── pages/                  # 7 páginas Streamlit (solo UI, sin fórmulas)
@@ -113,6 +113,5 @@ ACUCALC/
 
 ## Licencia
 
-MIT — ver `LICENSE`. El digitalizador de curvas (`core/curves.py`) es una
-implementación propia inspirada conceptualmente en
-[WebPlotDigitizer](https://automeris.io/) (AGPL-3.0); no reutiliza su código.
+MIT — ver `LICENSE`. El digitalizador de curvas (`core/curves.py`,
+`components/digitizer/`) es una implementación propia.

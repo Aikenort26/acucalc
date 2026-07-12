@@ -1,5 +1,6 @@
 """Digitalización de curvas de bomba: calibración de ejes y ajustes.
-Funcionalidad tipo WebPlotDigitizer (automeris.io); implementación propia."""
+Implementación propia: calibración de ejes por pixel, ajuste polinómico,
+punto de operación y detección de curva por color."""
 import math
 from dataclasses import dataclass
 

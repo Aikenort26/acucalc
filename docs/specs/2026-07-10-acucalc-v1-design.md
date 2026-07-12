@@ -125,8 +125,7 @@ aducción, conducción, tanque = QMD; red = QMH).
   pre-cálculo de paneles solares (potencia panel, FS, número y área).
 
 ### 5.5 Digitalizador de curvas + multi-bomba *(módulo aparte; ajuste del usuario integrado)*
-Funcionalidad tipo **WebPlotDigitizer (automeris.io)** pero **implementación propia**
-(WebPlotDigitizer es AGPL-3.0: no se copia ni adapta su código — solo se replica el concepto).
+Digitalizador de curvas de bomba, **implementación propia**.
 - Cargar imagen del catálogo (png/jpg; PDF se exporta a imagen fuera de la app en v1). Calibración: 2 puntos por eje con valores
   conocidos; soporte de escala logarítmica; unidades de entrada (L/s, L/min, m³/h, GPM)
   convertidas a L/s y m internamente.
@@ -193,7 +192,7 @@ resultados exportables (CSV) por página.
 - Repo GitHub `acucalc` (crear al final de v1; push solo con confirmación del usuario).
   El repo vive en `02_PROYECTOS\ACUCALC\` — al hacer `git init` ahí, añadir la carpeta al
   `.gitignore` del vault para evitar repos anidados.
-- Licencia del repo: MIT (sin código AGPL de WebPlotDigitizer).
+- Licencia del repo: MIT.
 
 ## 10. Dependencias
 
