@@ -73,6 +73,7 @@ def test_render_tex(tmp_path):
     assert "Recomendaciones y limitaciones" in tex
     assert "Resolución 0330 de 2017, MVCT." in tex          # referencias
     assert "listoffigures" in tex and "listoftables" in tex
+    assert "semienterrado" in tex and "112.4" in tex        # tipo constructivo + V real
 
 
 def test_render_crea_zip(tmp_path):

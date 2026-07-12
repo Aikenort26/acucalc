@@ -162,12 +162,16 @@ Volumen total adoptado (incluye incendio NSR-10 Título J):
 \BLOCK{endif}
 
 \BLOCK{if tanques}
+Cada tanque puede construirse como una o varias unidades del mismo tipo;
+las dimensiones se redondean hacia arriba a 10 cm, por lo que el volumen real
+construido es igual o mayor al volumen requerido por el balance de regulación.
 \begin{table}[H]\centering
-\caption{Predimensionamiento de tanques (volumen útil; añadir 0.30 m de borde libre).}
-\begin{tabular}{llllrr}\toprule
-Tanque & Tipo & Forma & Dimensiones & Volumen [m³] & Altura [m] \\ \midrule
+\caption{Predimensionamiento de tanques (dimensiones por unidad; volumen útil de
+líquido — añadir 0.30 m de borde libre adicional en la construcción).}
+\begin{tabular}{lllcllrr}\toprule
+Tanque & Tipo & Tipo constructivo & Cant. & Forma & Dim. (c/u) & $V$ requerido [m³] & $V$ real total [m³] \\ \midrule
 \BLOCK{for t in tanques}
-\VAR{t.nombre} & \VAR{t.tipo} & \VAR{t.forma} & \VAR{t.dim} & \VAR{t.volumen} & \VAR{t.altura} \\
+\VAR{t.nombre} & \VAR{t.tipo} & \VAR{t.tipo_constructivo} & \VAR{t.cantidad} & \VAR{t.forma} & \VAR{t.dim} & \VAR{t.volumen} & \VAR{t.volumen_real} \\
 \BLOCK{endfor}
 \bottomrule\end{tabular}\end{table}
 \BLOCK{endif}
