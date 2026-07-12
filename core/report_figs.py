@@ -155,42 +155,151 @@ def fig_sistema(sys_lps: list[tuple[float, float]],
     return fig
 
 
-def fig_esquema(tipo_bomba: str = "superficie", cadena: bool = True):
-    """Esquema del sistema: captación→PTAP→tanque bajo→bomba→tanque elevado→red."""
-    fig, ax = plt.subplots(figsize=(10, 3.6))
-    ax.axis("off")
+GROUND_Y = 0.34   # nivel de terreno común a todo el esquema, en coords de eje [0,1]
 
-    def caja(x, y, w, h, texto, fc="#E8F1F5"):
-        ax.add_patch(plt.Rectangle((x, y), w, h, fc=fc, ec="#0E7490", lw=1.4))
-        ax.text(x + w / 2, y + h / 2, texto, ha="center", va="center", fontsize=9)
+
+def _dibujar_terreno(ax, x0=0.0, x1=1.0, y=GROUND_Y):
+    ax.plot([x0, x1], [y, y], color="#8B5E34", lw=2, zorder=3)
+    n = int((x1 - x0) / 0.02)
+    for i in range(n):
+        xa = x0 + i * 0.02
+        ax.plot([xa, xa - 0.008], [y, y - 0.015], color="#8B5E34", lw=0.8, zorder=3)
+
+
+def _dibujar_bomba(ax, x, y, tipo_bomba: str):
+    """Símbolo de bomba: círculo con 'B'. tipo_bomba solo cambia la etiqueta —
+    la posición (en pozo bajo terreno o a nivel de superficie) la decide quien
+    llama esta función."""
+    ax.add_patch(plt.Circle((x, y), 0.028, fc="#FDE9D9", ec="#B45309", lw=1.4, zorder=6))
+    ax.text(x, y, "B", ha="center", va="center", fontsize=8, weight="bold", zorder=7)
+    etiqueta = "Bomba\nsumergible" if tipo_bomba == "sumergible" else "Bomba de\nsuperficie"
+    ax.text(x, y - 0.10, etiqueta, ha="center", va="top", fontsize=7)
+
+
+def _dibujar_pozo(ax, x, w, y_fondo, y_terreno, tipo_bomba: str):
+    """Pozo perforado con revestimiento; bomba sumergible cerca del fondo si
+    tipo_bomba=='sumergible', o succión desde el pozo si es de superficie."""
+    ax.add_patch(plt.Rectangle((x, y_fondo), w, y_terreno - y_fondo, fc="#EFEFEF",
+                               ec="#6B7280", lw=1.2, zorder=2))
+    ax.plot([x, x], [y_fondo, y_terreno], color="#6B7280", lw=1.5, zorder=3)
+    ax.plot([x + w, x + w], [y_fondo, y_terreno], color="#6B7280", lw=1.5, zorder=3)
+    cx = x + w / 2
+    if tipo_bomba == "sumergible":
+        _dibujar_bomba(ax, cx, y_fondo + 0.04, "sumergible")
+    else:
+        ax.plot([cx, cx], [y_fondo + 0.02, y_terreno], color="#0E7490", lw=1.3,
+                ls=":", zorder=4)
+        _dibujar_bomba(ax, cx, y_terreno + 0.05, "superficie")
+    ax.text(cx, y_fondo - 0.03, "Pozo", ha="center", va="top", fontsize=8)
+
+
+def _dibujar_tanque(ax, x, w, tipo_constructivo: str, forma: str, cantidad: int,
+                    nombre: str, y_terreno=GROUND_Y, h_tanque=0.30):
+    """Dibujo tipo corte constructivo del tanque según su tipo:
+    superficial (apoyado en el terreno), enterrado (bajo tierra con tapa de
+    acceso), semienterrado (mitad enterrado) o elevado (sobre torre/pedestal).
+    `forma` solo anota la planta (circular/cuadrado/rectangular) en la etiqueta."""
+    hatch = "////"
+    if tipo_constructivo == "elevado":
+        torre_h = 0.32
+        base_y = y_terreno + torre_h
+        ax.plot([x + w * 0.15, x + w * 0.15], [y_terreno, base_y],
+                color="#6B7280", lw=2.2, zorder=2)
+        ax.plot([x + w * 0.85, x + w * 0.85], [y_terreno, base_y],
+                color="#6B7280", lw=2.2, zorder=2)
+        ax.add_patch(plt.Rectangle((x, base_y), w, h_tanque, fc="#DCE9EF",
+                                   ec="#0E7490", lw=1.5, zorder=5))
+        y_centro = base_y + h_tanque / 2
+    elif tipo_constructivo == "enterrado":
+        base_y = y_terreno - h_tanque
+        ax.add_patch(plt.Rectangle((x - 0.02, base_y - 0.02), w + 0.04,
+                                   h_tanque + 0.02 + (y_terreno - base_y - h_tanque),
+                                   fc="#EAD9BE", ec="none", hatch=hatch,
+                                   alpha=0.5, zorder=1))
+        ax.add_patch(plt.Rectangle((x, base_y), w, h_tanque, fc="#DCE9EF",
+                                   ec="#0E7490", lw=1.5, zorder=2))
+        ax.add_patch(plt.Rectangle((x + w * 0.4, y_terreno - 0.015, ), w * 0.2, 0.015,
+                                   fc="#9CA3AF", ec="#374151", lw=0.8, zorder=3))
+        y_centro = base_y + h_tanque / 2
+    elif tipo_constructivo == "semienterrado":
+        base_y = y_terreno - h_tanque / 2
+        ax.add_patch(plt.Rectangle((x - 0.02, base_y - 0.02), w + 0.04,
+                                   y_terreno - base_y + 0.02, fc="#EAD9BE",
+                                   ec="none", hatch=hatch, alpha=0.5, zorder=1))
+        ax.add_patch(plt.Rectangle((x, base_y), w, h_tanque, fc="#DCE9EF",
+                                   ec="#0E7490", lw=1.5, zorder=2))
+        y_centro = base_y + h_tanque / 2
+    else:  # superficial
+        base_y = y_terreno
+        ax.add_patch(plt.Rectangle((x, base_y), w, 0.03, fc="#9CA3AF",
+                                   ec="#374151", lw=0.8, zorder=2))   # losa
+        ax.add_patch(plt.Rectangle((x, base_y + 0.03), w, h_tanque, fc="#DCE9EF",
+                                   ec="#0E7490", lw=1.5, zorder=3))
+        y_centro = base_y + 0.03 + h_tanque / 2
+    etiqueta = f"{nombre}\n({tipo_constructivo}, {forma}" + (f" ×{cantidad})" if cantidad > 1 else ")")
+    ax.text(x + w / 2, y_centro, etiqueta, ha="center", va="center", fontsize=7.5, zorder=6)
+    return x + w / 2   # centro horizontal, para conectar flechas
+
+
+def fig_esquema(sistemas: list[dict], tanques: list) -> "plt.Figure":
+    """Esquema constructivo del sistema: capta (pozo/superficial) → PTAP →
+    tanque[0] (tipo_constructivo/forma/cantidad) → bomba → tanque[1] → … → red.
+
+    `sistemas`: [{"tipo_bomba": "sumergible"|"superficie"}, …] en orden.
+    `tanques`: [TankSpec, …] en orden hidráulico (puede ser vacío)."""
+    n_etapas = 2 + len(tanques)          # captación+PTAP + N tanques
+    fig, ax = plt.subplots(figsize=(2.6 * max(n_etapas, 3), 3.8))
+    ax.axis("off")
+    _dibujar_terreno(ax)
 
     def flecha(x0, y0, x1, y1):
         ax.annotate("", xy=(x1, y1), xytext=(x0, y0),
-                    arrowprops=dict(arrowstyle="-|>", color="#0E7490", lw=1.6))
+                    arrowprops=dict(arrowstyle="-|>", color="#0E7490", lw=1.6), zorder=4)
 
-    if tipo_bomba == "sumergible":
-        caja(0.02, 0.15, 0.13, 0.5, "Pozo con\nbomba\nsumergible", fc="#DCE9EF")
+    tipo_bomba_0 = sistemas[0]["tipo_bomba"] if sistemas else "superficie"
+    ancho_paso = 1.0 / max(n_etapas, 1)
+    x = 0.02
+
+    if tipo_bomba_0 == "sumergible":
+        _dibujar_pozo(ax, x, ancho_paso * 0.6, GROUND_Y - 0.28, GROUND_Y, "sumergible")
     else:
-        caja(0.02, 0.3, 0.13, 0.35, "Captación")
-    flecha(0.15, 0.48, 0.22, 0.48)
-    caja(0.22, 0.3, 0.13, 0.35, "PTAP\n(sin almacen.)")
-    flecha(0.35, 0.48, 0.42, 0.48)
-    if cadena:
-        caja(0.42, 0.3, 0.13, 0.35, "Tanque bajo")
-        flecha(0.55, 0.48, 0.60, 0.48)
-        simbolo = "Bomba\nsumergible" if tipo_bomba == "sumergible" else "Bomba de\nsuperficie"
-        circ = plt.Circle((0.635, 0.48), 0.045, fc="#FDE9D9", ec="#B45309", lw=1.4)
-        ax.add_patch(circ)
-        ax.text(0.635, 0.48, "B", ha="center", va="center", fontsize=10, weight="bold")
-        ax.text(0.635, 0.24, simbolo, ha="center", va="center", fontsize=8)
-        flecha(0.68, 0.48, 0.73, 0.48)
-        caja(0.73, 0.42, 0.13, 0.45, "Tanque\nelevado", fc="#DCE9EF")
-        flecha(0.86, 0.55, 0.93, 0.55)
-        ax.text(0.955, 0.55, "Red", ha="center", va="center", fontsize=10)
-    else:
-        caja(0.42, 0.3, 0.2, 0.35, "Tanque de\nalmacenamiento")
-        flecha(0.62, 0.48, 0.72, 0.48)
-        ax.text(0.76, 0.48, "Red", ha="center", va="center", fontsize=10)
-    ax.set_xlim(0, 1); ax.set_ylim(0, 1)
+        ax.add_patch(plt.Rectangle((x, GROUND_Y), ancho_paso * 0.6, 0.16,
+                                   fc="#E8F1F5", ec="#0E7490", lw=1.4, zorder=5))
+        ax.text(x + ancho_paso * 0.3, GROUND_Y + 0.08, "Captación\nsuperficial",
+                ha="center", va="center", fontsize=7.5)
+    x_prev = x + ancho_paso * 0.6
+    x += ancho_paso
+    flecha(x_prev, GROUND_Y + 0.08, x, GROUND_Y + 0.08)
+
+    ax.add_patch(plt.Rectangle((x, GROUND_Y), ancho_paso * 0.6, 0.16, fc="#F5F0E6",
+                               ec="#0E7490", lw=1.4, zorder=5))
+    ax.text(x + ancho_paso * 0.3, GROUND_Y + 0.08, "PTAP\n(sin\nalmacén.)",
+           ha="center", va="center", fontsize=7)
+    x_prev = x + ancho_paso * 0.6
+    x += ancho_paso
+
+    for i, t in enumerate(tanques):
+        tipo_bomba_i = (sistemas[i]["tipo_bomba"] if i < len(sistemas) and i > 0
+                        else (tipo_bomba_0 if i == 0 else "superficie"))
+        if i > 0:
+            cx = x_prev + 0.02
+            _dibujar_bomba(ax, cx, GROUND_Y + 0.05, tipo_bomba_i)
+            flecha(x_prev, GROUND_Y + 0.05, cx - 0.03, GROUND_Y + 0.05)
+            x_prev = cx + 0.03
+        else:
+            flecha(x_prev, GROUND_Y + 0.08, x, GROUND_Y + 0.08)
+            x_prev = x
+        w = ancho_paso * 0.7
+        cx_tanque = _dibujar_tanque(ax, x_prev, w, t.tipo_constructivo, t.forma,
+                                    t.cantidad, t.nombre)
+        x_prev = x_prev + w
+        x += ancho_paso
+
+    flecha(x_prev, GROUND_Y + 0.08, min(x_prev + ancho_paso * 0.5, 0.97), GROUND_Y + 0.08)
+    ax.text(min(x_prev + ancho_paso * 0.5, 0.97) + 0.02, GROUND_Y + 0.08, "Red",
+           ha="left", va="center", fontsize=9, weight="bold")
+
+    ax.set_xlim(0, 1)
+    ax.set_ylim(GROUND_Y - 0.4, GROUND_Y + 0.75)
     fig.tight_layout()
     return fig

@@ -3,12 +3,32 @@
 Mismo pipeline que usa la página 7 de la app: población → caudales →
 almacenamiento → sistemas de bombeo → figuras. Reproducible desde el JSON
 del proyecto, sin Streamlit ni session_state."""
+import base64
 import tempfile
 from pathlib import Path
 
 from core import curves as cvs, demand, population as pop, pumping as pu
 from core import report_figs as rf, storage
 from core.project import Project
+
+REFERENCIAS = [
+    {"cita": "Ministerio de Vivienda, Ciudad y Territorio. Resolución 0330 de 2017, "
+             "\"Por la cual se adopta el Reglamento Técnico para el Sector de Agua "
+             "Potable y Saneamiento Básico — RAS\"."},
+    {"cita": "Ministerio de Vivienda, Ciudad y Territorio. Resolución 0844 de 2018, "
+             "por la cual se establecen esquemas diferenciales de dotación para "
+             "zonas rurales."},
+    {"cita": "Presidencia de la República. Decreto 1575 de 2007, por el cual se "
+             "establece el Sistema para la Protección y Control de la Calidad del "
+             "Agua para Consumo Humano."},
+    {"cita": "Asociación Colombiana de Ingeniería Sísmica. Reglamento Colombiano de "
+             "Construcción Sismo Resistente NSR-10, Título J — Requisitos de "
+             "Protección contra Incendios en Edificaciones."},
+    {"cita": "Corte Constitucional de Colombia. Sentencia T-740 de 2011 (mínimo "
+             "vital de agua potable)."},
+    {"cita": "Comisión de Regulación de Agua Potable y Saneamiento Básico (CRA). "
+             "Resolución CRA 750 de 2016, metodología tarifaria — consumo básico."},
+]
 
 
 def build(p: Project) -> tuple[dict, dict]:
@@ -79,8 +99,22 @@ def build(p: Project) -> tuple[dict, dict]:
                       else alm.factores_hora)
             pares.append((t.nombre, t.entrada_flags(), salida))
         _save(rf.fig_balance_train(pares), "balance")
-    tipo_bomba_ppal = p.bombeos[0].tipo_bomba if p.bombeos else "superficie"
-    _save(rf.fig_esquema(tipo_bomba_ppal, cadena=bool(tren)), "esquema")
+    sistemas_bomba_ctx = ([{"tipo_bomba": s.tipo_bomba} for s in p.bombeos]
+                         or [{"tipo_bomba": "superficie"}])
+    _save(rf.fig_esquema(sistemas_bomba_ctx, alm.tanques if tren else []), "esquema")
+
+    # ---------- logos de portada ----------
+    def _save_logo(b64: str, name: str) -> str | None:
+        if not b64:
+            return None
+        raw = base64.b64decode(b64)
+        ext = "jpg" if raw[:3] == b"\xff\xd8\xff" else "png"
+        fp = figdir / f"{name}.{ext}"
+        fp.write_bytes(raw)
+        return fp.name
+
+    logo_cliente = _save_logo(p.logo_cliente_b64, "logo_cliente")
+    logo_consultor = _save_logo(p.logo_consultor_b64, "logo_consultor")
 
     # ---------- sistemas de bombeo ----------
     sistemas_ctx = []
@@ -143,13 +177,16 @@ def build(p: Project) -> tuple[dict, dict]:
     # ---------- tanques ----------
     tanques_ctx = []
     for t in alm.tanques:
-        d = storage.tank_dimensions(t.volumen, t.altura, t.ratio)
-        dim = (f"Ø {d.diametro:.2f} m" if t.forma == "circular"
-               else f"lado {d.lado:.2f} m" if t.forma == "cuadrado"
-               else f"{d.ancho:.2f} × {d.largo:.2f} m")
-        tanques_ctx.append({"nombre": t.nombre, "tipo": t.tipo, "forma": t.forma,
-                            "dim": dim, "volumen": f"{t.volumen:.0f}",
-                            "altura": f"{t.altura:.2f}"})
+        v_unitario_obj = (t.volumen or 1.0) / max(t.cantidad, 1)
+        ct = storage.dimensioned_tank(v_unitario_obj, t.altura, t.forma, t.ratio)
+        dim = (f"Ø {ct.diametro:.1f} m" if ct.forma == "circular"
+               else f"lado {ct.lado:.1f} m" if ct.forma == "cuadrado"
+               else f"{ct.ancho:.1f} × {ct.largo:.1f} m")
+        tanques_ctx.append({
+            "nombre": t.nombre, "tipo": t.tipo, "tipo_constructivo": t.tipo_constructivo,
+            "forma": t.forma, "cantidad": t.cantidad, "dim": dim,
+            "altura": f"{ct.altura:.1f}", "volumen": f"{t.volumen:.0f}",
+            "volumen_real": f"{ct.volumen_real * t.cantidad:.1f}"})
 
     # ---------- contexto ----------
     paso = max(1, len(serie_q) // 26)
@@ -181,6 +218,11 @@ def build(p: Project) -> tuple[dict, dict]:
         "tanques_balance": ([{"nombre": bal.nombre,
                               "horas": f"{bal.horas_entrada:.0f}",
                               "q_entrada": f"{bal.q_entrada_lps:.2f}",
+                              "horas_salida": (f"{bal.horas_salida:.0f}"
+                                              if bal.horas_salida is not None else "—"),
+                              "q_salida": (f"{bal.q_salida_lps:.2f}"
+                                          if bal.q_salida_lps is not None
+                                          else "red (variable)"),
                               "frac": f"{bal.frac_regulacion:.4f}",
                               "v": bal.v_total_redondeado} for bal in tren]
                             if tren else []),
@@ -190,5 +232,8 @@ def build(p: Project) -> tuple[dict, dict]:
         "tanques": tanques_ctx,
         "sistemas": sistemas_ctx,
         "figuras": figuras,
+        "logo_cliente": logo_cliente,
+        "logo_consultor": logo_consultor,
+        "referencias": REFERENCIAS,
     }
     return ctx, figuras

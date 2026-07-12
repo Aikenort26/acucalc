@@ -1,5 +1,6 @@
 from core import population as pop, report_figs as rf
 from core.curves import fit_curve
+from core.project import TankSpec
 from tests.test_population import CENSO
 
 FACTORES = [0.6,0.7,0.8,0.9,1,1.2,1.6,1.2,1,1.1,1.1,1.2,1.1,1.1,1,1.1,1.2,1.1,0.9,0.9,0.9,0.8,0.8,0.7]
@@ -37,6 +38,24 @@ def test_fig_sistema(tmp_path):
              tmp_path, "sis")
 
 
-def test_fig_esquema(tmp_path):
-    _save_ok(rf.fig_esquema("sumergible", cadena=True), tmp_path, "esq1")
-    _save_ok(rf.fig_esquema("superficie", cadena=False), tmp_path, "esq2")
+def test_fig_esquema_sin_tanques(tmp_path):
+    _save_ok(rf.fig_esquema([{"tipo_bomba": "superficie"}], []), tmp_path, "esq_sin_tk")
+
+
+def test_fig_esquema_pozo_dos_tanques(tmp_path):
+    tanques = [
+        TankSpec("Tanque bajo", "bajo", "rectangular", 30, 2.5, 1.5,
+                 tipo_constructivo="semienterrado", cantidad=1),
+        TankSpec("Tanque elevado", "elevado", "circular", 110, 2.5, 1.0,
+                 tipo_constructivo="elevado", cantidad=2),
+    ]
+    sistemas = [{"tipo_bomba": "sumergible"}, {"tipo_bomba": "superficie"}]
+    _save_ok(rf.fig_esquema(sistemas, tanques), tmp_path, "esq_pozo_2tk")
+
+
+def test_fig_esquema_todos_los_tipos_constructivos(tmp_path):
+    for tipo in ("superficial", "enterrado", "semienterrado", "elevado"):
+        tanques = [TankSpec("T", "bajo", "circular", 50, 2.5, 1.0,
+                            tipo_constructivo=tipo)]
+        _save_ok(rf.fig_esquema([{"tipo_bomba": "superficie"}], tanques),
+                 tmp_path, f"esq_{tipo}")
