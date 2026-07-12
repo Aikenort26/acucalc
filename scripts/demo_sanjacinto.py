@@ -107,11 +107,16 @@ pj.save(p, SAVES / "Acueducto_San_Jacinto.acucalc.json")
 
 out = report.render(ctx, Path(tempfile.mkdtemp()) / "memoria")
 pdf, log_tail = report.compile_pdf(out)
-OUT.mkdir(exist_ok=True)
+
+FOLDER = OUT / "San_Jacinto_Cabecera_Municipal"
+CURVAS = FOLDER / "curvas_bombas"
+CURVAS.mkdir(parents=True, exist_ok=True)
 if pdf:
-    shutil.copy(pdf, OUT / "memoria_sanjacinto.pdf")
+    shutil.copy(pdf, FOLDER / "Informe_Acueducto_San_Jacinto.pdf")
 z = report.make_zip(out)
-shutil.copy(z, OUT / "memoria_sanjacinto.zip")
+shutil.copy(z, FOLDER / "Informe_Acueducto_San_Jacinto_LaTeX.zip")
+for nombre, ruta in figuras.items():
+    shutil.copy(ruta, CURVAS / f"{nombre}.png")
 
 print(f"Censo DANE {cfg.mpio} ({cfg.area}): {p.censo[0]} … {p.censo[-1]}")
 print(f"Población base {cfg.year0}: {cfg.p0:,.0f} hab · método: {cfg.metodo}")
@@ -126,6 +131,8 @@ for s in ctx["sistemas"]:
           f"{s['potencia_hp']} HP · bombas: "
           + "; ".join(f"{b['nombre']}: Q_op={b['q_op']} L/s H_op={b['h_op']} m "
                       f"η={b['eta_op']}" for b in s["bombas"]))
-print(f"PDF: {'OK -> output/memoria_sanjacinto.pdf' if pdf else 'NO COMPILO'}")
+print(f"Carpeta de salida: {FOLDER}")
+print(f"PDF: {'OK -> Informe_Acueducto_San_Jacinto.pdf' if pdf else 'NO COMPILO'}")
+print(f"Curvas de bombas: {len(figuras)} PNG en curvas_bombas/")
 if not pdf:
     print(log_tail[-800:])
