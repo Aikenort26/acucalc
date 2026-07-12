@@ -10,8 +10,35 @@
 \date{\VAR{fecha}}
 
 \begin{document}
-\maketitle
+\begin{titlepage}
+\centering
+\BLOCK{if logo_cliente or logo_consultor}
+\begin{minipage}{0.45\textwidth}\centering
+\BLOCK{if logo_cliente}
+\includegraphics[height=2.2cm]{figures/\VAR{logo_cliente}}
+\BLOCK{endif}
+\end{minipage}\hfill
+\begin{minipage}{0.45\textwidth}\centering
+\BLOCK{if logo_consultor}
+\includegraphics[height=2.2cm]{figures/\VAR{logo_consultor}}
+\BLOCK{endif}
+\end{minipage}
+\vspace{1.5cm}
+\BLOCK{endif}
+{\LARGE\bfseries Memoria de Cálculo Hidráulico\par}
+\vspace{0.4cm}
+{\Large Sistema de Acueducto de \VAR{corregimiento}\par}
+\vspace{2cm}
+{\large \VAR{consultor}\par}
+\vspace{0.3cm}
+{\large \VAR{fecha}\par}
+\vfill
+{\small Documento generado con ACUCALC — ver Recomendaciones y limitaciones\par}
+\end{titlepage}
+
 \tableofcontents
+\listoffigures
+\listoftables
 \newpage
 
 \section{Introducción}
@@ -209,5 +236,43 @@ con un caudal máximo diario de \VAR{qmd} L/s y un volumen de almacenamiento de
 El sistema de bombeo \VAR{s.nombre} requiere un equipo de \VAR{s.potencia_hp} HP
 para \VAR{s.qb} L/s con altura dinámica de \VAR{s.hd} m.
 \BLOCK{endfor}
+
+\section{Recomendaciones y limitaciones}
+Este documento es una memoria de predimensionamiento generada de forma
+automatizada a partir de la metodología de la Resolución 0330 de 2017 y de los
+datos suministrados por el usuario. En consecuencia:
+\begin{itemize}
+  \item \textbf{Toda la información contenida en este informe, así como en la
+    aplicación ACUCALC y su código fuente, debe ser revisada, verificada y
+    validada por el profesional proyectista responsable} antes de usarse en
+    diseño definitivo, construcción u operación de un sistema real.
+  \item Los resultados son un predimensionamiento preliminar; no reemplazan el
+    diseño detallado, el análisis estructural y geotécnico de tanques y
+    estructuras, ni el análisis de transitorios hidráulicos con software
+    especializado para redes complejas.
+  \item Los diagramas de esquema del sistema (captación, tanques, bombeo) son
+    representaciones conceptuales, no planos constructivos definitivos — el
+    diseño estructural y de detalle de cada componente requiere ingeniería
+    específica adicional.
+  \item Las curvas de bomba digitalizadas y sus regresiones polinómicas son una
+    aproximación numérica a la curva del fabricante; debe verificarse contra la
+    ficha técnica oficial del equipo antes de la compra o instalación.
+  \item El catálogo de tuberías (diámetros, espesores, presión nominal) usa
+    valores normativos de referencia; deben confirmarse con la ficha técnica
+    del fabricante específico antes de la construcción.
+  \item La verificación de golpe de ariete es una estimación de Joukowsky de
+    primer orden; sistemas críticos requieren un análisis de transitorios
+    completo (método de las características u otro) antes de definir las
+    protecciones finales.
+  \item Este documento no sustituye el juicio profesional del ingeniero
+    responsable ni las revisiones de las autoridades competentes.
+\end{itemize}
+
+\section{Referencias}
+\begin{enumerate}
+\BLOCK{for ref in referencias}
+  \item \VAR{ref.cita}
+\BLOCK{endfor}
+\end{enumerate}
 
 \end{document}

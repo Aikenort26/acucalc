@@ -21,13 +21,21 @@ CTX = {
         {"ano": 2051, "pob": "1,602", "qmed": "1.648", "qmd": "2.142", "qmh": "3.428"}],
     "usar_cadena": True,
     "tanques_balance": [
-        {"nombre": "T. bajo", "horas": "24", "q_entrada": "21.49", "frac": "0.0417", "v": 30},
-        {"nombre": "T. elevado", "horas": "10", "q_entrada": "51.57", "frac": "0.5167", "v": 110}],
+        {"nombre": "T. bajo", "horas": "24", "q_entrada": "21.49",
+         "horas_salida": "10", "q_salida": "51.57",
+         "frac": "0.0417", "v": 30},
+        {"nombre": "T. elevado", "horas": "10", "q_entrada": "51.57",
+         "horas_salida": "—", "q_salida": "red (variable)",
+         "frac": "0.5167", "v": 110}],
     "v_art81": "—", "v_curva": "—", "v_final": 140,
-    "tanques": [{"nombre": "T. bajo", "tipo": "bajo", "forma": "rectangular",
-                 "dim": "3.00 × 4.50 m", "volumen": "30", "altura": "2.50"},
-                {"nombre": "T. elevado", "tipo": "elevado", "forma": "circular",
-                 "dim": "Ø 7.48 m", "volumen": "110", "altura": "2.50"}],
+    "tanques": [{"nombre": "T. bajo", "tipo": "bajo", "tipo_constructivo": "semienterrado",
+                 "forma": "rectangular", "cantidad": 1,
+                 "dim": "3.00 × 4.50 m", "volumen": "30", "volumen_real": "31.2",
+                 "altura": "2.50"},
+                {"nombre": "T. elevado", "tipo": "elevado", "tipo_constructivo": "elevado",
+                 "forma": "circular", "cantidad": 2,
+                 "dim": "Ø 7.48 m", "volumen": "110", "volumen_real": "112.4",
+                 "altura": "2.50"}],
     "sistemas": [{
         "nombre": "Captación→T.Bajo", "tipo_bomba": "sumergible", "horas": "10",
         "qb": "5.14", "hd": "74.35", "eficiencia": 0.734,
@@ -41,6 +49,9 @@ CTX = {
                     "e_eq": "$\\eta = -0.008639Q^2 +0.11837Q -0.0554$"}],
         "bomba_seleccionada": "Bomba A", "fig": ""}],
     "figuras": {},   # sin archivos en el test — los \BLOCK{if} deben omitir las figuras
+    "logo_cliente": None, "logo_consultor": None,
+    "referencias": [{"cita": "Resolución 0330 de 2017, MVCT."},
+                    {"cita": "Decreto 1575 de 2007."}],
 }
 
 
@@ -58,6 +69,10 @@ def test_render_tex(tmp_path):
     assert "51.57" in tex                                   # Q de entrada por tanque
     assert "flotante" in tex.lower()                        # población flotante
     assert "includegraphics" not in tex                     # sin figuras si figuras={}
+    assert "proyectista" in tex.lower()                     # aviso de revisión profesional
+    assert "Recomendaciones y limitaciones" in tex
+    assert "Resolución 0330 de 2017, MVCT." in tex          # referencias
+    assert "listoffigures" in tex and "listoftables" in tex
 
 
 def test_render_crea_zip(tmp_path):
