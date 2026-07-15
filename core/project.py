@@ -151,6 +151,12 @@ class Project:
     demanda: DemandConfig = field(default_factory=DemandConfig)
     almacenamiento: StorageConfig = field(default_factory=StorageConfig)
     bombeos: list = field(default_factory=list)       # PumpSystemData
+    red_inp: str = ""             # texto INP cargado (vacío = sin red)
+    red_material: str = ""        # material del catálogo usado en la optimización
+    red_serie: str = ""
+    red_vmax: float = 6.0
+    red_pmin: float = 15.0
+    red_pmax: float = 70.0
 
 
 def save(p: Project, path: str | Path) -> None:
@@ -211,4 +217,10 @@ def load(path: str | Path) -> Project:
     p.almacenamiento = StorageConfig(**d.get("almacenamiento", {}))
     p.almacenamiento.tanques = [TankSpec(**t) for t in p.almacenamiento.tanques]
     p.bombeos = [_pump_system_from_dict(s) for s in d.get("bombeos", [])]
+    p.red_inp = d.get("red_inp", "")
+    p.red_material = d.get("red_material", "")
+    p.red_serie = d.get("red_serie", "")
+    p.red_vmax = d.get("red_vmax", 6.0)
+    p.red_pmin = d.get("red_pmin", 15.0)
+    p.red_pmax = d.get("red_pmax", 70.0)
     return p

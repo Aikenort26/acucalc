@@ -9,7 +9,7 @@ from core import report, report_ctx
 from pages_common import page_setup
 
 p = page_setup()
-st.header("7 · Reporte — memoria de cálculo LaTeX")
+st.header("8 · Reporte — memoria de cálculo LaTeX")
 
 try:
     ctx, figuras = report_ctx.build(p)

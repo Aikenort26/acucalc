@@ -113,3 +113,15 @@ def test_k_auto_persiste_en_json(tmp_path):
     p2 = pj.load(f)
     assert p2.demanda.k_auto is False
     assert p2.demanda.k1 == 1.15 and p2.demanda.k2 == 1.45
+
+
+def test_red_inp_persiste_en_json(tmp_path):
+    p = _proyecto()
+    p.red_inp = "[JUNCTIONS]\nJ1 10 5\n"
+    p.red_material, p.red_serie = "PEAD PE100", "RDE 21"
+    p.red_vmax = 2.5
+    f = tmp_path / "red.acucalc.json"
+    pj.save(p, f)
+    p2 = pj.load(f)
+    assert p2.red_inp == "[JUNCTIONS]\nJ1 10 5\n"
+    assert p2.red_material == "PEAD PE100" and p2.red_vmax == 2.5
