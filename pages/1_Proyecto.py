@@ -2,7 +2,7 @@ import base64
 import datetime as dt
 import streamlit as st
 from core import dane, project as pj
-from pages_common import (SAVES_DIR, page_setup, num_input, clear_widget_state)
+from pages_common import (SAVES_DIR, AUTOSAVE_FILE, page_setup, num_input, clear_widget_state)
 
 p = page_setup()
 st.header("1 · Proyecto")
@@ -41,11 +41,10 @@ with c2:
     p.temperatura = num_input("Temperatura del agua [°C]", "temperatura", p.temperatura,
                               decimals=1, min_value=0.0, max_value=50.0)
 
-autosave_f = SAVES_DIR / "_autosave.acucalc.json"
-if autosave_f.exists() and not p.nombre:
+if AUTOSAVE_FILE.exists() and not p.nombre:
     st.info("Hay una sesión anterior sin guardar explícitamente.")
     if st.button("♻ Restaurar última sesión (autosave)"):
-        st.session_state["project"] = pj.load(autosave_f)
+        st.session_state["project"] = pj.load(AUTOSAVE_FILE)
         clear_widget_state()
         st.rerun()
 
