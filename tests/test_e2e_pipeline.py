@@ -70,7 +70,10 @@ def test_pipeline_completo(tmp_path):
     out = report.render(ctx, tmp_path / "memoria")
     tex = (out / "main.tex").read_text(encoding="utf-8")
     assert "\\VAR{" not in tex and "\\BLOCK{" not in tex
-    assert "Pozo→T.Elevado" in tex
+    # el nombre trae una flecha unicode fragil; report_ctx.build() debe
+    # escaparla a la forma LaTeX robusta (ver latex_escape en report_ctx.py)
+    assert "Pozo$\\to$T.Elevado" in tex
+    assert "Pozo→T.Elevado" not in tex
     assert (out / "figures" / "poblacion.png").exists()
     assert (out / "figures" / "esquema.png").exists()
     z = report.make_zip(out)

@@ -30,6 +30,36 @@ REFERENCIAS = [
              "Resolución CRA 750 de 2016, metodología tarifaria — consumo básico."},
 ]
 
+_LATEX_MAP = [
+    ("\\", r"\textbackslash{}"),
+    ("&", r"\&"), ("%", r"\%"), ("$", r"\$"), ("#", r"\#"),
+    ("_", r"\_"), ("{", r"\{"), ("}", r"\}"),
+    ("~", r"\textasciitilde{}"), ("^", r"\textasciicircum{}"),
+    ("→", r"$\to$"), ("×", r"$\times$"), ("Ø", r"\O{}"),
+    ("—", "---"), ("–", "--"),
+    ("“", "``"), ("”", "''"), ("‘", "`"), ("’", "'"),
+]
+
+
+_LATEX_ESCAPE_TABLE = dict(_LATEX_MAP)
+
+
+def latex_escape(s: str) -> str:
+    """Escapa un string de usuario para LaTeX y normaliza unicode frágil
+    (flechas, multiplicación, Ø, guiones y comillas tipográficas) a su forma
+    ASCII/LaTeX robusta — necesario porque el `main.tex` generado puede ser
+    reabierto y re-guardado externamente en un encoding no-UTF8 (bug
+    reportado: tildes y unicode se corrompen a U+FFFD tras ese re-guardado;
+    el ASCII sobrevive).
+
+    Nota: se traduce carácter por carácter (no con `.replace()` encadenado)
+    porque varios reemplazos de `_LATEX_MAP` insertan `{`/`}` literales
+    (p.ej. `\\` -> `\textbackslash{}`); un `.replace()` en cadena volvería a
+    escapar esas llaves recién insertadas y las duplicaría."""
+    if not s:
+        return s
+    return "".join(_LATEX_ESCAPE_TABLE.get(ch, ch) for ch in s)
+
 
 def build(p: Project) -> tuple[dict, dict]:
     """Devuelve (ctx para la plantilla LaTeX, dict figuras nombre→ruta png).
@@ -149,7 +179,7 @@ def build(p: Project) -> tuple[dict, dict]:
                                "e_fit": e_fit})
             A, B, C = fit.coeffs
             bombas_tab.append({
-                "nombre": bb.nombre,
+                "nombre": latex_escape(bb.nombre),
                 "h_eq": f"$H = {A:+.4f}Q^2 {B:+.4f}Q {C:+.3f}$",
                 "e_eq": (f"$\\eta = {e_fit.coeffs[0]:+.6f}Q^2 "
                          f"{e_fit.coeffs[1]:+.5f}Q {e_fit.coeffs[2]:+.4f}$"
@@ -163,15 +193,17 @@ def build(p: Project) -> tuple[dict, dict]:
         fig_name = f"sistema_{i + 1}"
         _save(rf.fig_sistema(sys_lps, bombas_fig, qb_lps, r.hd, s.nombre), fig_name)
         sistemas_ctx.append({
-            "nombre": s.nombre, "tipo_bomba": s.tipo_bomba, "horas": f"{s.horas:.0f}",
+            "nombre": latex_escape(s.nombre), "tipo_bomba": s.tipo_bomba,
+            "horas": f"{s.horas:.0f}",
             "qb": f"{qb_lps:.2f}", "hd": f"{r.hd:.2f}", "eficiencia": s.eficiencia,
             "potencia_kw": f"{r.potencia_kw:.2f}", "potencia_hp": f"{r.potencia_hp:.2f}",
-            "tramos": [{"nombre": t.segment.nombre, "L": f"{t.segment.L:.1f}",
+            "tramos": [{"nombre": latex_escape(t.segment.nombre), "L": f"{t.segment.L:.1f}",
                         "D_mm": f"{t.segment.D * 1000:.1f}",
                         "material": t.segment.material,
                         "V": f"{t.V:.2f}", "hf": f"{t.hf:.3f}", "hl": f"{t.hl:.3f}"}
                        for t in r.tramos],
-            "bombas": bombas_tab, "bomba_seleccionada": s.bomba_seleccionada or "—",
+            "bombas": bombas_tab,
+            "bomba_seleccionada": latex_escape(s.bomba_seleccionada or "—"),
             "fig": f"{fig_name}.png"})
 
     # ---------- tanques ----------
@@ -183,7 +215,8 @@ def build(p: Project) -> tuple[dict, dict]:
                else f"lado {ct.lado:.1f} m" if ct.forma == "cuadrado"
                else f"{ct.ancho:.1f} × {ct.largo:.1f} m")
         tanques_ctx.append({
-            "nombre": t.nombre, "tipo": t.tipo, "tipo_constructivo": t.tipo_constructivo,
+            "nombre": latex_escape(t.nombre), "tipo": t.tipo,
+            "tipo_constructivo": t.tipo_constructivo,
             "forma": t.forma, "cantidad": t.cantidad, "dim": dim,
             "altura": f"{ct.altura:.1f}", "volumen": f"{t.volumen:.0f}",
             "volumen_real": f"{ct.volumen_real * t.cantidad:.1f}"})
@@ -191,10 +224,12 @@ def build(p: Project) -> tuple[dict, dict]:
     # ---------- contexto ----------
     paso = max(1, len(serie_q) // 26)
     ctx = {
-        "nombre": p.nombre, "municipio": p.municipio, "departamento": p.departamento,
-        "corregimiento": p.corregimiento or p.municipio, "consultor": p.consultor,
-        "fecha": p.fecha, "altitud": p.altitud, "temperatura": p.temperatura,
-        "pob_metodo": cfg.metodo, "pob_justificacion": cfg.justificacion,
+        "nombre": latex_escape(p.nombre), "municipio": latex_escape(p.municipio),
+        "departamento": latex_escape(p.departamento),
+        "corregimiento": latex_escape(p.corregimiento or p.municipio),
+        "consultor": latex_escape(p.consultor), "fecha": p.fecha,
+        "altitud": p.altitud, "temperatura": p.temperatura,
+        "pob_metodo": cfg.metodo, "pob_justificacion": latex_escape(cfg.justificacion),
         "pob_final": f"{pob_final:,.0f}", "horizonte": cfg.horizon_year,
         "pob_tipo": ("cabecera municipal" if cfg.tipo == "municipio"
                      else "corregimiento/vereda"),
@@ -204,7 +239,7 @@ def build(p: Project) -> tuple[dict, dict]:
         "year0": cfg.year0,
         "flotante_pct": f"{cfg.flotante_pct * 100:.0f}" if cfg.flotante_pct else "",
         "dneta": f"{p.demanda.dneta:.0f}", "dneta_modo": p.demanda.modo,
-        "dneta_justificacion": p.demanda.justificacion,
+        "dneta_justificacion": latex_escape(p.demanda.justificacion),
         "dbruta": f"{flows.dbruta:.1f}", "perdidas": f"{flows.perdidas * 100:.0f}",
         "k1": flows.k1, "k2": flows.k2,
         "qmed": f"{flows.qmed_lps:.3f}", "qmd": f"{flows.qmd_lps:.3f}",
