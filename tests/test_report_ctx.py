@@ -1,5 +1,24 @@
+import base64
+
 from core import project as pj
+from core import report
 from core import report_ctx
+
+
+def _logo_png_b64() -> str:
+    # PNG 1x1 blanco válido (evita depender de Pillow para generar el fixture)
+    raw = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+        "+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+    return base64.b64encode(raw).decode()
+
+
+def _proyecto_minimo() -> pj.Project:
+    p = pj.Project(nombre="Demo", municipio="Demo", altitud=100, temperatura=20.0)
+    p.censo = [(2018, 1000), (2019, 1010)]
+    p.poblacion.p0, p.poblacion.metodo = 1000.0, "res0844"
+    p.demanda.dneta = 120.0
+    return p
 
 
 def test_latex_escape_caracteres_especiales():
@@ -43,3 +62,13 @@ def test_latex_escape_cubre_tanques_balance():
     assert ctx["tanques_balance"]
     assert ctx["tanques_balance"][0]["nombre"] == report_ctx.latex_escape("T&B_1")
     assert ctx["fecha"] == report_ctx.latex_escape("15% de julio")
+
+
+def test_logo_entra_al_diccionario_de_figuras_y_se_copia(tmp_path):
+    p = _proyecto_minimo()
+    p.logo_cliente_b64 = _logo_png_b64()
+    ctx, figuras = report_ctx.build(p)
+    assert "logo_cliente" in figuras
+    assert ctx["logo_cliente"] == "logo_cliente.png"
+    out = report.render(ctx, tmp_path)
+    assert (out / "figures" / "logo_cliente.png").exists()

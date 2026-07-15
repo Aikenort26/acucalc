@@ -33,7 +33,7 @@
 \vspace{0.3cm}
 {\large \VAR{fecha}\par}
 \vfill
-{\small Documento generado con ACUCALC — ver Recomendaciones y limitaciones\par}
+{\small Documento generado con ACUCALC --- ver Recomendaciones y limitaciones\par}
 \end{titlepage}
 
 \tableofcontents
@@ -53,10 +53,10 @@ características.
 
 \section{Marco legal}
 \begin{itemize}
-  \item Resolución 0330 de 2017 (MVCT) — Reglamento Técnico RAS.
-  \item Resolución 0844 de 2018 (MVCT) — esquemas diferenciales para zonas rurales.
-  \item Decreto 1575 de 2007 — calidad del agua para consumo humano.
-  \item NSR-10, Título J — protección contra incendios.
+  \item Resolución 0330 de 2017 (MVCT) --- Reglamento Técnico RAS.
+  \item Resolución 0844 de 2018 (MVCT) --- esquemas diferenciales para zonas rurales.
+  \item Decreto 1575 de 2007 --- calidad del agua para consumo humano.
+  \item NSR-10, Título J --- protección contra incendios.
   \item Jurisprudencia de mínimo vital (Corte Constitucional, T-740 de 2011).
 \end{itemize}
 
@@ -167,7 +167,7 @@ las dimensiones se redondean hacia arriba a 10 cm, por lo que el volumen real
 construido es igual o mayor al volumen requerido por el balance de regulación.
 \begin{table}[H]\centering
 \caption{Predimensionamiento de tanques (dimensiones por unidad; volumen útil de
-líquido — añadir 0.30 m de borde libre adicional en la construcción).}
+líquido --- añadir 0.30 m de borde libre adicional en la construcción).}
 \begin{tabular}{lllcllrr}\toprule
 Tanque & Tipo & Tipo constructivo & Cant. & Forma & Dim. (c/u) & $V$ requerido [m³] & $V$ real total [m³] \\ \midrule
 \BLOCK{for t in tanques}
@@ -196,7 +196,7 @@ se construye barriendo el caudal sobre todos los tramos.
 Bomba de tipo \VAR{s.tipo_bomba}, operación de \VAR{s.horas} h/día.
 Caudal de bombeo $Q_b=\VAR{s.qb}$ L/s.
 \begin{table}[H]\centering
-\caption{Pérdidas por tramo — \VAR{s.nombre}.}
+\caption{Pérdidas por tramo --- \VAR{s.nombre}.}
 \begin{tabular}{lrrrrrr}\toprule
 Tramo & $L$ [m] & $D$ [mm] & Material & $V$ [m/s] & $h_f$ [m] & $h_l$ [m] \\ \midrule
 \BLOCK{for t in s.tramos}
@@ -218,7 +218,7 @@ Bomba & $Q_{op}$ [L/s] & $H_{op}$ [m] & $\eta(Q_{op})$ & $Q_{BEP}$ [L/s] & Desv.
 Regresiones polinómicas de las curvas características (Q en L/s):
 \begin{itemize}
 \BLOCK{for b in s.bombas}
-  \item \VAR{b.nombre}: \VAR{b.h_eq}\BLOCK{if b.e_eq != "—"}; \VAR{b.e_eq}\BLOCK{endif}
+  \item \VAR{b.nombre}: \VAR{b.h_eq}\BLOCK{if b.e_eq != "---"}; \VAR{b.e_eq}\BLOCK{endif}
 \BLOCK{endfor}
 \end{itemize}
 Bomba seleccionada: \textbf{\VAR{s.bomba_seleccionada}} (criterio: mayor
@@ -227,7 +227,7 @@ eficiencia en el punto de operación).
 \BLOCK{if s.fig}
 \begin{figure}[H]\centering
 \includegraphics[width=0.9\textwidth]{figures/\VAR{s.fig}}
-\caption{Curva del sistema, punto de diseño y curvas de bombas — \VAR{s.nombre}.}
+\caption{Curva del sistema, punto de diseño y curvas de bombas --- \VAR{s.nombre}.}
 \end{figure}
 \BLOCK{endif}
 \BLOCK{endfor}
@@ -255,7 +255,7 @@ datos suministrados por el usuario. En consecuencia:
     estructuras, ni el análisis de transitorios hidráulicos con software
     especializado para redes complejas.
   \item Los diagramas de esquema del sistema (captación, tanques, bombeo) son
-    representaciones conceptuales, no planos constructivos definitivos — el
+    representaciones conceptuales, no planos constructivos definitivos --- el
     diseño estructural y de detalle de cada componente requiere ingeniería
     específica adicional.
   \item Las curvas de bomba digitalizadas y sus regresiones polinómicas son una

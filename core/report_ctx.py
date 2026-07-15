@@ -141,6 +141,7 @@ def build(p: Project) -> tuple[dict, dict]:
         ext = "jpg" if raw[:3] == b"\xff\xd8\xff" else "png"
         fp = figdir / f"{name}.{ext}"
         fp.write_bytes(raw)
+        figuras[name] = str(fp)
         return fp.name
 
     logo_cliente = _save_logo(p.logo_cliente_b64, "logo_cliente")
@@ -183,7 +184,7 @@ def build(p: Project) -> tuple[dict, dict]:
                 "h_eq": f"$H = {A:+.4f}Q^2 {B:+.4f}Q {C:+.3f}$",
                 "e_eq": (f"$\\eta = {e_fit.coeffs[0]:+.6f}Q^2 "
                          f"{e_fit.coeffs[1]:+.5f}Q {e_fit.coeffs[2]:+.4f}$"
-                         if e_fit else "—"),
+                         if e_fit else "---"),
                 "q_op": f"{op[0]:.2f}" if op else "—",
                 "h_op": f"{op[1]:.2f}" if op else "—",
                 "eta_op": f"{eta:.3f}" if eta == eta else "—",
