@@ -125,7 +125,8 @@ else:
     try:
         tren = storage.tank_train(qmd_m3d,
                                   [(t.nombre, t.entrada_flags()) for t in cfg.tanques],
-                                  cfg.factores_hora, cfg.frac_incendio, cfg.dias_reserva)
+                                  cfg.factores_hora, cfg.frac_incendio, cfg.dias_reserva,
+                                  qmh_lps=flows.qmh_lps)
     except ValueError as e:
         st.error(str(e)); st.stop()
 
@@ -138,14 +139,16 @@ else:
         [{"Tanque": b.nombre,
           "Entrada [h/día]": b.horas_entrada, "Q entrada [L/s]": b.q_entrada_lps,
           "Salida [h/día]": (b.horas_salida if b.horas_salida is not None else None),
-          "Q salida [L/s]": (b.q_salida_lps if b.q_salida_lps is not None else None),
+          "Q salida [L/s]": (f"{b.q_salida_lps:.2f}"
+                             + (" (pico QMH)" if b.horas_salida is None else "")
+                             if b.q_salida_lps is not None else "red (variable)"),
           "Fracción regulación": b.frac_regulacion,
           "Regulación [m³]": b.v_regulacion, "Incendio [m³]": b.v_incendio,
           "V asignado [m³]": b.v_total_redondeado} for b in tren])
-        .style.format({"Q entrada [L/s]": "{:.2f}", "Q salida [L/s]": "{:.2f}",
+        .style.format({"Q entrada [L/s]": "{:.2f}",
                        "Fracción regulación": "{:.4f}", "Regulación [m³]": "{:.2f}",
                        "Incendio [m³]": "{:.2f}", "Entrada [h/día]": "{:.0f}",
-                       "Salida [h/día]": "{:.0f}"}, na_rep="red (variable)"),
+                       "Salida [h/día]": "{:.0f}"}, na_rep="—"),
         hide_index=True, width="stretch")
     st.caption("Q entrada/salida = QMD·24/horas de la ventana respectiva (caudal "
                "constante del bombeo). El último tanque entrega a la red con "

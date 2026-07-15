@@ -69,7 +69,8 @@ class TankBalance:
     frac_regulacion: float
     q_entrada_lps: float          # caudal constante del bombeo/gravedad que lo alimenta
     horas_entrada: float
-    q_salida_lps: float | None    # caudal constante de salida (None = red, variable)
+    q_salida_lps: float | None    # caudal constante de salida; en el último tanque,
+                                   # si se pasa qmh_lps, es el QMH de referencia (no constante)
     horas_salida: float | None    # None = último tanque (consumo variable de la red)
     v_regulacion: float
     v_incendio: float
@@ -79,12 +80,13 @@ class TankBalance:
 
 def tank_train(qmd_m3d: float, entradas: list[tuple[str, list[float]]],
                factores_consumo: list[float], frac_incendio: float = 0.15,
-               dias_reserva: float = 1) -> list[TankBalance]:
+               dias_reserva: float = 1, qmh_lps: float | None = None) -> list[TankBalance]:
     """Cadena de N tanques en serie. `entradas` = [(nombre, ventana_entrada[24])]
     en orden hidráulico. La salida de cada tanque es la ventana de entrada del
     siguiente (bombeo intermedio a caudal constante = QMD·24/h de esa ventana);
     la salida del último es el patrón horario de consumo de la población (Q
-    variable, no constante — `q_salida_lps`/`horas_salida` quedan en None).
+    variable) — si se pasa `qmh_lps`, se reporta como referencia de pico
+    horario (QMH), aunque el consumo real siga siendo variable hora a hora.
     Balance de regulación por tanque con `balance_curve`."""
     if not entradas:
         raise ValueError("Se requiere al menos un tanque")
@@ -98,7 +100,7 @@ def tank_train(qmd_m3d: float, entradas: list[tuple[str, list[float]]],
         es_ultimo = i + 1 >= len(entradas)
         if es_ultimo:
             demand = consumo
-            horas_salida, q_salida = None, None
+            horas_salida, q_salida = None, qmh_lps
         else:
             ventana_sig = entradas[i + 1][1]
             demand = _normalize(ventana_sig, f"entrada de '{entradas[i+1][0]}'")

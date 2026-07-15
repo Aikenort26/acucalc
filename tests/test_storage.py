@@ -123,6 +123,19 @@ def test_tank_train_q_salida():
     assert tren[-1].horas_salida is None
 
 
+def test_tank_train_ultimo_reporta_qmh():
+    entradas = [("T1", [1 if 5 <= h <= 14 else 0 for h in range(24)])]
+    tren = storage.tank_train(QMD_M3D, entradas, FACTORES, qmh_lps=9.87)
+    assert tren[-1].q_salida_lps == 9.87
+    assert tren[-1].horas_salida is None      # sigue siendo patrón variable, no horas fijas
+
+
+def test_tank_train_sin_qmh_mantiene_comportamiento_previo():
+    entradas = [("T1", [1 if 5 <= h <= 14 else 0 for h in range(24)])]
+    tren = storage.tank_train(QMD_M3D, entradas, FACTORES)
+    assert tren[-1].q_salida_lps is None
+
+
 def test_round_up_step():
     assert storage.round_up_step(5.53, 0.1) == 5.6
     assert storage.round_up_step(5.50, 0.1) == 5.5           # exacto no sube

@@ -90,7 +90,8 @@ def build(p: Project) -> tuple[dict, dict]:
         try:
             tren = storage.tank_train(
                 qmd_m3d, [(t.nombre, t.entrada_flags()) for t in alm.tanques],
-                alm.factores_hora, alm.frac_incendio, alm.dias_reserva)
+                alm.factores_hora, alm.frac_incendio, alm.dias_reserva,
+                qmh_lps=flows.qmh_lps)
             for t, bal in zip(alm.tanques, tren):
                 t.volumen = float(bal.v_total_redondeado)
         except ValueError:
@@ -266,6 +267,7 @@ def build(p: Project) -> tuple[dict, dict]:
                               "horas_salida": (f"{bal.horas_salida:.0f}"
                                               if bal.horas_salida is not None else "—"),
                               "q_salida": (f"{bal.q_salida_lps:.2f}"
+                                          + (" (pico QMH)" if bal.horas_salida is None else "")
                                           if bal.q_salida_lps is not None
                                           else "red (variable)"),
                               "frac": f"{bal.frac_regulacion:.4f}",

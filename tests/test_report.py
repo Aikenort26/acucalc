@@ -25,7 +25,7 @@ CTX = {
          "horas_salida": "10", "q_salida": "51.57",
          "frac": "0.0417", "v": 30},
         {"nombre": "T. elevado", "horas": "10", "q_entrada": "51.57",
-         "horas_salida": "—", "q_salida": "red (variable)",
+         "horas_salida": "—", "q_salida": "51.57 (pico QMH)",
          "frac": "0.5167", "v": 110}],
     "v_art81": "—", "v_curva": "—", "v_final": 140,
     "tanques": [{"nombre": "T. bajo", "tipo": "bajo", "tipo_constructivo": "semienterrado",
