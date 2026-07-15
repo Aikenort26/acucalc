@@ -9,7 +9,12 @@ flows = st.session_state.get("flows")
 
 up = st.file_uploader("Archivo INP de la red (EPANET)", type=["inp", "txt"])
 if up is not None:
-    p.red_inp = up.getvalue().decode("utf-8", errors="replace")
+    texto_subido = up.getvalue().decode("utf-8", errors="replace")
+    if texto_subido != p.red_inp:
+        p.red_inp = texto_subido
+        st.session_state.pop("red_demandas", None)
+        st.session_state.pop("red_optim", None)
+        st.session_state.pop("red_optim_inp", None)
 
 if not p.red_inp:
     st.info("Carga un archivo .inp (EPANET) con [JUNCTIONS], [RESERVOIRS]/[TANKS] "
