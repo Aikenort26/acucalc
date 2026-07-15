@@ -43,10 +43,15 @@ with c2:
 
 if AUTOSAVE_FILE.exists() and not p.nombre:
     st.info("Hay una sesión anterior sin guardar explícitamente.")
-    if st.button("♻ Restaurar última sesión (autosave)"):
-        st.session_state["project"] = pj.load(AUTOSAVE_FILE)
-        clear_widget_state()
-        st.rerun()
+    with st.popover("♻ Restaurar última sesión (autosave)"):
+        st.warning("Esto reemplaza los datos actuales (no guardados) con el autosave.")
+        if st.button("Restaurar definitivamente", key="w_confirm_restore_autosave"):
+            try:
+                st.session_state["project"] = pj.load(AUTOSAVE_FILE)
+                clear_widget_state()
+                st.rerun()
+            except pj.SchemaError as e:
+                st.error(f"No se pudo restaurar el autosave: {e}")
 
 st.caption("La serie de población DANE del municipio seleccionado alimenta la página "
            "2 (tasas de crecimiento y proyección).")
