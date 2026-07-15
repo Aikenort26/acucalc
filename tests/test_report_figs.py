@@ -1,3 +1,6 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
 from core import population as pop, report_figs as rf
 from core.curves import fit_curve
 from core.project import TankSpec
@@ -36,6 +39,27 @@ def test_fig_sistema(tmp_path):
     bombas = [{"nombre": "Bomba A", "fit": fit, "op": (7.5, 18.4)}]
     _save_ok(rf.fig_sistema(sys_lps, bombas, qb_lps=5.1, hd=17.0, titulo="Sistema 1"),
              tmp_path, "sis")
+
+
+def test_fig_sistema_fondo_claro_con_estilo_oscuro_global(tmp_path):
+    """Bug reportado: con dark_background activo globalmente (como usan las
+    páginas de la app), una figura del reporte podía salir con fondo negro y
+    la curva del sistema (línea negra) invisible."""
+    plt.style.use("dark_background")
+    try:
+        fit = fit_curve([(2, 33), (5, 30), (8, 22), (10, 14)], 2)
+        sys_lps = [(q / 10, 10 + 0.15 * (q / 10) ** 2) for q in range(0, 120)]
+        bombas = [{"nombre": "Bomba A", "fit": fit, "op": (7.5, 18.4)}]
+        fig = rf.fig_sistema(sys_lps, bombas, qb_lps=5.1, hd=17.0)
+        f = tmp_path / "sis_claro.png"
+        fig.savefig(f, dpi=100, facecolor=fig.get_facecolor())
+        from PIL import Image
+        img = Image.open(f).convert("RGB")
+        r, g, b = img.getpixel((2, 2))         # esquina superior izquierda
+        assert (r, g, b) != (0, 0, 0)
+        assert r > 200 and g > 200 and b > 200  # fondo blanco, no negro
+    finally:
+        plt.style.use("default")
 
 
 def test_fig_esquema_sin_tanques(tmp_path):

@@ -1,7 +1,14 @@
 """Figuras del reporte, generadas desde el modelo (matplotlib headless).
 
 Cada función devuelve una Figure lista para savefig; el llamador decide ruta y
-dpi. Ninguna función depende de Streamlit ni de session_state."""
+dpi. Ninguna función depende de Streamlit ni de session_state.
+
+Todas las figuras fuerzan el estilo claro de matplotlib (`default`) — las
+páginas de la app usan `dark_background` para la vista en pantalla, y sin este
+blindaje una figura del PDF podía heredar el fondo negro y volver invisibles
+las líneas negras (bug reportado con la curva del sistema)."""
+import functools
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -14,6 +21,23 @@ _METODO_LABEL = {"aritmetico": "Aritmético", "geometrico": "Geométrico",
                  "res0844": "Res. 0844/2018"}
 
 
+def _light(fn):
+    """Fuerza el estilo de la figura sin importar el estado global de
+    matplotlib: claro por defecto (reporte PDF), oscuro si se pasa `dark=True`
+    (vista en la app). Evita el bug de figuras negras en el PDF."""
+    @functools.wraps(fn)
+    def wrapper(*args, dark: bool = False, **kwargs):
+        with plt.style.context("dark_background" if dark else "default"):
+            fig = fn(*args, **kwargs)
+            if dark:
+                fig.patch.set_alpha(0)
+                for ax in fig.axes:
+                    ax.set_facecolor("none")
+            return fig
+    return wrapper
+
+
+@_light
 def fig_poblacion(proj: Projection, metodo: str, flotante_pct: float = 0.0):
     """Proyección por los 5 métodos + promedio; método adoptado resaltado."""
     fig, ax = plt.subplots(figsize=(8.5, 4.8))
@@ -36,6 +60,7 @@ def fig_poblacion(proj: Projection, metodo: str, flotante_pct: float = 0.0):
     return fig
 
 
+@_light
 def fig_metodos(deviations: dict[str, float], sugerido: str):
     """Barras de desviación de cada método vs el promedio."""
     fig, ax = plt.subplots(figsize=(7, 4))
@@ -54,6 +79,7 @@ def fig_metodos(deviations: dict[str, float], sugerido: str):
     return fig
 
 
+@_light
 def fig_caudales(serie: list[tuple[int, float, float, float]]):
     """Qmed/QMD/QMH [L/s] vs años. serie = [(año, qmed, qmd, qmh)]."""
     fig, ax = plt.subplots(figsize=(8.5, 4.5))
@@ -75,6 +101,7 @@ def _acum(v):
     return out
 
 
+@_light
 def fig_balance_train(pares: list[tuple[str, list[float], list[float]]]):
     """Curvas acumuladas entrada vs salida para N tanques.
     pares = [(nombre, entrada[24], salida[24])] — se normalizan."""
@@ -92,6 +119,7 @@ def fig_balance_train(pares: list[tuple[str, list[float], list[float]]]):
     return fig
 
 
+@_light
 def fig_balance(capta: list[float], bombeo: list[float], consumo: list[float]):
     """Curvas acumuladas de suministro/consumo por tanque (bajo y elevado).
     Entradas: 24 valores horarios (se normalizan)."""
@@ -112,6 +140,7 @@ def fig_balance(capta: list[float], bombeo: list[float], consumo: list[float]):
     return fig
 
 
+@_light
 def fig_sistema(sys_lps: list[tuple[float, float]],
                 bombas: list[dict], qb_lps: float, hd: float, titulo: str = ""):
     """Curva del sistema + curvas de bombas + punto de diseño y de operación.
@@ -124,16 +153,21 @@ def fig_sistema(sys_lps: list[tuple[float, float]],
     else:
         fig, ax = plt.subplots(figsize=(8.5, 5))
         ax2 = None
-    ax.plot([q for q, _ in sys_lps], [h for _, h in sys_lps], "k--", lw=2,
-            label="Curva del sistema")
+    ax.plot([q for q, _ in sys_lps], [h for _, h in sys_lps], "--",
+            color="#1D4ED8", lw=2.2, label="Curva del sistema")
     ax.plot(qb_lps, hd, "r*", ms=16, zorder=5,
             label=f"Punto de diseño ({qb_lps:.1f} L/s, {hd:.1f} m)")
+    y_vals = [h for _, h in sys_lps] + [hd]
+    q_vals = [q for q, _ in sys_lps] + [qb_lps]
     for b in bombas:
         fit = b["fit"]
         qs = np.linspace(fit.q_min, fit.q_max, 100)
-        linea, = ax.plot(qs, [fit(q) for q in qs], lw=1.6, label=b["nombre"])
+        hs = [fit(q) for q in qs]
+        linea, = ax.plot(qs, hs, lw=1.6, label=b["nombre"])
+        y_vals += hs; q_vals += [fit.q_min, fit.q_max]
         if b.get("op"):
             ax.plot(*b["op"], "o", ms=8, color=linea.get_color())
+            y_vals.append(b["op"][1]); q_vals.append(b["op"][0])
         e_fit = b.get("e_fit")
         if ax2 is not None and e_fit:
             qs_e = np.linspace(e_fit.q_min, e_fit.q_max, 100)
@@ -142,6 +176,14 @@ def fig_sistema(sys_lps: list[tuple[float, float]],
             if b.get("op"):
                 ax2.plot(b["op"][0], e_fit(b["op"][0]), "o", ms=8,
                          color=linea.get_color())
+    # guías punteadas del punto de diseño a los ejes, con anotación (Q, H)
+    ax.plot([qb_lps, qb_lps], [0, hd], ":", color="#DC2626", lw=1.1, zorder=4)
+    ax.plot([0, qb_lps], [hd, hd], ":", color="#DC2626", lw=1.1, zorder=4)
+    ax.annotate(f"({qb_lps:.1f}, {hd:.1f})", (qb_lps, hd),
+                textcoords="offset points", xytext=(8, 8), fontsize=8,
+                color="#DC2626")
+    ax.set_xlim(0, max(q_vals) * 1.03)
+    ax.set_ylim(0, max(y_vals) * 1.08)
     ax.set_ylabel("H [m]")
     if ax2 is not None:
         ax2.set_xlabel("Q [L/s]"); ax2.set_ylabel("η [-]")
@@ -241,6 +283,7 @@ def _dibujar_tanque(ax, x, w, tipo_constructivo: str, forma: str, cantidad: int,
     return x + w / 2   # centro horizontal, para conectar flechas
 
 
+@_light
 def fig_esquema(sistemas: list[dict], tanques: list) -> "plt.Figure":
     """Esquema constructivo del sistema: capta (pozo/superficial) → PTAP →
     tanque[0] (tipo_constructivo/forma/cantidad) → bomba → tanque[1] → … → red.
