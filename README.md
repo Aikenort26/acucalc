@@ -18,7 +18,7 @@ operación, y generación de la memoria técnica en LaTeX.
 > profesional del responsable del proyecto. Ver la sección "Recomendaciones y
 > limitaciones" que la app agrega automáticamente a cada memoria generada.
 
-## Flujo de trabajo (7 páginas)
+## Flujo de trabajo (8 páginas)
 
 1. **Proyecto** — metadatos, guardar/cargar (`.acucalc.json`)
 2. **Población** — proyecciones oficiales **DANE** embebidas (todos los municipios,
@@ -46,7 +46,15 @@ operación, y generación de la memoria técnica en LaTeX.
    entrada manual Q-H/Q-η; regresiones H=A·Q²+B·Q+C y η=D·Q²+E·Q+F con
    coeficientes y R²; doble gráfica Q-H/Q-η con punto de diseño (Qb, Hd) y de
    operación; **catálogo de bombas desde Excel** con ranking por eficiencia
-7. **Reporte** — memoria LaTeX recalculada íntegramente desde el proyecto, con
+7. **Red de distribución** — carga de red desde archivo **EPANET .inp**
+   ([JUNCTIONS]/[RESERVOIRS]/[TANKS]/[PIPES]); asignación automática de
+   demandas por longitud aferente a partir del QMD calculado en la página 3;
+   optimización de diámetros por material/serie normativos con restricciones
+   de velocidad máxima y presión mín./máx.; solver hidráulico propio
+   (Global Gradient Algorithm reducido a cabezas nodales, Hazen-Williams o
+   Darcy-Weisbach) implementado en `core/network.py`; exporta INP con
+   demandas asignadas y CSV de demandas
+8. **Reporte** — memoria LaTeX recalculada íntegramente desde el proyecto, con
    6 figuras generadas (proyección, comparación de métodos, caudales anuales,
    balance de tanques, curvas de bombeo por sistema y esquema del sistema);
    compila a PDF si hay LaTeX instalado
@@ -84,13 +92,42 @@ Para compilar la memoria a PDF directamente desde la app se necesita
 `pdflatex` o `latexmk` en el `PATH` (MiKTeX o TeX Live). Sin LaTeX instalado,
 la app entrega el proyecto como `.zip` listo para subir a Overleaf.
 
+## Ejecución permanente local
+
+`run.bat` no tiene límite de tiempo — la app queda corriendo mientras esa
+consola esté abierta; se cierra únicamente si se cierra la consola.
+
+- **Acceso directo:** crea un acceso directo a `run.bat` en el escritorio o
+  en la carpeta de inicio de Windows (`shell:startup`) para lanzarla con un
+  doble clic o automáticamente al iniciar sesión.
+- **Inicio automático con el Programador de tareas:** `Programador de tareas`
+  → *Crear tarea básica* → desencadenador *Al iniciar sesión* → acción
+  *Iniciar un programa* → apuntar a `run.bat` con "Iniciar en" la carpeta del
+  proyecto.
+
+## Compartir en la web
+
+Tres formas gratuitas de exponer la app, de más simple/temporal a más
+permanente:
+
+1. **Túnel temporal (`cloudflared`):** con la app corriendo localmente,
+   `cloudflared tunnel --url http://localhost:8501` entrega una URL pública
+   mientras esa consola esté abierta — ideal para compartir "por unas horas"
+   sin desplegar nada. No requiere cuenta.
+2. **Streamlit Community Cloud:** gratis y permanente, se conecta
+   directamente al repo de GitHub del proyecto; la app se "duerme" tras un
+   periodo de inactividad y despierta al primer acceso.
+3. **Hugging Face Spaces:** gratis, alternativa a Streamlit Cloud con
+   soporte nativo para apps Streamlit vía `app.py` + `requirements.txt`
+   (los mismos que ya tiene este repo).
+
 ## Tests
 
 ```
 .venv/Scripts/python -m pytest -v
 ```
 
-Más de 90 tests cubren toda la lógica de `core/` (sin Streamlit), incluyendo golden
+Más de 130 tests cubren toda la lógica de `core/` (sin Streamlit), incluyendo golden
 tests contra los valores reales de la memoria de cálculo de El Salado
 (`docs/specs/2026-07-10-acucalc-v1-design.md`). Dos desviaciones deliberadas
 frente al Excel original están documentadas en `docs/plans/2026-07-10-acucalc-v1.md`
@@ -113,10 +150,10 @@ ACUCALC/
 │   ├── curves.py           # digitalizador de curvas (implementación propia)
 │   ├── project.py          # modelo de proyecto + JSON versionado
 │   └── report.py           # generador de memoria LaTeX
-├── pages/                  # 7 páginas Streamlit (solo UI, sin fórmulas)
+├── pages/                  # 8 páginas Streamlit (solo UI, sin fórmulas)
 ├── templates/latex/        # plantilla Jinja2 de la memoria (Res. 0330)
 ├── data/                   # catálogos JSON (agua, ks, km, dotaciones)
-├── tests/                  # +90 tests pytest
+├── tests/                  # +130 tests pytest
 ├── docs/specs/, docs/plans/ # spec de diseño y plan de implementación
 ├── requirements.txt, run.bat
 └── LICENSE
