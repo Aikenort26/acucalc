@@ -130,6 +130,10 @@ def build(p: Project) -> tuple[dict, dict]:
                       else alm.factores_hora)
             pares.append((t.nombre, t.entrada_flags(), salida))
         _save(rf.fig_balance_train(pares), "balance")
+    elif alm.factores_hora and alm.suministro_hora:
+        nombre_tk = alm.tanques[0].nombre if alm.tanques else "Tanque"
+        _save(rf.fig_balance_train([(nombre_tk, alm.suministro_hora, alm.factores_hora)]),
+              "balance")
     sistemas_bomba_ctx = ([{"tipo_bomba": s.tipo_bomba} for s in p.bombeos]
                          or [{"tipo_bomba": "superficie"}])
     _save(rf.fig_esquema(sistemas_bomba_ctx, alm.tanques if tren else []), "esquema")

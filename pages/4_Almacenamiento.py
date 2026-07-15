@@ -78,6 +78,10 @@ if not cfg.usar_cadena:
           "Redondeado [m³]": r0.v_total_redondeado}
          for n, r0 in (("Art. 81", a), ("Curva integral", b))])
         .style.format(precision=2, na_rep="—"), hide_index=True, width="stretch")
+    fig = rf.fig_balance_train([(cfg.tanques[0].nombre if cfg.tanques else "Tanque",
+                                 cfg.suministro_hora, cfg.factores_hora)], dark=True)
+    st.pyplot(fig)
+    plt.close(fig)
     v_final = storage.final_volume(a, b)
     if not cfg.tanques:
         cfg.tanques = [TankSpec("Tanque único", "bajo", "circular", float(v_final), 2.5)]
