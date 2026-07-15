@@ -54,10 +54,11 @@ if pob > 0:
     auto_k = st.checkbox(
         f"K1/K2 automáticos según población de diseño "
         f"({pob:,.0f} hab → K1={k1_max}, K2={k2_max} — Par. 2 Art. 47 Res. 0330)",
-        value=True, key="w_chk_autok")
+        value=p.demanda.k_auto, key="w_chk_autok")
+    p.demanda.k_auto = auto_k
 else:
-    k1_max, k2_max, auto_k = None, None, False
-if auto_k:
+    k1_max, k2_max, auto_k = None, None, p.demanda.k_auto
+if auto_k and k1_max is not None:
     p.demanda.k1, p.demanda.k2 = k1_max, k2_max
     c2.metric("K1 (Par. 2 Art. 47)", f"{p.demanda.k1}")
     c3.metric("K2 (Par. 2 Art. 47)", f"{p.demanda.k2}")

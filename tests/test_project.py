@@ -102,3 +102,14 @@ def test_proyecto_vacio_serializa(tmp_path):
     f = tmp_path / "n.json"
     pj.save(p, f)
     assert pj.load(f).nombre == "Nuevo"
+
+
+def test_k_auto_persiste_en_json(tmp_path):
+    p = _proyecto()
+    p.demanda.k_auto = False
+    p.demanda.k1, p.demanda.k2 = 1.15, 1.45
+    f = tmp_path / "kmanual.acucalc.json"
+    pj.save(p, f)
+    p2 = pj.load(f)
+    assert p2.demanda.k_auto is False
+    assert p2.demanda.k1 == 1.15 and p2.demanda.k2 == 1.45

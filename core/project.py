@@ -37,6 +37,7 @@ class DemandConfig:
     perdidas: float = 0.10
     k1: float = 1.3
     k2: float = 1.6
+    k_auto: bool = True        # False = K1/K2 manuales, nunca se recalculan
     usos: list = field(default_factory=list)         # [(actividad, L/hab/d)]
     referencia: str = ""       # id de data/dotaciones.json (modo manual)
     justificacion: str = ""
