@@ -102,3 +102,23 @@ def test_deteccion_color():
 def test_deteccion_sin_match():
     img = np.full((100, 100, 3), 255, dtype=np.uint8)
     assert cv.detect_curve_by_color(img, (255, 0, 0), 40, 10) == []
+
+
+def test_scale_points_afinidad():
+    # Q∝N, H∝N² — r = N2/N1 = 2
+    assert cv.scale_points([(10.0, 50.0), (20.0, 40.0)], 2.0) == [(20.0, 200.0), (40.0, 160.0)]
+
+
+def test_combine_parallel_mismo_h_suma_q():
+    assert cv.combine_parallel([(10.0, 50.0), (20.0, 40.0)], 3) == \
+        [(30.0, 50.0), (60.0, 40.0)]
+
+
+def test_combine_series_mismo_q_suma_h():
+    assert cv.combine_series([(10.0, 50.0), (20.0, 40.0)], 2) == \
+        [(10.0, 100.0), (20.0, 80.0)]
+
+
+def test_combine_n_invalido():
+    with pytest.raises(ValueError):
+        cv.combine_parallel([(10.0, 50.0)], 0)

@@ -119,3 +119,22 @@ def detect_curve_by_color(img_rgb, target_rgb: tuple[int, int, int],
         if sel.any():
             pts.append((float(np.median(xs[sel])), float(np.median(ys[sel]))))
     return pts
+
+
+def scale_points(points: list[tuple[float, float]], r: float) -> list[tuple[float, float]]:
+    """Leyes de afinidad para el mismo rodete (r = N2/N1): Q → Q·r, H → H·r²."""
+    return [(q * r, h * r ** 2) for q, h in points]
+
+
+def combine_parallel(points: list[tuple[float, float]], n: int) -> list[tuple[float, float]]:
+    """n bombas iguales en paralelo: mismo H, Q se multiplica por n."""
+    if n < 1:
+        raise ValueError("n debe ser ≥ 1")
+    return [(q * n, h) for q, h in points]
+
+
+def combine_series(points: list[tuple[float, float]], n: int) -> list[tuple[float, float]]:
+    """n bombas iguales en serie: mismo Q, H se multiplica por n."""
+    if n < 1:
+        raise ValueError("n debe ser ≥ 1")
+    return [(q, h * n) for q, h in points]
