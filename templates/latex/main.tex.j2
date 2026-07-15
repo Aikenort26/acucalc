@@ -232,6 +232,36 @@ eficiencia en el punto de operación).
 \BLOCK{endif}
 \BLOCK{endfor}
 
+\BLOCK{if red}
+\section{Red de distribución}
+La red cargada tiene \VAR{red.n_nodos} nodos de consumo y \VAR{red.n_tuberias}
+tuberías. Las demandas se asignaron por el método de longitud aferente
+(fracción de tubería incidente en cada nodo sobre la longitud total de la red).
+\begin{table}[H]\centering
+\caption{Demandas asignadas por nodo (longitud aferente).}
+\begin{tabular}{lr}\toprule
+Nodo & Demanda [L/s] \\ \midrule
+\BLOCK{for d in red.demandas}
+\VAR{d.nodo} & \VAR{d.q} \\
+\BLOCK{endfor}
+\bottomrule\end{tabular}\end{table}
+\BLOCK{if red.optimizacion}
+Optimización de diámetros con catálogo \VAR{red.optimizacion.material}
+\VAR{red.optimizacion.serie}:
+\begin{table}[H]\centering
+\caption{Diámetros original vs. optimizado por tubería.}
+\begin{tabular}{lrr}\toprule
+Tubería & DN original [mm] & DN optimizado [mm] \\ \midrule
+\BLOCK{for t in red.optimizacion.tuberias}
+\VAR{t.id} & \VAR{t.dn0} & \VAR{t.dn1} \\
+\BLOCK{endfor}
+\bottomrule\end{tabular}\end{table}
+\BLOCK{for a in red.optimizacion.avisos}
+\textbf{Aviso:} \VAR{a}\\
+\BLOCK{endfor}
+\BLOCK{endif}
+\BLOCK{endif}
+
 \section{Conclusiones}
 El sistema se dimensionó para \VAR{pob_final} habitantes al año \VAR{horizonte},
 con un caudal máximo diario de \VAR{qmd} L/s y un volumen de almacenamiento de

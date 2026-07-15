@@ -52,6 +52,7 @@ CTX = {
     "logo_cliente": None, "logo_consultor": None,
     "referencias": [{"cita": "Resolución 0330 de 2017, MVCT."},
                     {"cita": "Decreto 1575 de 2007."}],
+    "red": None,
 }
 
 
@@ -75,6 +76,19 @@ def test_render_tex(tmp_path):
     assert "listoffigures" in tex and "listoftables" in tex
     assert "semienterrado" in tex and "112.4" in tex        # tipo constructivo + V real
     assert "Arreglo" in tex                                  # columna de arreglo por bomba
+
+
+def test_render_tex_con_red(tmp_path):
+    ctx_con_red = dict(CTX)
+    ctx_con_red["red"] = {
+        "n_nodos": 2, "n_tuberias": 2,
+        "demandas": [{"nodo": "J1", "q": "15.000"}, {"nodo": "J2", "q": "10.000"}],
+        "optimizacion": {"material": "PEAD PE100", "serie": "RDE 21", "avisos": [],
+                         "tuberias": [{"id": "P1", "dn0": "50", "dn1": "63"}]},
+    }
+    out = report.render(ctx_con_red, tmp_path)
+    tex = (out / "main.tex").read_text(encoding="utf-8")
+    assert "Red de distribución" in tex and "J1" in tex and "63" in tex
 
 
 def test_render_crea_zip(tmp_path):

@@ -7,7 +7,7 @@ import base64
 import tempfile
 from pathlib import Path
 
-from core import curves as cvs, demand, population as pop, pumping as pu
+from core import curves as cvs, demand, network, population as pop, pumping as pu
 from core import report_figs as rf, storage
 from core.project import Project
 
@@ -236,6 +236,33 @@ def build(p: Project) -> tuple[dict, dict]:
             "altura": f"{ct.altura:.1f}", "volumen": f"{t.volumen:.0f}",
             "volumen_real": f"{ct.volumen_real * t.cantidad:.1f}"})
 
+    # ---------- red de distribución (opcional) ----------
+    red_ctx = None
+    if p.red_inp:
+        try:
+            red = network.parse_inp(p.red_inp)
+            demandas = network.assign_demands_by_length(red, flows.qmd_lps)
+            for jid, q in demandas.items():
+                red.junctions[jid].demand = q
+            red_ctx = {
+                "n_nodos": len(red.junctions), "n_tuberias": len(red.pipes),
+                "demandas": [{"nodo": latex_escape(jid), "q": f"{q:.3f}"}
+                            for jid, q in demandas.items()],
+                "optimizacion": None,
+            }
+            if p.red_material and p.red_serie:
+                opt = network.optimize_diameters(
+                    red, p.red_material, p.red_serie, p.red_vmax, p.red_pmin, p.red_pmax)
+                red_ctx["optimizacion"] = {
+                    "material": latex_escape(p.red_material),
+                    "serie": latex_escape(p.red_serie),
+                    "avisos": [latex_escape(a) for a in opt.avisos],
+                    "tuberias": [{"id": latex_escape(pid), "dn0": f"{opt.dn_original[pid]:.0f}",
+                                 "dn1": f"{opt.dn_optimizado[pid]:.0f}"}
+                                for pid in opt.dn_original]}
+        except ValueError:
+            red_ctx = None
+
     # ---------- contexto ----------
     paso = max(1, len(serie_q) // 26)
     ctx = {
@@ -286,5 +313,6 @@ def build(p: Project) -> tuple[dict, dict]:
         "logo_cliente": logo_cliente,
         "logo_consultor": logo_consultor,
         "referencias": REFERENCIAS,
+        "red": red_ctx,
     }
     return ctx, figuras
