@@ -250,7 +250,7 @@ def build(p: Project) -> tuple[dict, dict]:
              "qmd": f"{fr.qmd_lps:.3f}", "qmh": f"{fr.qmh_lps:.3f}"}
             for (t, fr), (_, pob_t) in list(zip(serie_q, serie_total))[::paso]],
         "usar_cadena": bool(tren),
-        "tanques_balance": ([{"nombre": bal.nombre,
+        "tanques_balance": ([{"nombre": latex_escape(bal.nombre),
                               "horas": f"{bal.horas_entrada:.0f}",
                               "q_entrada": f"{bal.q_entrada_lps:.2f}",
                               "horas_salida": (f"{bal.horas_salida:.0f}"
