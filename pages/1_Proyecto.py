@@ -41,6 +41,14 @@ with c2:
     p.temperatura = num_input("Temperatura del agua [°C]", "temperatura", p.temperatura,
                               decimals=1, min_value=0.0, max_value=50.0)
 
+autosave_f = SAVES_DIR / "_autosave.acucalc.json"
+if autosave_f.exists() and not p.nombre:
+    st.info("Hay una sesión anterior sin guardar explícitamente.")
+    if st.button("♻ Restaurar última sesión (autosave)"):
+        st.session_state["project"] = pj.load(autosave_f)
+        clear_widget_state()
+        st.rerun()
+
 st.caption("La serie de población DANE del municipio seleccionado alimenta la página "
            "2 (tasas de crecimiento y proyección).")
 

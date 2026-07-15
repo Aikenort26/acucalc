@@ -9,6 +9,8 @@ from core.project import Project
 # Prefijo de todos los keys de widgets numéricos — permite limpiarlos al cargar proyecto
 WIDGET_PREFIX = "w_"
 SAVES_DIR = Path(__file__).resolve().parent / "saves"
+AUTOSAVE_FILE = SAVES_DIR / "_autosave.acucalc.json"
+AUTOSAVE_THROTTLE_S = 30
 
 _CSS = """
 <style>
@@ -31,11 +33,23 @@ def get_project() -> Project:
     return st.session_state["project"]
 
 
+def _autosave(p: Project) -> None:
+    if not p.nombre:
+        return
+    now = dt.datetime.now().timestamp()
+    if now - st.session_state.get("_autosave_ts", 0.0) < AUTOSAVE_THROTTLE_S:
+        return
+    SAVES_DIR.mkdir(exist_ok=True)
+    pj.save(p, AUTOSAVE_FILE)
+    st.session_state["_autosave_ts"] = now
+
+
 def page_setup() -> Project:
-    """CSS del tema + controles de guardado en la barra lateral. Llamar al
-    inicio de cada página; devuelve el proyecto activo."""
+    """CSS del tema + autosave + controles de guardado en la barra lateral.
+    Llamar al inicio de cada página; devuelve el proyecto activo."""
     st.markdown(_CSS, unsafe_allow_html=True)
     p = get_project()
+    _autosave(p)
     with st.sidebar:
         st.divider()
         if p.nombre:
