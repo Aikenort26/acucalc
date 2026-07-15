@@ -160,13 +160,9 @@ else:
         salida = (cfg.tanques[i + 1].entrada_flags() if i + 1 < len(cfg.tanques)
                   else cfg.factores_hora)
         pares.append((t.nombre, t.entrada_flags(), salida))
-    with plt.style.context("dark_background"):
-        fig = rf.fig_balance_train(pares)
-        fig.patch.set_alpha(0)
-        for ax in fig.axes:
-            ax.set_facecolor("none")
-        st.pyplot(fig)
-        plt.close(fig)
+    fig = rf.fig_balance_train(pares, dark=True)
+    st.pyplot(fig)
+    plt.close(fig)
 
 st.metric("Volumen total de almacenamiento", f"{v_final:.0f} m³")
 st.session_state["v_almacenamiento"] = v_final

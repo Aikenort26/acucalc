@@ -386,14 +386,10 @@ for b in sys_d.bombas:
         ecu["H(Q_op) [m]"], ecu["η(Q_op)"] = float("nan"), float("nan")
     ecuaciones.append(ecu)
 
-with plt.style.context("dark_background"):
-    from core import report_figs as rf
-    fig = rf.fig_sistema(sys_lps, bombas_fig, qb_lps, hd)
-    fig.patch.set_alpha(0)
-    for ax in fig.axes:
-        ax.set_facecolor("none")
-    st.pyplot(fig)
-    plt.close(fig)
+from core import report_figs as rf
+fig = rf.fig_sistema(sys_lps, bombas_fig, qb_lps, hd, dark=True)
+st.pyplot(fig)
+plt.close(fig)
 
 if ecuaciones:
     st.subheader("Regresiones polinómicas (H = A·Q²+B·Q+C · η = D·Q²+E·Q+F)")
