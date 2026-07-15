@@ -8,6 +8,7 @@ KSB WKL 125 Ø320 a 1750 rpm (curva digitalizada del catálogo).
 Genera saves/Acueducto_San_Jacinto.acucalc.json (abrible en la app) y
 output/memoria_sanjacinto.pdf.
 """
+import base64
 import shutil
 import sys
 import tempfile
@@ -25,6 +26,12 @@ p = pj.Project(nombre="Acueducto San Jacinto", municipio="San Jacinto",
                departamento="Bolívar", corregimiento="",
                consultor="Aguas de Bolívar S.A. E.S.P.", fecha="2026-07-11",
                altitud=200, temperatura=27.0)
+
+# logo sintético (PNG 1x1) para probar end-to-end la portada con logo (Task 2)
+LOGO_PNG_1X1 = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+    "+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+p.logo_cliente_b64 = base64.b64encode(LOGO_PNG_1X1).decode()
 
 cfg = p.poblacion
 cfg.tipo, cfg.fuente = "municipio", "dane"
