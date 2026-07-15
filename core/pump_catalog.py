@@ -4,6 +4,7 @@ Formato largo: columnas `Bomba | Q [L/s] | H [m] | eta` (eta opcional),
 una fila por punto de curva, filas agrupadas por nombre de bomba."""
 import io
 
+import numpy as np
 import pandas as pd
 
 from core.project import PumpData
@@ -27,14 +28,26 @@ def template_xlsx() -> bytes:
 def export_xlsx(bombeos: list) -> bytes:
     """Exporta todas las bombas de todos los sistemas de bombeo en formato
     largo compatible con `parse()` (la columna extra 'Sistema' se ignora al
-    reimportar; sirve como referencia de origen)."""
+    reimportar; sirve como referencia de origen). El eta se interpola sobre
+    la grilla de Q de puntos_qh (no se cruza por Q exacto): puntos_qh y
+    puntos_qe se digitalizan por separado en la app y casi nunca comparten
+    los mismos valores de Q — un cruce exacto perdía casi toda la eficiencia
+    al reexportar/reimportar. Fuera del rango medido de puntos_qe no se
+    interpola (queda en blanco), para no inventar valores extrapolados."""
     rows = []
     for s in bombeos:
         for b in s.bombas:
-            eta_por_q = dict(b.puntos_qe)
+            eta_en_qh = {}
+            if len(b.puntos_qe) >= 2:
+                qe_ordenado = sorted(b.puntos_qe)
+                qs_e = [q for q, _ in qe_ordenado]
+                es = [e for _, e in qe_ordenado]
+                for q, _ in b.puntos_qh:
+                    if qs_e[0] <= q <= qs_e[-1]:
+                        eta_en_qh[q] = float(np.interp(q, qs_e, es))
             for q, h in b.puntos_qh:
                 rows.append({"Sistema": s.nombre, "Bomba": b.nombre,
-                            "Q [L/s]": q, "H [m]": h, "eta": eta_por_q.get(q)})
+                            "Q [L/s]": q, "H [m]": h, "eta": eta_en_qh.get(q)})
     df = pd.DataFrame(rows, columns=["Sistema", "Bomba", "Q [L/s]", "H [m]", "eta"])
     buf = io.BytesIO()
     df.to_excel(buf, index=False)

@@ -63,3 +63,22 @@ def test_export_xlsx_roundtrip():
     a = next(b for b in bombas if b.nombre == "Bomba A")
     assert a.puntos_qh == [(10.0, 50.0), (20.0, 45.0), (30.0, 35.0)]
     assert len(a.puntos_qe) == 3
+
+
+def test_export_xlsx_qh_qe_grillas_independientes():
+    # puntos_qh y puntos_qe con Q's muestreados de forma independiente
+    # (caso real: digitalizador/tabla manual), como la bomba WKL 125 de
+    # scripts/demo_sanjacinto.py — casi nunca comparten valores exactos de Q.
+    s = PumpSystemData(nombre="Sistema 1")
+    s.bombas = [PumpData(
+        nombre="WKL 125",
+        puntos_qh=[(25.0, 60.0), (40.0, 55.0), (50.0, 50.0),
+                   (63.0, 42.0), (75.0, 33.0), (85.0, 20.0)],
+        puntos_qe=[(25.0, 0.5), (35.0, 0.65), (45.0, 0.75),
+                   (55.0, 0.72), (63.0, 0.68)])]
+    data = pc.export_xlsx([s])
+    buf = io.BytesIO(data)
+    buf.name = "export.xlsx"
+    bombas = pc.parse(buf)
+    b = next(x for x in bombas if x.nombre == "WKL 125")
+    assert b.puntos_qe != []
