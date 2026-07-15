@@ -114,6 +114,10 @@ class PumpData:
     cal: dict | None = None    # {"X1": {...}, ...}
     modelo: str = ""
     fabricante: str = ""
+    n_unidades: int = 1            # nº de bombas iguales en el arreglo
+    arreglo: str = "paralelo"      # paralelo|serie (solo si n_unidades > 1)
+    n1_nominal: float = 0.0        # rpm/Hz nominal de la curva digitalizada (0 = sin afinidad)
+    n2_objetivo: float = 0.0       # rpm/Hz al que se quiere operar (0 = igual a n1_nominal)
 
 
 @dataclass

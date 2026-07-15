@@ -169,18 +169,31 @@ def build(p: Project) -> tuple[dict, dict]:
         for bb in s.bombas:
             if len(bb.puntos_qh) < 3:
                 continue
-            fit = cvs.fit_curve(bb.puntos_qh, 2)
+            qh_t, qe_t = list(bb.puntos_qh), list(bb.puntos_qe)
+            if bb.n1_nominal > 0 and bb.n2_objetivo > 0 and bb.n2_objetivo != bb.n1_nominal:
+                razon = bb.n2_objetivo / bb.n1_nominal
+                qh_t = cvs.scale_points(qh_t, razon)
+                qe_t = [(q * razon, e) for q, e in qe_t]
+            if bb.n_unidades > 1:
+                combinar = cvs.combine_parallel if bb.arreglo == "paralelo" else cvs.combine_series
+                qh_t = combinar(qh_t, bb.n_unidades)
+                if bb.arreglo == "paralelo":
+                    qe_t = [(q * bb.n_unidades, e) for q, e in qe_t]
+            fit = cvs.fit_curve(qh_t, 2)
             op = cvs.operating_point(fit, sys_lps)
-            e_fit = cvs.fit_curve(bb.puntos_qe, 2) if len(bb.puntos_qe) >= 3 else None
-            bep = cvs.best_efficiency_point(bb.puntos_qe, 2) if e_fit else None
+            e_fit = cvs.fit_curve(qe_t, 2) if len(qe_t) >= 3 else None
+            bep = cvs.best_efficiency_point(qe_t, 2) if e_fit else None
             eta = e_fit(op[0]) if (op and e_fit) else float("nan")
             pot = (998.29 * 9.81 * op[0] / 1000 * op[1] / eta / 745.7
                    if op and eta and eta > 0 else float("nan"))
-            bombas_fig.append({"nombre": bb.nombre, "fit": fit, "op": op,
-                               "e_fit": e_fit})
+            arreglo_txt = (f"{bb.n_unidades}$\\times${bb.arreglo} @ N$_2$={bb.n2_objetivo:.0f}"
+                          if (bb.n_unidades > 1 or
+                              (bb.n1_nominal > 0 and bb.n2_objetivo not in (0, bb.n1_nominal)))
+                          else "nominal")
+            bombas_fig.append({"nombre": bb.nombre, "fit": fit, "op": op, "e_fit": e_fit})
             A, B, C = fit.coeffs
             bombas_tab.append({
-                "nombre": latex_escape(bb.nombre),
+                "nombre": latex_escape(bb.nombre), "arreglo": arreglo_txt,
                 "h_eq": f"$H = {A:+.4f}Q^2 {B:+.4f}Q {C:+.3f}$",
                 "e_eq": (f"$\\eta = {e_fit.coeffs[0]:+.6f}Q^2 "
                          f"{e_fit.coeffs[1]:+.5f}Q {e_fit.coeffs[2]:+.4f}$"

@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 from core import catalogs, pipes, pumping as pu
 from core.project import PumpSystemData, SegmentData, AccessoryData
-from pages_common import page_setup, num_input, int_input, show_issues
+from pages_common import page_setup, num_input, show_issues
 
 p = page_setup()
 st.header("5 · Sistemas de bombeo")
@@ -245,38 +245,6 @@ st.info(f"Bomba mínima requerida: **Q = {qb_lps:.1f} L/s · H = {r.hd:.0f} m ·
 
 sistemas = st.session_state.setdefault("sistemas", {})
 sistemas[sys_d.nombre] = {"sistema": sistema, "solve": r, "qb_lps": qb_lps}
-
-# ---------- arreglo de bombas y leyes de afinidad ----------
-with st.expander("Arreglo de bombas y leyes de afinidad", expanded=False):
-    st.caption("Con el punto de diseño resuelto (Qb, Hd), reparte entre varias "
-               "bombas iguales y escala por leyes de afinidad (Q∝N, H∝N², P∝N³).")
-    ar1, ar2 = st.columns(2)
-    n_b = int_input("Número de bombas", f"nb_{K}", 2, container=ar1,
-                    min_value=1, max_value=10)
-    tipo_ar = ar2.selectbox("Arreglo", ["paralelo", "serie"], key=f"w_sel_ar_{K}")
-    arr = pu.arreglo_bombas(qb_lps, r.hd, n_b, tipo_ar)
-    aa1, aa2, aa3 = st.columns(3)
-    aa1.metric("Q por bomba", f"{arr.q_unit_lps:.2f} L/s")
-    aa2.metric("H por bomba", f"{arr.h_unit:.2f} m")
-    aa3.metric("P por bomba (η del sistema)",
-               f"{r.potencia_hp / n_b:.2f} HP")
-    st.divider()
-    af1, af2, af3 = st.columns(3)
-    n1 = num_input("Velocidad/frecuencia nominal N₁ [rpm o Hz]", f"n1_{K}", 3500.0,
-                   decimals=0, container=af1, min_value=1.0, max_value=10000.0)
-    n2 = num_input("Nueva velocidad/frecuencia N₂", f"n2_{K}", 3500.0,
-                   decimals=0, container=af2, min_value=1.0, max_value=10000.0)
-    q_obj = num_input("…o caudal objetivo por bomba [L/s] (0 = no usar)",
-                      f"qobj_{K}", 0.0, decimals=2, container=af3,
-                      min_value=0.0, max_value=10000.0)
-    if q_obj > 0:
-        n2 = pu.frecuencia_para_caudal(q_obj, arr.q_unit_lps, n1)
-        st.caption(f"Frecuencia requerida para {q_obj:.2f} L/s: **N₂ = {n2:.0f}**")
-    q2, h2, p2 = pu.afinidad(arr.q_unit_lps, arr.h_unit, r.potencia_hp / n_b, n1, n2)
-    b1, b2, b3 = st.columns(3)
-    b1.metric("Q @ N₂", f"{q2:.2f} L/s")
-    b2.metric("H @ N₂", f"{h2:.2f} m")
-    b3.metric("P @ N₂", f"{p2:.2f} HP")
 
 # ---------- golpe de ariete: verificación automática contra PN por tramo ----------
 with st.expander("Golpe de ariete (Joukowsky) — verificación PN por tramo",

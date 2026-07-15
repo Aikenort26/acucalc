@@ -209,10 +209,10 @@ la potencia requerida es \textbf{\VAR{s.potencia_kw} kW (\VAR{s.potencia_hp} HP)
 \BLOCK{if s.bombas}
 \begin{table}[H]\centering
 \caption{Bombas evaluadas para \VAR{s.nombre} (punto de operación contra la curva del sistema).}
-\begin{tabular}{lrrrrrr}\toprule
-Bomba & $Q_{op}$ [L/s] & $H_{op}$ [m] & $\eta(Q_{op})$ & $Q_{BEP}$ [L/s] & Desv. BEP [\%] & $P$ [HP] \\ \midrule
+\begin{tabular}{lrrrrrrl}\toprule
+Bomba & $Q_{op}$ [L/s] & $H_{op}$ [m] & $\eta(Q_{op})$ & $Q_{BEP}$ [L/s] & Desv. BEP [\%] & $P$ [HP] & Arreglo \\ \midrule
 \BLOCK{for b in s.bombas}
-\VAR{b.nombre} & \VAR{b.q_op} & \VAR{b.h_op} & \VAR{b.eta_op} & \VAR{b.bep_q} & \VAR{b.desv_bep} & \VAR{b.p_hp} \\
+\VAR{b.nombre} & \VAR{b.q_op} & \VAR{b.h_op} & \VAR{b.eta_op} & \VAR{b.bep_q} & \VAR{b.desv_bep} & \VAR{b.p_hp} & \VAR{b.arreglo} \\
 \BLOCK{endfor}
 \bottomrule\end{tabular}\end{table}
 Regresiones polinómicas de las curvas características (Q en L/s):

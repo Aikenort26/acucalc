@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 from streamlit_image_coordinates import streamlit_image_coordinates
 from core import curves as cv, pumping as pu
 from core.project import PumpData
-from pages_common import page_setup, num_input
+from pages_common import page_setup, num_input, int_input
 
 try:
     from components.digitizer import digitizer
@@ -100,6 +100,23 @@ def _overlay(base: Image.Image, cal: dict, pend) -> Image.Image:
     if pend:
         _draw_cross(d, pend["x"], pend["y"], "#FFD400", size=12, w=2, label="●")
     return im
+
+
+def _puntos_transformados(b: PumpData) -> tuple[list, list]:
+    """Aplica afinidad (N1→N2) y luego arreglo (paralelo/serie ×n_unidades)
+    a los puntos Q-H/Q-η digitalizados de la bomba. Devuelve (qh, qe)."""
+    qh, qe = list(b.puntos_qh), list(b.puntos_qe)
+    if b.n1_nominal > 0 and b.n2_objetivo > 0 and b.n2_objetivo != b.n1_nominal:
+        r = b.n2_objetivo / b.n1_nominal
+        qh = cv.scale_points(qh, r)
+        # la eficiencia no se desplaza en valor por afinidad, solo en Q
+        qe = [(q * r, e) for q, e in qe]
+    if b.n_unidades > 1:
+        combinar = cv.combine_parallel if b.arreglo == "paralelo" else cv.combine_series
+        qh = combinar(qh, b.n_unidades)
+        if b.arreglo == "paralelo":
+            qe = [(q * b.n_unidades, e) for q, e in qe]
+    return qh, qe
 
 
 if img is not None:
@@ -355,12 +372,32 @@ rows, ecuaciones, bombas_fig = [], [], []
 for b in sys_d.bombas:
     if len(b.puntos_qh) < 3:
         continue
-    fit = cv.fit_curve(b.puntos_qh, 2)
+    with st.expander(f"⚙ Afinidad / arreglo — {b.nombre}", expanded=False):
+        af1, af2, af3, af4 = st.columns(4)
+        b.n1_nominal = num_input("N₁ nominal (rpm/Hz, 0=sin afinidad)",
+                                 f"n1_{BK}_{b.nombre}", b.n1_nominal, decimals=0,
+                                 container=af1, min_value=0.0, max_value=10000.0)
+        b.n2_objetivo = num_input("N₂ objetivo", f"n2_{BK}_{b.nombre}",
+                                  b.n2_objetivo, decimals=0, container=af2,
+                                  min_value=0.0, max_value=10000.0)
+        b.n_unidades = int_input("Nº de bombas", f"nu_{BK}_{b.nombre}",
+                                 b.n_unidades, container=af3, min_value=1, max_value=10)
+        b.arreglo = af4.selectbox("Arreglo", ["paralelo", "serie"],
+                                  index=["paralelo", "serie"].index(b.arreglo),
+                                  key=f"w_sel_arr_{BK}_{b.nombre}")
+    qh_t, qe_t = _puntos_transformados(b)
+    fit = cv.fit_curve(qh_t, 2)
     op = cv.operating_point(fit, sys_lps)
-    bep = cv.best_efficiency_point(b.puntos_qe, 2) if len(b.puntos_qe) >= 3 else None
-    e_fit = cv.fit_curve(b.puntos_qe, 2) if len(b.puntos_qe) >= 3 else None
-    bombas_fig.append({"nombre": f"{b.nombre} (R²={fit.r2:.3f})", "fit": fit,
-                       "op": op, "e_fit": e_fit})
+    bep = cv.best_efficiency_point(qe_t, 2) if len(qe_t) >= 3 else None
+    e_fit = cv.fit_curve(qe_t, 2) if len(qe_t) >= 3 else None
+    transformada = b.n_unidades > 1 or (b.n1_nominal > 0 and b.n2_objetivo not in (0, b.n1_nominal))
+    etiqueta = (f"{b.nombre} ({b.n_unidades}×{b.arreglo} @ N₂={b.n2_objetivo:.0f})"
+               if transformada else f"{b.nombre} (R²={fit.r2:.3f})")
+    bombas_fig.append({"nombre": etiqueta, "fit": fit, "op": op, "e_fit": e_fit})
+    if transformada:
+        fit_nom = cv.fit_curve(b.puntos_qh, 2)
+        bombas_fig.append({"nombre": f"{b.nombre} (nominal)", "fit": fit_nom, "op": None,
+                           "e_fit": None})
     A, B, C = fit.coeffs
     ecu = {"Bomba": b.nombre,
            "H(Q)": f"H = {A:+.4f}·Q² {B:+.4f}·Q {C:+.3f}  (R²={fit.r2:.4f})",
