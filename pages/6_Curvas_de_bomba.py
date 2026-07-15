@@ -306,6 +306,10 @@ with st.expander("📚 Catálogo de bombas (Excel) — evalúa y escoge la más 
     from core import pump_catalog as pc
     st.download_button("⬇️ Plantilla del catálogo (.xlsx)", data=pc.template_xlsx(),
                        file_name="catalogo_bombas.xlsx")
+    st.download_button("⬇️ Exportar bombas del proyecto (.xlsx)",
+                       data=pc.export_xlsx(p.bombeos),
+                       file_name=f"{(p.nombre or 'proyecto').replace(' ', '_')}_bombas.xlsx",
+                       disabled=not any(s.bombas for s in p.bombeos))
     up_cat = st.file_uploader("Catálogo (columnas: Bomba | Q [L/s] | H [m] | eta)",
                               type=["xlsx", "csv"], key=f"w_cat_{sel_sys}")
     if up_cat is not None:

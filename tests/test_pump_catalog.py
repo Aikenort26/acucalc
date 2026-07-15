@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from core import pump_catalog as pc
+from core.project import PumpSystemData, PumpData
 
 
 def _xlsx(df):
@@ -44,3 +45,21 @@ def test_parse_pocos_puntos():
     df = pd.DataFrame({"Bomba": ["A", "A"], "Q [L/s]": [1, 2], "H [m]": [5, 4]})
     with pytest.raises(ValueError, match="mínimo 3"):
         pc.parse(_xlsx(df))
+
+
+def test_export_xlsx_roundtrip():
+    s1 = PumpSystemData(nombre="Sistema 1")
+    s1.bombas = [PumpData(nombre="Bomba A",
+                          puntos_qh=[(10.0, 50.0), (20.0, 45.0), (30.0, 35.0)],
+                          puntos_qe=[(10.0, 0.6), (20.0, 0.75), (30.0, 0.7)])]
+    s2 = PumpSystemData(nombre="Sistema 2")
+    s2.bombas = [PumpData(nombre="Bomba B",
+                          puntos_qh=[(5.0, 60.0), (15.0, 55.0), (25.0, 45.0)])]
+    data = pc.export_xlsx([s1, s2])
+    buf = io.BytesIO(data)
+    buf.name = "export.xlsx"
+    bombas = pc.parse(buf)
+    assert {b.nombre for b in bombas} == {"Bomba A", "Bomba B"}
+    a = next(b for b in bombas if b.nombre == "Bomba A")
+    assert a.puntos_qh == [(10.0, 50.0), (20.0, 45.0), (30.0, 35.0)]
+    assert len(a.puntos_qe) == 3

@@ -24,6 +24,23 @@ def template_xlsx() -> bytes:
     return buf.getvalue()
 
 
+def export_xlsx(bombeos: list) -> bytes:
+    """Exporta todas las bombas de todos los sistemas de bombeo en formato
+    largo compatible con `parse()` (la columna extra 'Sistema' se ignora al
+    reimportar; sirve como referencia de origen)."""
+    rows = []
+    for s in bombeos:
+        for b in s.bombas:
+            eta_por_q = dict(b.puntos_qe)
+            for q, h in b.puntos_qh:
+                rows.append({"Sistema": s.nombre, "Bomba": b.nombre,
+                            "Q [L/s]": q, "H [m]": h, "eta": eta_por_q.get(q)})
+    df = pd.DataFrame(rows, columns=["Sistema", "Bomba", "Q [L/s]", "H [m]", "eta"])
+    buf = io.BytesIO()
+    df.to_excel(buf, index=False)
+    return buf.getvalue()
+
+
 def parse(file) -> list[PumpData]:
     """Lee el Excel/CSV del catálogo y devuelve una PumpData por bomba.
 
