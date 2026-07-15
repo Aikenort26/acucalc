@@ -169,16 +169,9 @@ def build(p: Project) -> tuple[dict, dict]:
         for bb in s.bombas:
             if len(bb.puntos_qh) < 3:
                 continue
-            qh_t, qe_t = list(bb.puntos_qh), list(bb.puntos_qe)
-            if bb.n1_nominal > 0 and bb.n2_objetivo > 0 and bb.n2_objetivo != bb.n1_nominal:
-                razon = bb.n2_objetivo / bb.n1_nominal
-                qh_t = cvs.scale_points(qh_t, razon)
-                qe_t = [(q * razon, e) for q, e in qe_t]
-            if bb.n_unidades > 1:
-                combinar = cvs.combine_parallel if bb.arreglo == "paralelo" else cvs.combine_series
-                qh_t = combinar(qh_t, bb.n_unidades)
-                if bb.arreglo == "paralelo":
-                    qe_t = [(q * bb.n_unidades, e) for q, e in qe_t]
+            qh_t, qe_t = cvs.apply_pump_transform(
+                bb.puntos_qh, bb.puntos_qe, bb.n1_nominal, bb.n2_objetivo,
+                bb.n_unidades, bb.arreglo)
             fit = cvs.fit_curve(qh_t, 2)
             op = cvs.operating_point(fit, sys_lps)
             e_fit = cvs.fit_curve(qe_t, 2) if len(qe_t) >= 3 else None
@@ -186,10 +179,13 @@ def build(p: Project) -> tuple[dict, dict]:
             eta = e_fit(op[0]) if (op and e_fit) else float("nan")
             pot = (998.29 * 9.81 * op[0] / 1000 * op[1] / eta / 745.7
                    if op and eta and eta > 0 else float("nan"))
-            arreglo_txt = (f"{bb.n_unidades}$\\times${bb.arreglo} @ N$_2$={bb.n2_objetivo:.0f}"
-                          if (bb.n_unidades > 1 or
-                              (bb.n1_nominal > 0 and bb.n2_objetivo not in (0, bb.n1_nominal)))
-                          else "nominal")
+            afinidad_activa = bb.n1_nominal > 0 and bb.n2_objetivo not in (0, bb.n1_nominal)
+            partes_arr = []
+            if bb.n_unidades > 1:
+                partes_arr.append(f"{bb.n_unidades}$\\times${bb.arreglo}")
+            if afinidad_activa:
+                partes_arr.append(f"@ N$_2$={bb.n2_objetivo:.0f}")
+            arreglo_txt = " ".join(partes_arr) if partes_arr else "nominal"
             bombas_fig.append({"nombre": bb.nombre, "fit": fit, "op": op, "e_fit": e_fit})
             A, B, C = fit.coeffs
             bombas_tab.append({

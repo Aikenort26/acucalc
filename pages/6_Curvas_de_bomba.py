@@ -104,19 +104,11 @@ def _overlay(base: Image.Image, cal: dict, pend) -> Image.Image:
 
 def _puntos_transformados(b: PumpData) -> tuple[list, list]:
     """Aplica afinidad (N1→N2) y luego arreglo (paralelo/serie ×n_unidades)
-    a los puntos Q-H/Q-η digitalizados de la bomba. Devuelve (qh, qe)."""
-    qh, qe = list(b.puntos_qh), list(b.puntos_qe)
-    if b.n1_nominal > 0 and b.n2_objetivo > 0 and b.n2_objetivo != b.n1_nominal:
-        r = b.n2_objetivo / b.n1_nominal
-        qh = cv.scale_points(qh, r)
-        # la eficiencia no se desplaza en valor por afinidad, solo en Q
-        qe = [(q * r, e) for q, e in qe]
-    if b.n_unidades > 1:
-        combinar = cv.combine_parallel if b.arreglo == "paralelo" else cv.combine_series
-        qh = combinar(qh, b.n_unidades)
-        if b.arreglo == "paralelo":
-            qe = [(q * b.n_unidades, e) for q, e in qe]
-    return qh, qe
+    a los puntos Q-H/Q-η digitalizados de la bomba. Devuelve (qh, qe).
+    Envoltorio delgado sobre `cv.apply_pump_transform` — misma fuente única
+    de la transformación que usa `core/report_ctx.build`."""
+    return cv.apply_pump_transform(b.puntos_qh, b.puntos_qe, b.n1_nominal,
+                                   b.n2_objetivo, b.n_unidades, b.arreglo)
 
 
 if img is not None:
@@ -390,14 +382,20 @@ for b in sys_d.bombas:
     op = cv.operating_point(fit, sys_lps)
     bep = cv.best_efficiency_point(qe_t, 2) if len(qe_t) >= 3 else None
     e_fit = cv.fit_curve(qe_t, 2) if len(qe_t) >= 3 else None
-    transformada = b.n_unidades > 1 or (b.n1_nominal > 0 and b.n2_objetivo not in (0, b.n1_nominal))
-    etiqueta = (f"{b.nombre} ({b.n_unidades}×{b.arreglo} @ N₂={b.n2_objetivo:.0f})"
+    afinidad_activa = b.n1_nominal > 0 and b.n2_objetivo not in (0, b.n1_nominal)
+    transformada = b.n_unidades > 1 or afinidad_activa
+    partes_etq = []
+    if b.n_unidades > 1:
+        partes_etq.append(f"{b.n_unidades}×{b.arreglo}")
+    if afinidad_activa:
+        partes_etq.append(f"@ N₂={b.n2_objetivo:.0f}")
+    etiqueta = (f"{b.nombre} ({' '.join(partes_etq)})"
                if transformada else f"{b.nombre} (R²={fit.r2:.3f})")
     bombas_fig.append({"nombre": etiqueta, "fit": fit, "op": op, "e_fit": e_fit})
     if transformada:
         fit_nom = cv.fit_curve(b.puntos_qh, 2)
         bombas_fig.append({"nombre": f"{b.nombre} (nominal)", "fit": fit_nom, "op": None,
-                           "e_fit": None})
+                           "e_fit": None, "faint": True})
     A, B, C = fit.coeffs
     ecu = {"Bomba": b.nombre,
            "H(Q)": f"H = {A:+.4f}·Q² {B:+.4f}·Q {C:+.3f}  (R²={fit.r2:.4f})",

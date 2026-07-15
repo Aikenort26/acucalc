@@ -138,3 +138,26 @@ def combine_series(points: list[tuple[float, float]], n: int) -> list[tuple[floa
     if n < 1:
         raise ValueError("n debe ser ≥ 1")
     return [(q, h * n) for q, h in points]
+
+
+def apply_pump_transform(qh: list[tuple[float, float]], qe: list[tuple[float, float]],
+                         n1_nominal: float, n2_objetivo: float, n_unidades: int,
+                         arreglo: str) -> tuple[list, list]:
+    """Aplica afinidad (n1_nominal→n2_objetivo, si ambos > 0 y distintos) y
+    luego arreglo (paralelo/serie ×n_unidades, si n_unidades > 1) a puntos
+    Q-H/Q-η digitalizados. La eficiencia se desplaza en Q, no en valor.
+
+    Fuente única de la transformación — usada tanto por la UI (página 6,
+    comparación interactiva) como por el reporte (`core/report_ctx.build`),
+    para que ambos flujos nunca puedan desincronizarse."""
+    qh, qe = list(qh), list(qe)
+    if n1_nominal > 0 and n2_objetivo > 0 and n2_objetivo != n1_nominal:
+        r = n2_objetivo / n1_nominal
+        qh = scale_points(qh, r)
+        qe = [(q * r, e) for q, e in qe]
+    if n_unidades > 1:
+        combinar = combine_parallel if arreglo == "paralelo" else combine_series
+        qh = combinar(qh, n_unidades)
+        if arreglo == "paralelo":
+            qe = [(q * n_unidades, e) for q, e in qe]
+    return qh, qe

@@ -161,11 +161,13 @@ def fig_sistema(sys_lps: list[tuple[float, float]],
     q_vals = [q for q, _ in sys_lps] + [qb_lps]
     for b in bombas:
         fit = b["fit"]
+        faint = bool(b.get("faint"))
         qs = np.linspace(fit.q_min, fit.q_max, 100)
         hs = [fit(q) for q in qs]
-        linea, = ax.plot(qs, hs, lw=1.6, label=b["nombre"])
+        style = {"alpha": 0.35, "linestyle": "--"} if faint else {}
+        linea, = ax.plot(qs, hs, lw=1.6, label=b["nombre"], **style)
         y_vals += hs; q_vals += [fit.q_min, fit.q_max]
-        if b.get("op"):
+        if b.get("op") and not faint:
             ax.plot(*b["op"], "o", ms=8, color=linea.get_color())
             y_vals.append(b["op"][1]); q_vals.append(b["op"][0])
         e_fit = b.get("e_fit")

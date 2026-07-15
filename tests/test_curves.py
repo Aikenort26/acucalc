@@ -122,3 +122,45 @@ def test_combine_series_mismo_q_suma_h():
 def test_combine_n_invalido():
     with pytest.raises(ValueError):
         cv.combine_parallel([(10.0, 50.0)], 0)
+
+
+_QH = [(10.0, 50.0), (20.0, 40.0)]
+_QE = [(10.0, 0.5), (20.0, 0.4)]
+
+
+def test_apply_pump_transform_no_op_por_defecto():
+    # n1_nominal=0, n2_objetivo=0, n_unidades=1 -> sin transformación
+    qh, qe = cv.apply_pump_transform(_QH, _QE, 0.0, 0.0, 1, "paralelo")
+    assert qh == _QH and qe == _QE
+
+
+def test_apply_pump_transform_solo_afinidad():
+    # r = N2/N1 = 2: Q*r, H*r² ; eficiencia solo se desplaza en Q
+    qh, qe = cv.apply_pump_transform(_QH, _QE, 1750.0, 3500.0, 1, "paralelo")
+    assert qh == cv.scale_points(_QH, 2.0)
+    assert qe == [(20.0, 0.5), (40.0, 0.4)]
+
+
+def test_apply_pump_transform_solo_arreglo_paralelo():
+    qh, qe = cv.apply_pump_transform(_QH, _QE, 0.0, 0.0, 3, "paralelo")
+    assert qh == cv.combine_parallel(_QH, 3)
+    assert qe == [(30.0, 0.5), (60.0, 0.4)]      # Q de eficiencia también ×n en paralelo
+
+
+def test_apply_pump_transform_solo_arreglo_serie():
+    qh, qe = cv.apply_pump_transform(_QH, _QE, 0.0, 0.0, 2, "serie")
+    assert qh == cv.combine_series(_QH, 2)
+    assert qe == _QE                              # en serie Q de eficiencia no se multiplica
+
+
+def test_apply_pump_transform_afinidad_y_arreglo_combinados():
+    # primero afinidad (r=2), luego arreglo paralelo ×3
+    qh, qe = cv.apply_pump_transform(_QH, _QE, 1750.0, 3500.0, 3, "paralelo")
+    esperado_qh = cv.combine_parallel(cv.scale_points(_QH, 2.0), 3)
+    assert qh == esperado_qh
+    assert qe == [(60.0, 0.5), (120.0, 0.4)]
+
+
+def test_apply_pump_transform_n2_igual_a_n1_no_aplica_afinidad():
+    qh, qe = cv.apply_pump_transform(_QH, _QE, 3500.0, 3500.0, 1, "paralelo")
+    assert qh == _QH and qe == _QE

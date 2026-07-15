@@ -64,6 +64,55 @@ def test_latex_escape_cubre_tanques_balance():
     assert ctx["fecha"] == report_ctx.latex_escape("15% de julio")
 
 
+def _sistema_con_bomba(n_unidades: int = 1, arreglo: str = "paralelo",
+                       n1_nominal: float = 0.0, n2_objetivo: float = 0.0) -> pj.Project:
+    p = _proyecto_minimo()
+    p.almacenamiento.factores_hora = [1.0] * 24
+    sistema = pj.PumpSystemData(nombre="Bombeo 1", horas=10.0, he=20.0)
+    sistema.tramos = [pj.SegmentData("Impulsion", "impulsion", 100.0, 100.0, "PEAD")]
+    sistema.bombas = [pj.PumpData(
+        nombre="Bomba X",
+        puntos_qh=[(0.0, 40.0), (5.0, 30.0), (10.0, 15.0)],
+        puntos_qe=[(0.0, 0.1), (5.0, 0.5), (10.0, 0.3)],
+        n_unidades=n_unidades, arreglo=arreglo,
+        n1_nominal=n1_nominal, n2_objetivo=n2_objetivo)]
+    p.bombeos = [sistema]
+    return p
+
+
+def test_bombas_tab_refleja_arreglo_por_bomba():
+    """Cierra el gap del code review: ningún test ejercía el camino de la
+    transformación (afinidad/arreglo) a través de report_ctx.build() — solo
+    la UI de la página 6 lo hacía manualmente. bombas_tab debe reflejar el
+    arreglo configurado en la PumpData persistida y su Q_op debe diferir del
+    de la misma bomba sin arreglo (2 en paralelo -> mismo H, mayor Q)."""
+    ctx_nominal, _ = report_ctx.build(_sistema_con_bomba(n_unidades=1))
+    ctx_paralelo, _ = report_ctx.build(_sistema_con_bomba(n_unidades=2, arreglo="paralelo"))
+
+    tab_nominal = ctx_nominal["sistemas"][0]["bombas"][0]
+    tab_paralelo = ctx_paralelo["sistemas"][0]["bombas"][0]
+
+    assert tab_nominal["arreglo"] == "nominal"
+    assert tab_paralelo["arreglo"] == "2$\\times$paralelo"
+    assert tab_paralelo["q_op"] != tab_nominal["q_op"]
+
+
+def test_bombas_tab_etiqueta_arreglo_no_incluye_n2_espurio():
+    """Hallazgo Minor del code review: cuando solo cambia n_unidades (sin
+    afinidad activa), la etiqueta no debe mostrar '@ N$_2$=0'."""
+    ctx, _ = report_ctx.build(_sistema_con_bomba(n_unidades=2, arreglo="serie"))
+    arreglo = ctx["sistemas"][0]["bombas"][0]["arreglo"]
+    assert arreglo == "2$\\times$serie"
+    assert "N$_2$" not in arreglo
+
+
+def test_bombas_tab_etiqueta_solo_afinidad_sin_prefijo_de_unidades():
+    ctx, _ = report_ctx.build(_sistema_con_bomba(n1_nominal=1750.0, n2_objetivo=3500.0))
+    arreglo = ctx["sistemas"][0]["bombas"][0]["arreglo"]
+    assert arreglo == "@ N$_2$=3500"
+    assert "$\\times$" not in arreglo
+
+
 def test_logo_entra_al_diccionario_de_figuras_y_se_copia(tmp_path):
     p = _proyecto_minimo()
     p.logo_cliente_b64 = _logo_png_b64()
