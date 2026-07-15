@@ -23,9 +23,13 @@ def test_latex_escape_cubre_tanques_balance():
     """Regresion (spec review): bal.nombre (storage.TankBalance, generado por
     la cadena de tanques) viene del mismo TankSpec.nombre que tanques_ctx,
     pero es un flujo independiente hacia el contexto — build() debe
-    escaparlo igual que en tanques_ctx, no solo ahi."""
+    escaparlo igual que en tanques_ctx, no solo ahi.
+
+    Tambien cubre p.fecha (hallazgo de code review): texto libre del usuario
+    que se interpola crudo en main.tex.j2 (\\date{\\VAR{fecha}}) — debe
+    salir escapado del contexto igual que los demas campos de usuario."""
     p = pj.Project(nombre="Test", municipio="M", departamento="D",
-                   consultor="C", fecha="2026-07-15", altitud=100,
+                   consultor="C", fecha="15% de julio", altitud=100,
                    temperatura=20.0)
     p.censo = [(2010, 1000), (2020, 1200)]
     p.poblacion = pj.PopulationConfig(p0=1200, year0=2024, horizon_year=2030,
@@ -38,3 +42,4 @@ def test_latex_escape_cubre_tanques_balance():
 
     assert ctx["tanques_balance"]
     assert ctx["tanques_balance"][0]["nombre"] == report_ctx.latex_escape("T&B_1")
+    assert ctx["fecha"] == report_ctx.latex_escape("15% de julio")

@@ -227,7 +227,7 @@ def build(p: Project) -> tuple[dict, dict]:
         "nombre": latex_escape(p.nombre), "municipio": latex_escape(p.municipio),
         "departamento": latex_escape(p.departamento),
         "corregimiento": latex_escape(p.corregimiento or p.municipio),
-        "consultor": latex_escape(p.consultor), "fecha": p.fecha,
+        "consultor": latex_escape(p.consultor), "fecha": latex_escape(p.fecha),
         "altitud": p.altitud, "temperatura": p.temperatura,
         "pob_metodo": cfg.metodo, "pob_justificacion": latex_escape(cfg.justificacion),
         "pob_final": f"{pob_final:,.0f}", "horizonte": cfg.horizon_year,
