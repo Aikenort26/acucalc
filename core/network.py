@@ -214,3 +214,117 @@ def solve(net_: Network, temperatura: float = 20.0, tol: float = 1e-6,
         vel[p.id] = float(Q[k] / A) if A > 0 else 0.0
         hf[p.id] = float(r[k] * abs(Q[k]) ** (n_exp - 1) * Q[k])
     return NetworkResult(heads, flows, vel, hf, it, converged)
+
+
+@dataclass
+class OptimizeResult:
+    dn_original: dict
+    dn_optimizado: dict
+    result: NetworkResult
+    avisos: list
+    iteraciones: int
+
+
+def _siguiente_dn(material: str, serie: str, dn_actual: float):
+    """Siguiente diámetro nominal comercial por encima de `dn_actual`, o
+    None si `dn_actual` ya es el mayor del catálogo. `dn_actual` debe ser
+    un DN nominal del catálogo (no un diámetro interno) — comparar contra
+    el interno rompería el avance monótono, ver `_dn_inicial`."""
+    from core import pipes as pipe_cat
+    mayores = [d for d in pipe_cat.diameters(material, serie) if d > dn_actual]
+    return min(mayores) if mayores else None
+
+
+def _dn_inicial(material: str, serie: str, diametro_mm: float) -> float:
+    """DN nominal de catálogo desde el que arrancar la búsqueda para una
+    tubería cuyo `diameter_mm` (diámetro interno usado por `solve()`) no
+    necesariamente coincide con ningún DN del catálogo — típico cuando la
+    red viene de un INP con diámetros "de diseño" en vez de comerciales.
+
+    Se toma el menor DN cuyo diámetro interno de catálogo sea >= al
+    diámetro actual (el DN comercial "equivalente o superior" más
+    pequeño); si el diámetro actual excede el mayor DN del catálogo, se
+    usa ese mayor DN. Esto evita el bug de comparar `diameter_mm` (interno)
+    contra `dn` (nominal, basado en diámetro externo) en cada iteración —
+    esa comparación nunca avanza más allá del primer paso porque el
+    interno de un DN siempre es menor que su propio DN nominal."""
+    from core import pipes as pipe_cat
+    dns = sorted(pipe_cat.diameters(material, serie))
+    candidatos = [d for d in dns
+                  if pipe_cat.pipe(material, serie, d).id_mm >= diametro_mm]
+    return min(candidatos) if candidatos else dns[-1]
+
+
+def _ruta_desde_fuente(net_: Network, nodo: str) -> list:
+    """BFS desde la primera fuente hasta `nodo`; asume topología en árbol
+    (típica de una red rural) — con anillos, devuelve una ruta válida
+    cualquiera, no necesariamente la de menor pérdida."""
+    adj: dict = {}
+    for p in net_.pipes:
+        adj.setdefault(p.node1, []).append((p.node2, p))
+        adj.setdefault(p.node2, []).append((p.node1, p))
+    origen = next(iter(net_.sources))
+    visitado = {origen}
+    cola = [(origen, [])]
+    while cola:
+        actual, ruta = cola.pop(0)
+        if actual == nodo:
+            return ruta
+        for vecino, p in adj.get(actual, []):
+            if vecino not in visitado:
+                visitado.add(vecino)
+                cola.append((vecino, ruta + [p]))
+    return []
+
+
+def optimize_diameters(net_: Network, material: str, serie: str,
+                       v_max: float = 6.0, p_min: float = 15.0,
+                       p_max: float = 70.0, temperatura: float = 20.0,
+                       max_iter: int = 30) -> OptimizeResult:
+    """Heurística: sube al siguiente DN comercial toda tubería con V>v_max;
+    para nodos con presión<p_min, sube el DN de la tubería con mayor pérdida
+    en la ruta desde la fuente. Itera hasta estabilizar o `max_iter`.
+    Violaciones de p_max se reportan como aviso de VRP (bajar diámetros no
+    reduce la presión estática de un tramo).
+
+    El DN nominal "actual" de cada tubería se rastrea aparte del
+    `diameter_mm` (interno) que usa `solve()` — ver `_dn_inicial` para el
+    porqué: comparar el interno contra el catálogo nominal directamente
+    no avanza monótonamente."""
+    from core import pipes as pipe_cat
+    dn_original = {p.id: p.diameter_mm for p in net_.pipes}
+    dn_actual = {p.id: _dn_inicial(material, serie, p.diameter_mm)
+                 for p in net_.pipes}
+    it = 0
+    for it in range(1, max_iter + 1):
+        res = solve(net_, temperatura)
+        cambio = False
+        for p in net_.pipes:
+            if abs(res.velocities[p.id]) > v_max:
+                nuevo = _siguiente_dn(material, serie, dn_actual[p.id])
+                if nuevo is not None:
+                    dn_actual[p.id] = nuevo
+                    p.diameter_mm = pipe_cat.pipe(material, serie, nuevo).id_mm
+                    cambio = True
+        for jid, j in net_.junctions.items():
+            if res.heads[jid] - j.elevation < p_min:
+                ruta = _ruta_desde_fuente(net_, jid)
+                if ruta:
+                    peor = max(ruta, key=lambda p: res.hf[p.id])
+                    nuevo = _siguiente_dn(material, serie, dn_actual[peor.id])
+                    if nuevo is not None:
+                        dn_actual[peor.id] = nuevo
+                        peor.diameter_mm = pipe_cat.pipe(material, serie, nuevo).id_mm
+                        cambio = True
+        if not cambio:
+            break
+    res = solve(net_, temperatura)
+    avisos = []
+    for jid, j in net_.junctions.items():
+        presion = res.heads[jid] - j.elevation
+        if presion > p_max:
+            avisos.append(f"Nodo '{jid}': presión {presion:.1f} m > máxima "
+                          f"{p_max:.0f} m — requiere válvula reductora de presión "
+                          "(VRP); bajar diámetros no reduce la presión estática.")
+    dn_optimizado = {p.id: p.diameter_mm for p in net_.pipes}
+    return OptimizeResult(dn_original, dn_optimizado, res, avisos, it)

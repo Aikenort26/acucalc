@@ -126,3 +126,18 @@ def test_solve_dos_tuberias_en_paralelo_iguales():
     assert abs(res.heads["J"] - h_j_esperado) < 1e-3
     assert abs(res.flows["P1"] - 25.0) < 1e-2
     assert abs(res.flows["P2"] - 25.0) < 1e-2
+
+
+def test_optimize_diameters_converge():
+    n = net.Network(
+        junctions={"J1": net.Junction("J1", 0.0, 0.0),
+                   "J2": net.Junction("J2", 0.0, 30.0)},
+        sources={"R": net.Source("R", 50.0)},
+        pipes=[net.Pipe("P1", "R", "J1", 300.0, 50.0, 130.0),
+               net.Pipe("P2", "J1", "J2", 300.0, 50.0, 130.0)],
+        headloss="H-W")
+    r = net.optimize_diameters(n, "PEAD PE100", "RDE 21", v_max=2.0, p_min=15.0, p_max=70.0)
+    assert all(abs(v) <= 2.0 + 1e-6 for v in r.result.velocities.values())
+    for jid, j in n.junctions.items():
+        assert r.result.heads[jid] - j.elevation >= 15.0 - 1e-3
+    assert r.dn_optimizado["P1"] >= r.dn_original["P1"]
