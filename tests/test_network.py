@@ -141,3 +141,17 @@ def test_optimize_diameters_converge():
     for jid, j in n.junctions.items():
         assert r.result.heads[jid] - j.elevation >= 15.0 - 1e-3
     assert r.dn_optimizado["P1"] >= r.dn_original["P1"]
+
+
+def test_optimize_diameters_avisa_si_p_min_no_se_resuelve():
+    n = net.Network(
+        junctions={"J1": net.Junction("J1", 0.0, 0.0),
+                   "J2": net.Junction("J2", 0.0, 30.0)},
+        sources={"R": net.Source("R", 50.0)},
+        pipes=[net.Pipe("P1", "R", "J1", 300.0, 50.0, 130.0),
+               net.Pipe("P2", "J1", "J2", 300.0, 50.0, 130.0)],
+        headloss="H-W")
+    r = net.optimize_diameters(n, "PEAD PE100", "RDE 21", v_max=2.0,
+                               p_min=1000.0, p_max=70.0)
+    assert r.avisos
+    assert any("J2" in aviso or "J1" in aviso for aviso in r.avisos)

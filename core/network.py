@@ -258,7 +258,12 @@ def _dn_inicial(material: str, serie: str, diametro_mm: float) -> float:
 def _ruta_desde_fuente(net_: Network, nodo: str) -> list:
     """BFS desde la primera fuente hasta `nodo`; asume topología en árbol
     (típica de una red rural) — con anillos, devuelve una ruta válida
-    cualquiera, no necesariamente la de menor pérdida."""
+    cualquiera, no necesariamente la de menor pérdida. En una red
+    multifuente elige arbitrariamente `next(iter(net_.sources))`: un nodo
+    inalcanzable desde esa fuente en particular (aunque sí lo sea desde
+    otra) devuelve `[]` y `optimize_diameters` no podrá subir ningún DN
+    para él — eso ahora se refleja como aviso de p_min si su presión
+    sigue por debajo del mínimo al terminar."""
     adj: dict = {}
     for p in net_.pipes:
         adj.setdefault(p.node1, []).append((p.node2, p))
@@ -320,6 +325,19 @@ def optimize_diameters(net_: Network, material: str, serie: str,
             break
     res = solve(net_, temperatura)
     avisos = []
+    for p in net_.pipes:
+        if abs(res.velocities[p.id]) > v_max:
+            avisos.append(f"Tubería '{p.id}': velocidad {abs(res.velocities[p.id]):.2f} m/s "
+                          f"> máxima {v_max:.1f} m/s tras {it} iteración(es) — no se encontró "
+                          "un DN comercial suficiente en el catálogo, o se alcanzó el límite "
+                          "de iteraciones.")
+    for jid, j in net_.junctions.items():
+        presion = res.heads[jid] - j.elevation
+        if presion < p_min:
+            avisos.append(f"Nodo '{jid}': presión {presion:.1f} m < mínima {p_min:.0f} m "
+                          f"tras {it} iteración(es) — no se pudo resolver subiendo diámetros "
+                          "(verificar conectividad de la red desde la fuente, o que el "
+                          "catálogo tenga diámetros suficientes).")
     for jid, j in net_.junctions.items():
         presion = res.heads[jid] - j.elevation
         if presion > p_max:
