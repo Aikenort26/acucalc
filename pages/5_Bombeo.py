@@ -39,13 +39,16 @@ with st.popover("🗑 Eliminar este sistema"):
 with st.popover("✏ Renombrar sistema"):
     nuevo_nombre = st.text_input("Nuevo nombre", sys_d.nombre, key=f"w_ren_{K}")
     if st.button("Renombrar", key=f"w_ren_btn_{K}") and nuevo_nombre and nuevo_nombre != sys_d.nombre:
-        viejo = sys_d.nombre
-        sys_d.nombre = nuevo_nombre
-        sistemas_dict = st.session_state.get("sistemas", {})
-        if viejo in sistemas_dict:
-            sistemas_dict[nuevo_nombre] = sistemas_dict.pop(viejo)
-        st.session_state["sel_sys_next"] = nuevo_nombre
-        st.rerun()
+        if nuevo_nombre in [s.nombre for s in p.bombeos if s is not sys_d]:
+            st.error(f"Ya existe un sistema llamado '{nuevo_nombre}'.")
+        else:
+            viejo = sys_d.nombre
+            sys_d.nombre = nuevo_nombre
+            sistemas_dict = st.session_state.get("sistemas", {})
+            if viejo in sistemas_dict:
+                sistemas_dict[nuevo_nombre] = sistemas_dict.pop(viejo)
+            st.session_state["sel_sys_next"] = nuevo_nombre
+            st.rerun()
 
 # ---------- sincronizar horas con la entrada de un tanque del tren ----------
 tanques_tren = [t for t in p.almacenamiento.tanques
