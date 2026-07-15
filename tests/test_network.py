@@ -86,3 +86,43 @@ def test_asignar_demandas_sin_tuberias_falla():
                     sources={"R1": net.Source("R1", 50.0)}, pipes=[])
     with pytest.raises(ValueError, match="longitud"):
         net.assign_demands_by_length(n, 10.0)
+
+
+def _r_hw(L, D_mm, C):
+    D = D_mm / 1000.0
+    return 10.67 * L / (C ** 1.852 * D ** 4.8704)
+
+
+def test_solve_dos_tuberias_en_serie():
+    n = net.Network(
+        junctions={"J1": net.Junction("J1", 0.0, 0.0),
+                   "J2": net.Junction("J2", 0.0, 50.0)},
+        sources={"R": net.Source("R", 100.0)},
+        pipes=[net.Pipe("P1", "R", "J1", 200.0, 150.0, 130.0),
+               net.Pipe("P2", "J1", "J2", 150.0, 100.0, 130.0)],
+        headloss="H-W")
+    r1, r2 = _r_hw(200.0, 150.0, 130.0), _r_hw(150.0, 100.0, 130.0)
+    Q0 = 0.05
+    h_j2_esperado = 100.0 - (r1 + r2) * Q0 ** 1.852
+    res = net.solve(n)
+    assert res.converged
+    assert abs(res.heads["J2"] - h_j2_esperado) < 1e-3
+    assert abs(res.flows["P1"] - 50.0) < 1e-2
+    assert abs(res.flows["P2"] - 50.0) < 1e-2
+
+
+def test_solve_dos_tuberias_en_paralelo_iguales():
+    n = net.Network(
+        junctions={"J": net.Junction("J", 0.0, 50.0)},
+        sources={"R": net.Source("R", 100.0)},
+        pipes=[net.Pipe("P1", "R", "J", 200.0, 150.0, 130.0),
+               net.Pipe("P2", "R", "J", 200.0, 150.0, 130.0)],
+        headloss="H-W")
+    r = _r_hw(200.0, 150.0, 130.0)
+    Q0 = 0.05
+    h_j_esperado = 100.0 - r * (Q0 / 2) ** 1.852
+    res = net.solve(n)
+    assert res.converged
+    assert abs(res.heads["J"] - h_j_esperado) < 1e-3
+    assert abs(res.flows["P1"] - 25.0) < 1e-2
+    assert abs(res.flows["P2"] - 25.0) < 1e-2

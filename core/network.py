@@ -1,7 +1,12 @@
 """Red de distribución: modelo INP, asignación de demandas por longitud
 aferente y solver hidráulico propio (formulación de Todini/Global Gradient
 Algorithm reducida a las cabezas nodales, densa con numpy — ver `solve()`)."""
+import math
 from dataclasses import dataclass, field
+
+import numpy as np
+
+G = 9.81
 
 
 @dataclass
@@ -117,3 +122,95 @@ def assign_demands_by_length(net_: Network, qmd_lps: float) -> dict:
             if nid in aferente:
                 aferente[nid] += p.length / 2.0
     return {jid: qmd_lps * a / total for jid, a in aferente.items()}
+
+
+@dataclass
+class NetworkResult:
+    heads: dict           # node id -> cabeza [m]
+    flows: dict            # pipe id -> Q [L/s] (positivo node1 -> node2)
+    velocities: dict        # pipe id -> V [m/s]
+    hf: dict                # pipe id -> pérdida de carga [m]
+    iterations: int
+    converged: bool
+
+
+def _hw_r(pipe: Pipe) -> float:
+    D = pipe.diameter_mm / 1000.0
+    return 10.67 * pipe.length / (pipe.roughness ** 1.852 * D ** 4.8704)
+
+
+def _dw_r(pipe: Pipe, Q_m3s: float, nu: float) -> float:
+    from core import hydraulics as hy
+    D = pipe.diameter_mm / 1000.0
+    A = math.pi / 4.0 * D ** 2
+    V = abs(Q_m3s) / A if A > 0 else 0.0
+    Re = hy.reynolds(V, D, nu)
+    f = hy.friction_factor(Re, (pipe.roughness / 1000.0) / D) if Re > 0 else 0.02
+    return f * pipe.length / (2.0 * G * D * A ** 2)
+
+
+def solve(net_: Network, temperatura: float = 20.0, tol: float = 1e-6,
+         max_outer: int = 50, max_newton: int = 30) -> NetworkResult:
+    """Newton-Raphson sobre las cabezas nodales (formulación reducida del
+    Global Gradient Algorithm de Todini para fuentes de cabeza fija): dado
+    Q_p = signo(Hi-Hj)·(|Hi-Hj|/r_p)^(1/n) en cada tubería, se itera H hasta
+    que la continuidad en cada nodo se satisface (Jacobiano analítico). Con
+    Darcy-Weisbach, r_p se recalcula cada iteración externa con el caudal de
+    la iteración previa (n=2); con Hazen-Williams, r_p es constante
+    (n=1.852)."""
+    from core import catalogs
+    nu = catalogs.water_props(temperatura).nu
+    nodes = list(net_.junctions)
+    idx = {nid: i for i, nid in enumerate(nodes)}
+    nn = len(nodes)
+    demand_m3s = np.array([net_.junctions[nid].demand / 1000.0 for nid in nodes])
+    H = np.array([net_.junctions[nid].elevation + 10.0 for nid in nodes])
+    n_exp = 2.0 if net_.headloss == "D-W" else 1.852
+    Q = np.zeros(len(net_.pipes))
+    converged, it = False, 0
+    for it in range(1, max_outer + 1):
+        r = (np.array([_dw_r(p, Q[k], nu) for k, p in enumerate(net_.pipes)])
+             if net_.headloss == "D-W" else np.array([_hw_r(p) for p in net_.pipes]))
+        Q_prev_outer = Q.copy()
+        for _ in range(max_newton):
+            F = -demand_m3s.copy()
+            J = np.zeros((nn, nn))
+            for k, p in enumerate(net_.pipes):
+                h1 = (net_.sources[p.node1].head if p.node1 in net_.sources
+                      else H[idx[p.node1]])
+                h2 = (net_.sources[p.node2].head if p.node2 in net_.sources
+                      else H[idx[p.node2]])
+                dh = h1 - h2
+                q = (math.copysign((abs(dh) / r[k]) ** (1.0 / n_exp), dh)
+                     if dh != 0 else 0.0)
+                Q[k] = q
+                y = 1.0 / (n_exp * r[k] * max(abs(q), 1e-9) ** (n_exp - 1))
+                if p.node1 in idx:
+                    F[idx[p.node1]] -= q
+                    J[idx[p.node1], idx[p.node1]] -= y
+                if p.node2 in idx:
+                    F[idx[p.node2]] += q
+                    J[idx[p.node2], idx[p.node2]] -= y
+                if p.node1 in idx and p.node2 in idx:
+                    J[idx[p.node1], idx[p.node2]] += y
+                    J[idx[p.node2], idx[p.node1]] += y
+            try:
+                dH = np.linalg.solve(J, -F)
+            except np.linalg.LinAlgError:
+                dH = np.linalg.lstsq(J, -F, rcond=None)[0]
+            H = H + dH
+            if np.max(np.abs(dH)) < tol:
+                break
+        if np.max(np.abs(Q - Q_prev_outer)) < tol:
+            converged = True
+            break
+    heads = {nid: float(H[i]) for i, nid in enumerate(nodes)}
+    heads.update({sid: s.head for sid, s in net_.sources.items()})
+    flows, vel, hf = {}, {}, {}
+    for k, p in enumerate(net_.pipes):
+        D = p.diameter_mm / 1000.0
+        A = math.pi / 4.0 * D ** 2
+        flows[p.id] = float(Q[k] * 1000.0)
+        vel[p.id] = float(Q[k] / A) if A > 0 else 0.0
+        hf[p.id] = float(r[k] * abs(Q[k]) ** (n_exp - 1) * Q[k])
+    return NetworkResult(heads, flows, vel, hf, it, converged)
