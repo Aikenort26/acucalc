@@ -53,3 +53,36 @@ def test_write_inp_demands_preserva_columna_patron():
     assert len(lineas) == 1
     assert "7.5000" in lineas[0]
     assert "PAT1" in lineas[0]
+
+
+INP_LINEAL = """[JUNCTIONS]
+J1 0 0
+J2 0 0
+
+[RESERVOIRS]
+R1 50.0
+
+[PIPES]
+P1 R1 J1 100 150 130
+P2 J1 J2 200 100 130
+
+[OPTIONS]
+Headloss H-W
+"""
+
+
+def test_asignar_demandas_por_longitud_aferente():
+    n = net.parse_inp(INP_LINEAL)
+    d = net.assign_demands_by_length(n, qmd_lps=30.0)
+    # J1: mitad de P1 (50) + mitad de P2 (100) = 150 de 300 -> 50%
+    assert abs(d["J1"] - 15.0) < 1e-9
+    # J2: solo mitad de P2 (100) de 300 -> 33.33%
+    assert abs(d["J2"] - 10.0) < 1e-9
+    assert "R1" not in d
+
+
+def test_asignar_demandas_sin_tuberias_falla():
+    n = net.Network(junctions={"J1": net.Junction("J1", 0.0)},
+                    sources={"R1": net.Source("R1", 50.0)}, pipes=[])
+    with pytest.raises(ValueError, match="longitud"):
+        net.assign_demands_by_length(n, 10.0)
