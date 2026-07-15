@@ -80,7 +80,8 @@ def parse_inp(text: str) -> Network:
 
 def write_inp_demands(text: str, demands: dict) -> str:
     """Reescribe la columna de demanda en [JUNCTIONS], preservando el resto
-    del archivo (otras secciones, comentarios de fin de línea) intacto."""
+    del archivo (otras secciones, comentarios de fin de línea, columnas
+    adicionales como el patrón de demanda) intacto."""
     out, section = [], None
     for raw in text.splitlines():
         stripped = raw.split(";")[0].strip()
@@ -93,8 +94,10 @@ def write_inp_demands(text: str, demands: dict) -> str:
             body = antes.split()
             jid = body[0]
             if jid in demands:
+                resto = body[3:]
+                extra = ("   " + "   ".join(resto)) if resto else ""
                 sufijo = f"   ;{comentario}" if comentario else ""
-                out.append(f"{jid}   {body[1]}   {demands[jid]:.4f}{sufijo}")
+                out.append(f"{jid}   {body[1]}   {demands[jid]:.4f}{extra}{sufijo}")
                 continue
         out.append(raw)
     return "\n".join(out)

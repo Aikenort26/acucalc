@@ -44,3 +44,12 @@ def test_write_inp_demands_preserva_el_resto():
     assert n2.junctions["J1"].demand == 12.34
     assert "[RESERVOIRS]" in nuevo and "R1   50.0" in nuevo
     assert "; nodo de consumo" in nuevo
+
+
+def test_write_inp_demands_preserva_columna_patron():
+    inp_con_patron = "[JUNCTIONS]\nJ1   10.0  0       PAT1\n\n[RESERVOIRS]\nR1   50.0\n"
+    nuevo = net.write_inp_demands(inp_con_patron, {"J1": 7.5})
+    lineas = [l for l in nuevo.splitlines() if l.startswith("J1")]
+    assert len(lineas) == 1
+    assert "7.5000" in lineas[0]
+    assert "PAT1" in lineas[0]
