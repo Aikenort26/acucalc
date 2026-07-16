@@ -101,13 +101,41 @@ def operating_point(pump_fit: CurveFit,
 
 
 def detect_curve_by_color(img_rgb, target_rgb: tuple[int, int, int],
-                          tolerance: int = 40, n_points: int = 30) -> list[tuple[float, float]]:
-    """Extrae puntos (px_x, px_y) de la curva cuyo color ≈ target_rgb.
-    img_rgb: array HxWx3 uint8 (RGB). Devuelve ≤ n_points ordenados por x
-    (mediana de y por banda de x). Lista vacía si no hay pixeles del color."""
-    img = np.asarray(img_rgb, dtype=np.int16)
-    dist = np.abs(img - np.array(target_rgb, dtype=np.int16)).sum(axis=2)
-    mask = dist <= tolerance * 3
+                          tolerance: int = 40, n_points: int = 30,
+                          bbox: tuple[int, int, int, int] | None = None,
+                          mask_extra=None) -> list[tuple[float, float]]:
+    """Extrae puntos (px_x, px_y) de la curva cuyo color ≈ target_rgb, estilo
+    WebPlotDigitizer/automeris. Devuelve ≤ n_points ordenados por x.
+
+    Correcciones vs. la versión vieja (que tomaba "puntos aleatorios"):
+    - **Distancia euclidiana en RGB** (no L1 cruda): un umbral en L1 de ~180
+      hacía match con grises y ejes; la euclidiana con `tolerance` acota mucho
+      mejor la vecindad del color objetivo.
+    - **Restricción al rectángulo `bbox`** (x0, y0, x1, y1) del área de la
+      gráfica — típicamente el rectángulo calibrado. Fuera de ahí quedan ejes,
+      texto y leyenda que contaminaban la máscara.
+    - **`mask_extra`**: máscara booleana HxW opcional ("pen") para limitar la
+      búsqueda a la zona pintada por el usuario.
+    - **Clustering por conectividad en cada banda** en vez de la mediana global:
+      si en una banda de x coexisten la curva y una línea de rejilla, la mediana
+      caía ENTRE ambas (un punto que no está en ninguna). Ahora se toma el
+      cluster contiguo de y más grande (la curva es la traza más densa) y se
+      devuelve su centro.
+
+    img_rgb: array HxWx3 uint8 (RGB). Lista vacía si no hay pixeles del color."""
+    img = np.asarray(img_rgb, dtype=np.float32)
+    target = np.array(target_rgb, dtype=np.float32)
+    dist = np.sqrt(((img - target) ** 2).sum(axis=2))
+    mask = dist <= float(tolerance)
+    if bbox is not None:
+        x0, y0, x1, y1 = bbox
+        x0, x1 = sorted((max(int(x0), 0), min(int(x1), mask.shape[1])))
+        y0, y1 = sorted((max(int(y0), 0), min(int(y1), mask.shape[0])))
+        recorte = np.zeros_like(mask)
+        recorte[y0:y1, x0:x1] = True
+        mask &= recorte
+    if mask_extra is not None:
+        mask &= np.asarray(mask_extra, dtype=bool)
     ys, xs = np.nonzero(mask)
     if len(xs) == 0:
         return []
@@ -116,9 +144,28 @@ def detect_curve_by_color(img_rgb, target_rgb: tuple[int, int, int],
     pts = []
     for a, b in zip(bands, bands[1:]):
         sel = (xs >= a) & (xs < b)
-        if sel.any():
-            pts.append((float(np.median(xs[sel])), float(np.median(ys[sel]))))
+        if not sel.any():
+            continue
+        ys_band = np.sort(ys[sel])
+        y_centro = _cluster_y_dominante(ys_band)
+        x_centro = float(np.median(xs[sel]))
+        pts.append((x_centro, y_centro))
     return pts
+
+
+def _cluster_y_dominante(ys_sorted, gap: int = 5) -> float:
+    """Centro del cluster contiguo de y más grande (la traza de la curva es más
+    densa que una línea de rejilla aislada). `gap`: separación en px que corta
+    un cluster del siguiente."""
+    inicio = 0
+    mejor_ini, mejor_fin = 0, 0
+    for i in range(1, len(ys_sorted) + 1):
+        if i == len(ys_sorted) or ys_sorted[i] - ys_sorted[i - 1] > gap:
+            if (i - inicio) > (mejor_fin - mejor_ini):
+                mejor_ini, mejor_fin = inicio, i
+            inicio = i
+    cluster = ys_sorted[mejor_ini:mejor_fin]
+    return float(np.mean(cluster))
 
 
 def scale_points(points: list[tuple[float, float]], r: float) -> list[tuple[float, float]]:

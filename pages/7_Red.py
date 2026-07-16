@@ -1,6 +1,7 @@
+import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
-from core import network as net, pipes, curves as cv
+from core import network as net, network_map as nm, pipes, curves as cv
 from pages_common import (page_setup, num_input, sel_state, SP_CAUDAL,
                           SP_VELOCIDAD, SP_PERDIDA, SP_ALTURA)
 
@@ -31,6 +32,30 @@ except ValueError as e:
 st.caption(f"Red cargada: {len(red.junctions)} nodos de consumo, "
            f"{len(red.sources)} fuente(s), {len(red.pipes)} tuberías "
            f"(pérdidas: {red.headloss}).")
+
+# ---------- WP-7: mapa de la red ----------
+with st.expander("🗺 Mapa de la red", expanded=False):
+    col_c, _ = st.columns([1, 2])
+    colorear = col_c.radio("Colorear por", ["presión", "velocidad", "topología"],
+                           horizontal=True, key="w_red_colorear")
+    if colorear == "topología":
+        fig_map = nm.fig_red(red, dark=True)
+    else:
+        try:
+            res_map = net.solve(red)
+            fig_map = nm.fig_red(red, res_map,
+                                 colorear="presion" if colorear == "presión" else "velocidad",
+                                 dark=True)
+        except Exception as e:
+            st.warning(f"No se pudo simular para colorear el mapa: {e}")
+            fig_map = nm.fig_red(red, dark=True)
+    if not nm.tiene_coordenadas(red):
+        st.caption("El INP no trae sección [COORDINATES]; se usa un layout "
+                   "automático (la topología es correcta, las posiciones son "
+                   "aproximadas). Triángulo = reservorio, cuadrado = tanque, "
+                   "círculo = nodo de consumo.")
+    st.pyplot(fig_map)
+    plt.close(fig_map)
 
 st.subheader("Asignación de demandas por longitud aferente")
 if flows is None:

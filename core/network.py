@@ -14,12 +14,17 @@ class Junction:
     id: str
     elevation: float
     demand: float = 0.0     # L/s
+    x: float | None = None  # coordenada del [COORDINATES] (para el mapa)
+    y: float | None = None
 
 
 @dataclass
 class Source:
     id: str
     head: float              # m (para tanques: elevación + nivel inicial)
+    tipo: str = "reservorio"  # reservorio | tanque
+    x: float | None = None
+    y: float | None = None
 
 
 @dataclass
@@ -44,12 +49,12 @@ class Network:
 
 def parse_inp(text: str) -> Network:
     """Parser mínimo de EPANET INP: secciones [JUNCTIONS] [RESERVOIRS]
-    [TANKS] [PIPES] [OPTIONS]. El resto de secciones se ignora (el texto
-    completo se conserva en `raw_text` para reescritura con
-    `write_inp_demands`)."""
+    [TANKS] [PIPES] [COORDINATES] [OPTIONS]. El resto de secciones se ignora
+    (el texto completo se conserva en `raw_text` para reescritura)."""
     junctions: dict[str, Junction] = {}
     sources: dict[str, Source] = {}
     pipes: list[Pipe] = []
+    coords: dict[str, tuple[float, float]] = {}
     headloss = "H-W"
     section = None
     for raw in text.splitlines():
@@ -65,21 +70,31 @@ def parse_inp(text: str) -> Network:
             demand = float(parts[2]) if len(parts) > 2 else 0.0
             junctions[jid] = Junction(jid, elev, demand)
         elif section == "RESERVOIRS":
-            sources[parts[0]] = Source(parts[0], float(parts[1]))
+            sources[parts[0]] = Source(parts[0], float(parts[1]), tipo="reservorio")
         elif section == "TANKS":
             elevation, initlevel = float(parts[1]), float(parts[2])
-            sources[parts[0]] = Source(parts[0], elevation + initlevel)
+            sources[parts[0]] = Source(parts[0], elevation + initlevel, tipo="tanque")
         elif section == "PIPES":
             pid, n1, n2 = parts[0], parts[1], parts[2]
             length, diam, rough = float(parts[3]), float(parts[4]), float(parts[5])
             km = float(parts[6]) if len(parts) > 6 else 0.0
             pipes.append(Pipe(pid, n1, n2, length, diam, rough, km))
+        elif section == "COORDINATES" and len(parts) >= 3:
+            try:
+                coords[parts[0]] = (float(parts[1]), float(parts[2]))
+            except ValueError:
+                pass
         elif section == "OPTIONS" and parts and parts[0].lower() == "headloss":
             headloss = "D-W" if parts[1].upper().startswith("D") else "H-W"
     if not junctions:
         raise ValueError("El INP no contiene nodos [JUNCTIONS]")
     if not sources:
         raise ValueError("El INP no contiene fuentes ([RESERVOIRS] ni [TANKS])")
+    for nid, (x, y) in coords.items():   # adjunta coordenadas al nodo que exista
+        if nid in junctions:
+            junctions[nid].x, junctions[nid].y = x, y
+        elif nid in sources:
+            sources[nid].x, sources[nid].y = x, y
     return Network(junctions, sources, pipes, headloss, text)
 
 
@@ -106,6 +121,114 @@ def write_inp_demands(text: str, demands: dict) -> str:
                 continue
         out.append(raw)
     return "\n".join(out)
+
+
+# Coeficientes C de Hazen-Williams por material (valores de literatura/manual,
+# tuberías nuevas). Son REFERENCIALES: el proyectista debe verificarlos según
+# el estado y la edad real de la tubería. Se emparejan por subcadena para cubrir
+# variantes del catálogo (PVC-U, PVC-O, PVC biaxial → "PVC"; PEAD PE100 → "PE").
+_C_HW_REF: list[tuple[str, float]] = [
+    ("PVC", 150.0), ("PE", 150.0), ("GRP", 150.0),
+    ("HIERRO", 130.0), ("DÚCTIL", 130.0), ("DUCTIL", 130.0),
+    ("ACERO", 120.0),
+]
+_C_HW_DEFAULT = 130.0
+
+
+def coef_rugosidad(material: str, headloss: str) -> float:
+    """Rugosidad que corresponde a `material` según el modelo de pérdidas del
+    INP: coeficiente C (adimensional) para Hazen-Williams, o rugosidad absoluta
+    ks en mm para Darcy-Weisbach. Necesaria para reescribir el INP cuando la
+    optimización cambia de material (antes solo se reescribían diámetros y la
+    rugosidad quedaba desfasada). Un material desconocido degrada a un default
+    razonable, nunca revienta.
+
+    Los C de Hazen-Williams son valores REFERENCIALES de literatura para tubería
+    nueva; para D-W se reusa `ks_mm` del catálogo de tuberías (`data/ks.json`
+    vía `core/pipes`)."""
+    if headloss == "D-W":
+        from core import pipes as pipe_cat
+        clave = pipe_cat.KS_KEY.get(material, material)
+        from core import catalogs
+        return catalogs.roughness().get(clave, 0.05)
+    mat = material.upper()
+    for token, c in _C_HW_REF:
+        if token in mat:
+            return c
+    return _C_HW_DEFAULT
+
+
+def write_inp_pipes(text: str, cambios: dict) -> str:
+    """Reescribe diámetro y rugosidad de las tuberías en [PIPES], preservando el
+    resto del archivo (otras secciones, minorloss, comentarios) intacto —
+    mismo patrón que `write_inp_demands`.
+
+    `cambios`: {pipe_id: (diametro_mm, rugosidad)}. Solo se tocan las tuberías
+    presentes en el dict; las demás quedan como estaban. Corrige el bug de que
+    el INP exportado no llevaba ni los diámetros optimizados ni la rugosidad
+    del material elegido (el writer viejo solo reescribía demandas)."""
+    out, section = [], None
+    for raw in text.splitlines():
+        stripped = raw.split(";")[0].strip()
+        if stripped.startswith("["):
+            section = stripped.strip("[]").upper()
+            out.append(raw)
+            continue
+        if section == "PIPES" and stripped:
+            antes, _, comentario = raw.partition(";")
+            body = antes.split()
+            pid = body[0] if body else ""
+            if pid in cambios and len(body) >= 6:
+                diam, rough = cambios[pid]
+                km = body[6] if len(body) > 6 else "0"
+                sufijo = f"    ;{comentario}" if comentario else ""
+                out.append(f"{body[0]}   {body[1]}   {body[2]}   {body[3]}   "
+                           f"{diam:.2f}   {rough:g}   {km}{sufijo}")
+                continue
+        out.append(raw)
+    return "\n".join(out)
+
+
+def _curva_id(nombre: str, i: int) -> str:
+    """ID de curva EPANET válido (sin espacios) a partir del nombre de la bomba."""
+    base = "".join(ch if ch.isalnum() else "_" for ch in nombre).strip("_")
+    return f"C_{base or i}"
+
+
+def write_inp_pump_curves(text: str, curvas: dict) -> str:
+    """Agrega al INP una sección [CURVES] con la curva Q-H de cada bomba y una
+    plantilla [PUMPS] comentada, preservando el resto del archivo. Para que las
+    curvas digitalizadas en ACUCALC se puedan usar en EPANET (ítem 16).
+
+    `curvas`: {nombre_bomba: [(q, h), ...]} — los puntos DEBEN venir ya con la
+    transformada de afinidad/arreglo aplicada (`core/curves.apply_pump_transform`),
+    no crudos. Q en las unidades de caudal del INP (verificar [OPTIONS] Units),
+    H en m.
+
+    No se autoconecta la bomba a nodos porque la topología (nodo de succión /
+    impulsión) no está en los datos de ACUCALC — se deja una plantilla [PUMPS]
+    comentada para que el proyectista la complete en EPANET."""
+    if not curvas:
+        return text
+    lineas = ["", "[CURVES]", ";ID           X(Caudal)   Y(Altura)"]
+    plantilla_pumps = ["", "[PUMPS]",
+                       ";ID   Nodo1(succión)   Nodo2(impulsión)   Propiedades",
+                       ";  Descomenta y conecta cada bomba a sus nodos en EPANET:"]
+    for i, (nombre, pts) in enumerate(curvas.items(), 1):
+        cid = _curva_id(nombre, i)
+        lineas.append(f";  {nombre}")
+        for q, h in pts:
+            lineas.append(f"{cid:<12} {q:<11.4f} {h:.4f}")
+        plantilla_pumps.append(f";PUMP_{i}   n1   n2   HEAD {cid}   ; {nombre}")
+    bloque = "\n".join(lineas + plantilla_pumps) + "\n"
+    # Inserta antes de [OPTIONS] si existe (EPANET tolera el orden, pero queda
+    # más limpio); si no, al final.
+    idx = text.find("[OPTIONS]")
+    if idx == -1:
+        idx = text.find("[END]")
+    if idx == -1:
+        return text.rstrip("\n") + "\n" + bloque
+    return text[:idx] + bloque + "\n" + text[idx:]
 
 
 def assign_demands_by_length(net_: Network, qmd_lps: float) -> dict:

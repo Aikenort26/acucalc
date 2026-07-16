@@ -104,6 +104,30 @@ def test_deteccion_sin_match():
     assert cv.detect_curve_by_color(img, (255, 0, 0), 40, 10) == []
 
 
+def test_deteccion_no_agarra_rejilla_gris():
+    """El bug de 'puntos aleatorios': con distancia euclidiana y clustering, la
+    detección del rojo NO debe contaminarse con la rejilla gris (200,200,200).
+    Un punto que cayera ENTRE la curva y una gridline sería el síntoma."""
+    img = _synthetic_curve_image()
+    pts = cv.detect_curve_by_color(img, target_rgb=(255, 0, 0),
+                                   tolerance=60, n_points=20)
+    for px, py in pts:
+        py_curva = 50 + 300 * ((px - 50) / 500) ** 2
+        # cada punto detectado cae sobre la parábola (±5 px), no sobre una
+        # línea de rejilla horizontal (y múltiplo de 50) alejada de la curva
+        assert abs(py - py_curva) < 6, f"punto ({px:.0f},{py:.0f}) fuera de la curva"
+
+
+def test_deteccion_respeta_bbox():
+    """Con bbox se ignora todo lo de fuera del rectángulo de la gráfica."""
+    img = _synthetic_curve_image()
+    # bbox que excluye la mitad izquierda de la parábola
+    pts = cv.detect_curve_by_color(img, (255, 0, 0), tolerance=60, n_points=20,
+                                   bbox=(300, 0, 600, 400))
+    assert pts
+    assert all(px >= 300 for px, _ in pts)
+
+
 def test_scale_points_afinidad():
     # Q∝N, H∝N² — r = N2/N1 = 2
     assert cv.scale_points([(10.0, 50.0), (20.0, 40.0)], 2.0) == [(20.0, 200.0), (40.0, 160.0)]
