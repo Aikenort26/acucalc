@@ -136,6 +136,32 @@ def test_tank_train_sin_qmh_mantiene_comportamiento_previo():
     assert tren[-1].q_salida_lps is None
 
 
+def test_tank_balance_check_cumple():
+    """Volumen asignado ≥ el requerido por el balance interno → cumple=True."""
+    chk = storage.tank_balance_check("T1", QMD_M3D, SUPPLY, FACTORES, v_asignado=200,
+                                     frac_incendio=0.15, dias_reserva=1)
+    assert chk.cumple is True
+    assert abs(chk.frac_balance - 0.516667) < 1e-4
+    assert chk.horas_suministro == 10          # SUPPLY: horas 5-14
+    assert chk.horas_salida == 24              # FACTORES: 24 horas con consumo
+    assert chk.v_asignado == 200
+
+
+def test_tank_balance_check_no_cumple():
+    """Volumen asignado insuficiente → cumple=False y v_balance_req exacto.
+    v_req = frac·QMD·(1+incendio)·días, con frac de balance_curve sobre las
+    ventanas normalizadas (mismo golden 51.67% del Bolívar)."""
+    supply = [s / sum(SUPPLY) for s in SUPPLY]
+    demand = [f / sum(FACTORES) for f in FACTORES]
+    frac, _ = storage.balance_curve(supply, demand)
+    v_req_esperado = frac * QMD_M3D * (1 + 0.15) * 1
+    chk = storage.tank_balance_check("T1", QMD_M3D, SUPPLY, FACTORES, v_asignado=50,
+                                     frac_incendio=0.15, dias_reserva=1)
+    assert chk.cumple is False
+    assert abs(chk.v_balance_req - v_req_esperado) < 1e-6
+    assert abs(chk.v_balance_req - 109.979) < 1e-2
+
+
 def test_round_up_step():
     assert storage.round_up_step(5.53, 0.1) == 5.6
     assert storage.round_up_step(5.50, 0.1) == 5.5           # exacto no sube

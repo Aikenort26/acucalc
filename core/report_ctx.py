@@ -84,31 +84,42 @@ def build(p: Project) -> tuple[dict, dict]:
     qmd_m3d = flows.qmd_lps * 86.4
 
     # ---------- almacenamiento ----------
+    # Flujo norma-first: volumen total = max(Art.81 QMD/3, curva integral de la
+    # comunidad). Los tanques los define el usuario (volumen asignado + ventanas);
+    # la app verifica el balance interno de cada uno, no reparte.
     alm = p.almacenamiento
-    tren, a, b = None, None, None
-    if alm.usar_cadena and alm.factores_hora and alm.tanques:
+    a = storage.volume_art81(qmd_m3d, alm.frac_regulacion, alm.frac_incendio,
+                             alm.dias_reserva)
+    b = None
+    if alm.factores_hora and alm.suministro_hora:
         try:
-            tren = storage.tank_train(
-                qmd_m3d, [(t.nombre, t.entrada_flags()) for t in alm.tanques],
-                alm.factores_hora, alm.frac_incendio, alm.dias_reserva,
-                qmh_lps=flows.qmh_lps)
-            for t, bal in zip(alm.tanques, tren):
-                t.volumen = float(bal.v_total_redondeado)
+            b = storage.volume_curva_integral(qmd_m3d, alm.factores_hora,
+                                              alm.suministro_hora, alm.frac_incendio,
+                                              alm.dias_reserva)
         except ValueError:
-            tren = None
-    if tren:
-        v_final = sum(bal.v_total_redondeado for bal in tren)
-    elif alm.factores_hora and alm.suministro_hora:
-        a = storage.volume_art81(qmd_m3d, alm.frac_regulacion, alm.frac_incendio,
-                                 alm.dias_reserva)
-        b = storage.volume_curva_integral(qmd_m3d, alm.factores_hora,
-                                          alm.suministro_hora, alm.frac_incendio,
-                                          alm.dias_reserva)
-        v_final = storage.final_volume(a, b)
-    else:
-        a = storage.volume_art81(qmd_m3d, alm.frac_regulacion, alm.frac_incendio,
-                                 alm.dias_reserva)
-        v_final = a.v_total_redondeado
+            b = None
+    v_final = storage.final_volume(a, b) if b else a.v_total_redondeado
+    gobierna = ("Art. 81 (QMD/3)" if not b or a.v_total_redondeado >= b.v_total_redondeado
+                else "Curva integral")
+
+    # verificación de balance interno por tanque (suministro=entrada, salida=salida)
+    tanques_balance = []
+    for t in alm.tanques:
+        try:
+            chk = storage.tank_balance_check(t.nombre, qmd_m3d, t.entrada_flags(),
+                                             t.salida_flags(), t.volumen,
+                                             alm.frac_incendio, alm.dias_reserva)
+        except ValueError:
+            continue
+        tanques_balance.append({
+            "nombre": latex_escape(chk.nombre),
+            "horas_suministro": f"{chk.horas_suministro:.0f}",
+            "horas_salida": f"{chk.horas_salida:.0f}",
+            "frac": f"{chk.frac_balance:.4f}",
+            "v_asignado": f"{chk.v_asignado:.0f}",
+            "v_req": f"{chk.v_balance_req:.1f}",
+            "cumple": "Sí" if chk.cumple else "No"})
+    v_asignado_total = sum(t.volumen for t in alm.tanques)
 
     # ---------- figuras ----------
     figdir = Path(tempfile.mkdtemp())
@@ -123,20 +134,12 @@ def build(p: Project) -> tuple[dict, dict]:
     _save(rf.fig_metodos(proj.deviations, pop.suggest_method(proj)), "metodos")
     _save(rf.fig_caudales([(t, fr.qmed_lps, fr.qmd_lps, fr.qmh_lps)
                            for t, fr in serie_q]), "caudales")
-    if tren:
-        pares = []
-        for i, t in enumerate(alm.tanques):
-            salida = (alm.tanques[i + 1].entrada_flags() if i + 1 < len(alm.tanques)
-                      else alm.factores_hora)
-            pares.append((t.nombre, t.entrada_flags(), salida))
-        _save(rf.fig_balance_train(pares), "balance")
-    elif alm.factores_hora and alm.suministro_hora:
-        nombre_tk = alm.tanques[0].nombre if alm.tanques else "Tanque"
-        _save(rf.fig_balance_train([(nombre_tk, alm.suministro_hora, alm.factores_hora)]),
+    if alm.factores_hora and alm.suministro_hora:
+        _save(rf.fig_balance_train([("Comunidad", alm.suministro_hora, alm.factores_hora)]),
               "balance")
     sistemas_bomba_ctx = ([{"tipo_bomba": s.tipo_bomba} for s in p.bombeos]
                          or [{"tipo_bomba": "superficie"}])
-    _save(rf.fig_esquema(sistemas_bomba_ctx, alm.tanques if tren else []), "esquema")
+    _save(rf.fig_esquema(sistemas_bomba_ctx, alm.tanques), "esquema")
 
     # ---------- logos de portada ----------
     def _save_logo(b64: str, name: str) -> str | None:
@@ -291,21 +294,11 @@ def build(p: Project) -> tuple[dict, dict]:
             {"ano": t, "pob": f"{pob_t:,.0f}", "qmed": f"{fr.qmed_lps:.3f}",
              "qmd": f"{fr.qmd_lps:.3f}", "qmh": f"{fr.qmh_lps:.3f}"}
             for (t, fr), (_, pob_t) in list(zip(serie_q, serie_total))[::paso]],
-        "usar_cadena": bool(tren),
-        "tanques_balance": ([{"nombre": latex_escape(bal.nombre),
-                              "horas": f"{bal.horas_entrada:.0f}",
-                              "q_entrada": f"{bal.q_entrada_lps:.2f}",
-                              "horas_salida": (f"{bal.horas_salida:.0f}"
-                                              if bal.horas_salida is not None else "—"),
-                              "q_salida": (f"{bal.q_salida_lps:.2f}"
-                                          + (" (pico QMH)" if bal.horas_salida is None else "")
-                                          if bal.q_salida_lps is not None
-                                          else "red (variable)"),
-                              "frac": f"{bal.frac_regulacion:.4f}",
-                              "v": bal.v_total_redondeado} for bal in tren]
-                            if tren else []),
-        "v_art81": "—" if tren else (a.v_total_redondeado if a else "—"),
-        "v_curva": "—" if tren else (b.v_total_redondeado if b else "—"),
+        "tanques_balance": tanques_balance,
+        "v_art81": a.v_total_redondeado,
+        "v_curva": b.v_total_redondeado if b else "—",
+        "v_gobierna": gobierna,
+        "v_asignado_total": f"{v_asignado_total:.0f}",
         "v_final": v_final,
         "tanques": tanques_ctx,
         "sistemas": sistemas_ctx,

@@ -52,16 +52,25 @@ class TankSpec:
     volumen: float = 0.0
     altura: float = 2.5
     ratio: float = 1.5          # largo/ancho (solo rectangular)
-    entrada_ini: int = 5        # ventana de entrada (bombeo/gravedad que lo alimenta)
+    entrada_ini: int = 5        # ventana de entrada/suministro (bombeo/gravedad que lo alimenta)
     entrada_fin: int = 14       # inclusive; si fin < ini, la ventana cruza medianoche
     cantidad: int = 1           # número de unidades constructivas de este tanque
     tipo_constructivo: str = "superficial"  # superficial|enterrado|semienterrado|elevado
+    salida_ini: int = 6         # ventana de salida (consumo/bombeo hacia adelante)
+    salida_fin: int = 22        # inclusive; si fin < ini, la ventana cruza medianoche
 
     def entrada_flags(self) -> list[int]:
         if self.entrada_fin >= self.entrada_ini:
             return [1 if self.entrada_ini <= h <= self.entrada_fin else 0
                     for h in range(24)]
         return [1 if (h >= self.entrada_ini or h <= self.entrada_fin) else 0
+                for h in range(24)]
+
+    def salida_flags(self) -> list[int]:
+        if self.salida_fin >= self.salida_ini:
+            return [1 if self.salida_ini <= h <= self.salida_fin else 0
+                    for h in range(24)]
+        return [1 if (h >= self.salida_ini or h <= self.salida_fin) else 0
                 for h in range(24)]
 
 

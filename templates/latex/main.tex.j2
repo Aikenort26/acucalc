@@ -131,28 +131,39 @@ Componente & $Q$ diseño [L/s] \\ \midrule
 \bottomrule\end{tabular}\end{table}
 
 \section{Volumen de almacenamiento}
-\BLOCK{if usar_cadena}
-El sistema opera como un tren de tanques en serie: el agua captada pasa por la
-PTAP (sin almacenamiento) y recorre los tanques hasta la red. Cada tanque se
-verifica con su propia curva integral: su entrada es el bombeo (o gravedad) que
-lo alimenta, a caudal constante durante su ventana horaria, y su salida es la
-entrada del tanque siguiente o, en el último, el patrón horario de consumo de
-la población. El volumen asignado a cada tanque resulta de su propia fracción
-de regulación.
+El volumen total requerido se toma como el máximo entre dos criterios normativos,
+ambos incluyendo la afectación por incendio (NSR-10 Título J) y los días de
+reserva: el criterio del Art. 81 (Res. 0330), que fija la regulación como una
+fracción del QMD (QMD/3), y la curva integral de la comunidad, que compara la
+ventana horaria de suministro contra el patrón horario de consumo.
 \begin{table}[H]\centering
-\caption{Regulación por tanque (curva integral de cada balance).}
-\begin{tabular}{lrrrr}\toprule
-Tanque & Entrada [h/día] & $Q$ entrada [L/s] & Fracción reg. & $V$ asignado [m³] \\ \midrule
-\BLOCK{for tb in tanques_balance}
-\VAR{tb.nombre} & \VAR{tb.horas} & \VAR{tb.q_entrada} & \VAR{tb.frac} & \VAR{tb.v} \\
-\BLOCK{endfor}
+\caption{Volumen total por norma (gobierna el máximo).}
+\begin{tabular}{lr}\toprule
+Criterio & $V$ [m³] \\ \midrule
+Art. 81 (QMD/3) & \VAR{v_art81} \\
+Curva integral & \VAR{v_curva} \\
+\midrule
+Gobernante (\VAR{v_gobierna}) & \VAR{v_final} \\
 \bottomrule\end{tabular}\end{table}
-\BLOCK{else}
-Método del Art. 81 (Res. 0330): \VAR{v_art81} m\textsuperscript{3}.
-Método de la curva integral: \VAR{v_curva} m\textsuperscript{3}.
-\BLOCK{endif}
 Volumen total adoptado (incluye incendio NSR-10 Título J):
 \textbf{\VAR{v_final} m\textsuperscript{3}}.
+
+\BLOCK{if tanques_balance}
+Los tanques y sus volúmenes los define el proyectista; la app verifica. Cada
+tanque se comprueba con su balance interno: su ventana de suministro (entrada)
+frente a su ventana de salida (consumo o bombeo hacia adelante) fijan la
+fracción de regulación que exige, y se contrasta contra el volumen asignado.
+Suma de volúmenes asignados: \textbf{\VAR{v_asignado_total} m\textsuperscript{3}}
+frente a \VAR{v_final} m\textsuperscript{3} requeridos por norma.
+\begin{table}[H]\centering
+\caption{Verificación del balance interno por tanque.}
+\begin{tabular}{lrrrrrc}\toprule
+Tanque & Sum. [h/d] & Sal. [h/d] & Fracción & $V$ asignado [m³] & $V$ req. balance [m³] & Cumple \\ \midrule
+\BLOCK{for tb in tanques_balance}
+\VAR{tb.nombre} & \VAR{tb.horas_suministro} & \VAR{tb.horas_salida} & \VAR{tb.frac} & \VAR{tb.v_asignado} & \VAR{tb.v_req} & \VAR{tb.cumple} \\
+\BLOCK{endfor}
+\bottomrule\end{tabular}\end{table}
+\BLOCK{endif}
 
 \BLOCK{if "balance" in figuras}
 \begin{figure}[H]\centering

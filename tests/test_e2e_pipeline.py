@@ -23,10 +23,12 @@ def _proyecto_salado() -> pj.Project:
         dpto="Bolívar", mpio="El Carmen de Bolívar", area="Cabecera Municipal")
     p.demanda = pj.DemandConfig(modo="usos", dneta=80.0, perdidas=0.10, k1=1.3, k2=1.6)
     p.almacenamiento.factores_hora = FACTORES
+    p.almacenamiento.suministro_hora = BOMBEO
     p.almacenamiento.ventana_captacion = [1] * 24
     p.almacenamiento.tanques = [
-        pj.TankSpec("Tanque elevado", "elevado", "circular", 0, 2.5, 1.0,
-                   entrada_ini=5, entrada_fin=14, tipo_constructivo="elevado"),
+        pj.TankSpec("Tanque elevado", "elevado", "circular", 110, 2.5, 1.0,
+                   entrada_ini=5, entrada_fin=14, tipo_constructivo="elevado",
+                   salida_ini=6, salida_fin=22),
     ]
     sistema = pj.PumpSystemData(nombre="Pozo→T.Elevado", horas=10, he=69.8,
                                 eficiencia=0.73413, tipo_bomba="sumergible")
@@ -64,7 +66,9 @@ def test_pipeline_completo(tmp_path):
     # contexto del reporte: mismo pipeline que usa la página 7 y los scripts demo
     ctx, figuras = report_ctx.build(p)
     assert abs(float(ctx["qmd"]) - 2.14234) < 1e-3
-    assert ctx["tanques_balance"] and ctx["tanques_balance"][0]["v"] == 110  # golden
+    # flujo norma-first: v_final = max(art81 QMD/3, curva integral) = 110 (golden)
+    assert ctx["v_final"] == 110 and ctx["v_curva"] == 110 and ctx["v_gobierna"] == "Curva integral"
+    assert ctx["tanques_balance"] and ctx["tanques_balance"][0]["v_asignado"] == "110"
     assert len(figuras) == 6   # poblacion, metodos, caudales, balance, esquema, sistema_1
 
     out = report.render(ctx, tmp_path / "memoria")

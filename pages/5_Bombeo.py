@@ -50,13 +50,12 @@ with st.popover("✏ Renombrar sistema"):
             st.session_state["sel_sys_next"] = nuevo_nombre
             st.rerun()
 
-# ---------- sincronizar horas con la entrada de un tanque del tren ----------
-tanques_tren = [t for t in p.almacenamiento.tanques
-                if p.almacenamiento.usar_cadena]
+# ---------- sincronizar horas con la ventana de suministro de un tanque ----------
+tanques_tren = list(p.almacenamiento.tanques)
 if tanques_tren:
     opciones_tk = ["—"] + [f"{t.nombre} ({sum(t.entrada_flags())} h)"
                            for t in tanques_tren]
-    sel_tk = st.selectbox("Sincronizar horas de bombeo con la entrada del tanque…",
+    sel_tk = st.selectbox("Sincronizar horas de bombeo con la ventana de suministro del tanque…",
                           opciones_tk, key=f"w_sel_synctk_{K}")
     if sel_tk != "—":
         horas_tk = float(sum(tanques_tren[opciones_tk.index(sel_tk) - 1]

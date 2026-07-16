@@ -19,15 +19,13 @@ CTX = {
     "caudales_anuales": [
         {"ano": 2026, "pob": "1,400", "qmed": "1.440", "qmd": "1.872", "qmh": "2.996"},
         {"ano": 2051, "pob": "1,602", "qmed": "1.648", "qmd": "2.142", "qmh": "3.428"}],
-    "usar_cadena": True,
     "tanques_balance": [
-        {"nombre": "T. bajo", "horas": "24", "q_entrada": "21.49",
-         "horas_salida": "10", "q_salida": "51.57",
-         "frac": "0.0417", "v": 30},
-        {"nombre": "T. elevado", "horas": "10", "q_entrada": "51.57",
-         "horas_salida": "—", "q_salida": "51.57 (pico QMH)",
-         "frac": "0.5167", "v": 110}],
-    "v_art81": "—", "v_curva": "—", "v_final": 140,
+        {"nombre": "T. bajo", "horas_suministro": "24", "horas_salida": "10",
+         "frac": "0.0417", "v_asignado": "30", "v_req": "8.9", "cumple": "Sí"},
+        {"nombre": "T. elevado", "horas_suministro": "10", "horas_salida": "24",
+         "frac": "0.5167", "v_asignado": "110", "v_req": "110.0", "cumple": "Sí"}],
+    "v_art81": 75, "v_curva": 110, "v_gobierna": "Curva integral",
+    "v_asignado_total": "140", "v_final": 140,
     "tanques": [{"nombre": "T. bajo", "tipo": "bajo", "tipo_constructivo": "semienterrado",
                  "forma": "rectangular", "cantidad": 1,
                  "dim": "3.00 × 4.50 m", "volumen": "30", "volumen_real": "31.2",
@@ -66,8 +64,9 @@ def test_render_tex(tmp_path):
     assert "Bomba A" in tex
     assert "proyecciones oficiales DANE" in tex             # fuente censal
     assert "Captación→T.Bajo" in tex                        # sistema de bombeo
-    assert "tren de tanques" in tex.lower()                 # cadena de tanques
-    assert "51.57" in tex                                   # Q de entrada por tanque
+    assert "Volumen total por norma" in tex                 # flujo norma-first
+    assert "balance interno" in tex                         # verificación por tanque
+    assert "Curva integral" in tex                          # criterio gobernante
     assert "flotante" in tex.lower()                        # población flotante
     assert "includegraphics" not in tex                     # sin figuras si figuras={}
     assert "proyectista" in tex.lower()                     # aviso de revisión profesional

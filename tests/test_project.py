@@ -48,6 +48,28 @@ def test_roundtrip_json_v2(tmp_path):
     assert raw["schema_version"] == 2
 
 
+def test_tankspec_salida_roundtrip(tmp_path):
+    """La ventana de salida (salida_ini/fin) persiste en el JSON y los flags
+    respetan el wrap-around de medianoche."""
+    p = _proyecto()
+    p.almacenamiento.tanques = [pj.TankSpec("T1", "elevado", "circular", 60, 2.5,
+                                            salida_ini=20, salida_fin=4)]
+    f = tmp_path / "salida.acucalc.json"
+    pj.save(p, f)
+    t = pj.load(f).almacenamiento.tanques[0]
+    assert t.salida_ini == 20 and t.salida_fin == 4
+    # ventana que cruza medianoche: horas 20-23 y 0-4 activas
+    flags = t.salida_flags()
+    assert flags[20] == 1 and flags[23] == 1 and flags[4] == 1 and flags[10] == 0
+
+
+def test_tankspec_salida_default_backward_compat(tmp_path):
+    """Un TankSpec sin salida_ini/fin (JSON viejo) toma los defaults."""
+    t = pj.TankSpec("T", "elevado", "circular", 60, 2.5)
+    assert t.salida_ini == 6 and t.salida_fin == 22
+    assert t.salida_flags()[6] == 1 and t.salida_flags()[22] == 1 and t.salida_flags()[0] == 0
+
+
 def test_migracion_v1(tmp_path):
     v1 = {
         "schema_version": 1,

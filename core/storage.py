@@ -64,6 +64,35 @@ def volume_curva_integral(qmd_m3d: float, factores_hora: list[float],
 
 
 @dataclass(frozen=True)
+class TankBalanceCheck:
+    nombre: str
+    v_asignado: float
+    v_balance_req: float       # volumen de regulación requerido por el balance interno
+    frac_balance: float
+    horas_suministro: float
+    horas_salida: float
+    cumple: bool               # v_asignado >= v_balance_req
+
+
+def tank_balance_check(nombre: str, qmd_m3d: float, ventana_suministro: list[float],
+                       ventana_salida: list[float], v_asignado: float,
+                       frac_incendio: float = 0.15, dias_reserva: float = 1) -> TankBalanceCheck:
+    """Verifica el balance interno de UN tanque: dado su patrón horario de
+    suministro (entrada) y de salida (consumo/bombeo hacia adelante), el volumen
+    de regulación que exige (curva integral) vs el volumen que el usuario le
+    asignó. No dimensiona ni reparte — solo verifica."""
+    frac, _ = balance_curve(_normalize(ventana_suministro, f"suministro de '{nombre}'"),
+                            _normalize(ventana_salida, f"salida de '{nombre}'"))
+    vreg = frac * qmd_m3d
+    vinc = vreg * frac_incendio
+    v_req = (vreg + vinc) * dias_reserva
+    horas_s = float(sum(1 for w in ventana_suministro if w))
+    horas_o = float(sum(1 for w in ventana_salida if w))
+    return TankBalanceCheck(nombre, v_asignado, v_req, frac, horas_s, horas_o,
+                            v_asignado + 1e-9 >= v_req)
+
+
+@dataclass(frozen=True)
 class TankBalance:
     nombre: str
     frac_regulacion: float
