@@ -23,12 +23,14 @@ st.caption(f"El reporte se genera recalculando todo desde el proyecto: població
            f"{ctx['v_final']} m³ · {len(ctx['sistemas'])} sistema(s) de bombeo · "
            f"{len(figuras)} figuras.")
 
-hay_latex = bool(shutil.which("latexmk") or shutil.which("pdflatex"))
+hay_latex = bool(shutil.which("tectonic") or shutil.which("pdflatex")
+                 or shutil.which("latexmk"))
 if not hay_latex:
-    st.warning("No se detectó LaTeX (latexmk/pdflatex) en el PATH. Instala "
-               "[MiKTeX](https://miktex.org/download) para compilar el PDF "
-               "directamente desde la app; mientras tanto se entrega el proyecto "
-               ".zip para compilar en Overleaf.")
+    st.warning("No se detectó ningún motor LaTeX (tectonic/pdflatex/latexmk) en el "
+               "PATH. Instala [Tectonic](https://tectonic-typesetting.github.io/) "
+               "(recomendado, autocontenido) o [MiKTeX](https://miktex.org/download) "
+               "para compilar el PDF directamente desde la app; mientras tanto se "
+               "entrega el proyecto .zip para compilar en Overleaf.")
 
 OUT_DIR = Path(__file__).resolve().parent.parent / "output"
 slug = p.nombre.replace(" ", "_")

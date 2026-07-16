@@ -27,33 +27,56 @@ def render(ctx: dict, out_dir: str | Path) -> Path:
     return out
 
 
-def compile_pdf(project_dir: Path) -> tuple[Path | None, str]:
-    """Compila con latexmk o pdflatex (2 pasadas) si están en PATH.
+def _engine_cmd(exe_name: str, exe: str) -> tuple[list[str], int]:
+    """Comando y nº de pasadas para cada motor LaTeX soportado."""
+    if exe_name == "tectonic":
+        # autocontenido: descarga/cachea paquetes solo, sin Perl ni prompts.
+        return [exe, "--outdir", ".", "main.tex"], 1
+    if exe_name == "latexmk":
+        return [exe, "-pdf", "-interaction=nonstopmode", "main.tex"], 1
+    # pdflatex directo (2 pasadas para refs); MiKTeX auto-instala paquetes.
+    return [exe, "-interaction=nonstopmode", "--enable-installer", "main.tex"], 2
 
-    Devuelve (ruta del PDF o None, cola del log LaTeX para diagnóstico).
-    En MiKTeX se habilita la autoinstalación de paquetes faltantes."""
-    exe = shutil.which("latexmk")
-    if exe:
-        cmd = [exe, "-pdf", "-interaction=nonstopmode", "main.tex"]
-        runs = 1
+
+def compile_pdf(project_dir: Path) -> tuple[Path | None, str]:
+    """Compila el proyecto LaTeX con el primer motor disponible en el PATH.
+
+    Orden de preferencia: tectonic (autocontenido, más confiable) → pdflatex
+    (evita la dependencia de Perl de latexmk) → latexmk. Devuelve (ruta del PDF
+    o None, cola del log para diagnóstico).
+
+    Captura SIEMPRE stdout **y stderr** (antes solo stdout, por eso un fallo de
+    latexmk sin Perl se veía como '(sin log)'), y ante cualquier excepción del
+    subprocess devuelve el mensaje real — nunca un log vacío silencioso."""
+    for exe_name in ("tectonic", "pdflatex", "latexmk"):
+        exe = shutil.which(exe_name)
+        if exe:
+            break
     else:
-        exe = shutil.which("pdflatex")
-        if not exe:
-            return None, "No se encontró latexmk ni pdflatex en el PATH."
-        cmd = [exe, "-interaction=nonstopmode", "--enable-installer", "main.tex"]
-        runs = 2
-    salida = ""
+        return None, "No se encontró ningún motor LaTeX (tectonic/pdflatex/latexmk) en el PATH."
+
+    cmd, runs = _engine_cmd(exe_name, exe)
+    salida = f"[motor: {exe_name} — {exe}]\n"
     for _ in range(runs):
         try:
             res = subprocess.run(cmd, cwd=project_dir, capture_output=True,
                                  timeout=600)
-            salida = (res.stdout or b"").decode("utf-8", errors="replace")
         except subprocess.TimeoutExpired:
-            return None, "La compilación superó los 10 minutos (timeout)."
+            return None, salida + "La compilación superó los 10 minutos (timeout)."
+        except Exception as e:  # FileNotFoundError, PermissionError, etc.
+            return None, salida + f"No se pudo ejecutar {exe_name}: {type(e).__name__}: {e}"
+        out = (res.stdout or b"").decode("utf-8", errors="replace")
+        err = (res.stderr or b"").decode("utf-8", errors="replace")
+        salida = (f"[motor: {exe_name} — {exe} — código de salida {res.returncode}]\n"
+                  + out + ("\n--- STDERR ---\n" + err if err.strip() else ""))
+
     log_file = project_dir / "main.log"
     if log_file.exists():
-        salida = log_file.read_text(encoding="utf-8", errors="replace")
-    log_tail = salida[-3000:] if salida else ""
+        # main.log tiene el diagnóstico detallado de LaTeX; lo priorizamos pero
+        # conservamos el stderr del motor (donde latexmk reporta 'Perl not found').
+        log_txt = log_file.read_text(encoding="utf-8", errors="replace")
+        salida = salida + "\n--- main.log ---\n" + log_txt
+    log_tail = salida[-4000:] if salida.strip() else ""
     pdf = project_dir / "main.pdf"
     return (pdf if pdf.exists() else None), log_tail
 

@@ -97,10 +97,15 @@ def test_render_crea_zip(tmp_path):
     assert z.exists() and z.suffix == ".zip"
 
 
+def _hay_motor_latex():
+    return bool(shutil.which("tectonic") or shutil.which("pdflatex")
+                or shutil.which("latexmk"))
+
+
 def test_compilacion_detecta_latex(tmp_path):
     out = report.render(CTX, tmp_path)
     pdf, log = report.compile_pdf(out)
-    if shutil.which("pdflatex") or shutil.which("latexmk"):
+    if _hay_motor_latex():
         assert pdf is not None and pdf.exists()
         assert log                                     # log siempre disponible
     else:
@@ -108,11 +113,36 @@ def test_compilacion_detecta_latex(tmp_path):
 
 
 def test_compilacion_fallida_da_log(tmp_path):
-    import shutil as sh
-    if not (sh.which("pdflatex") or sh.which("latexmk")):
+    if not _hay_motor_latex():
         return
     (tmp_path / "main.tex").write_text(r"\documentclass{article}\begin{document}"
                                        r"\errmessage{fallo}\end{document}",
                                        encoding="utf-8")
     pdf, log = report.compile_pdf(tmp_path)
-    assert log        # hay diagnóstico aunque falle o no genere PDF
+    assert log                       # hay diagnóstico aunque falle o no genere PDF
+    assert "[motor:" in log          # el log identifica el motor usado (no '(sin log)')
+
+
+def test_compilacion_sin_motor_da_mensaje(tmp_path, monkeypatch):
+    """Sin ningún motor en el PATH el log explica qué falta (no queda vacío)."""
+    monkeypatch.setattr(report.shutil, "which", lambda _name: None)
+    pdf, log = report.compile_pdf(tmp_path)
+    assert pdf is None
+    assert "PATH" in log and "tectonic" in log
+
+
+def test_compilacion_captura_stderr(tmp_path, monkeypatch):
+    """Un motor que falla escribiendo SOLO a stderr (y sin crear main.log) debe
+    reflejarse en el log — regresión del bug '(sin log)' que ignoraba stderr."""
+    monkeypatch.setattr(report.shutil, "which",
+                        lambda name: "/fake/latexmk" if name == "latexmk" else None)
+
+    class _Res:
+        returncode = 1
+        stdout = b""
+        stderr = b"Can't locate Perl module ... latexmk aborting"
+
+    monkeypatch.setattr(report.subprocess, "run", lambda *a, **k: _Res())
+    pdf, log = report.compile_pdf(tmp_path)
+    assert pdf is None
+    assert "Perl" in log and "STDERR" in log
