@@ -228,6 +228,17 @@ Tramo & $L$ [m] & $D$ [mm] & Material & $V$ [m/s] & $h_f$ [m] & $h_l$ [m] \\ \mi
 Altura dinámica total: $H_d=\VAR{s.hd}$ m. Con eficiencia $\eta=\VAR{s.eficiencia}$,
 la potencia requerida es \textbf{\VAR{s.potencia_kw} kW (\VAR{s.potencia_hp} HP)}.
 
+\BLOCK{if s.ariete}
+\begin{table}[H]\centering
+\caption{Golpe de ariete (Joukowsky) y factor de seguridad --- \VAR{s.nombre}. FS $=PN/(H_d+\Delta H)$, cumple si $\geq 1$; el uso se calcula con la $H_d$ del sistema completo (conservador).}
+\begin{tabular}{lrrrrrrl}\toprule
+Tramo & $C$ [m/s] & $\Delta H$ [mca] & $H_d+\Delta H$ & $PN$ [mca] & FS & Uso [\%] & Cumple \\ \midrule
+\BLOCK{for a in s.ariete}
+\VAR{a.nombre} & \VAR{a.c} & \VAR{a.dh} & \VAR{a.h_total} & \VAR{a.pn} & \VAR{a.fs} & \VAR{a.uso} & \BLOCK{if a.cumple == "No"}\textbf{\VAR{a.cumple}}\BLOCK{else}\VAR{a.cumple}\BLOCK{endif} \\
+\BLOCK{endfor}
+\bottomrule\end{tabular}\end{table}
+\BLOCK{endif}
+
 \BLOCK{if s.bombas}
 \begin{table}[H]\centering
 \caption{Bombas evaluadas para \VAR{s.nombre} (punto de operación contra la curva del sistema).}

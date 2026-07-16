@@ -7,9 +7,14 @@ import base64
 import tempfile
 from pathlib import Path
 
-from core import curves as cvs, demand, network, population as pop, pumping as pu
+from core import curves as cvs, demand, network, pipes, population as pop, pumping as pu
 from core import formato as fm, report_figs as rf, storage
 from core.project import Project
+
+# k_elast por material de rugosidad para tramos manuales (los del catálogo traen
+# su k_elast en el PipeSpec). Mismo mapa que usa la página 5 de la app.
+K_ELAST_MANUAL = {"PVC": 18.0, "PEAD": 111.11, "HD": 1.0, "Acero comercial": 0.5,
+                  "GRP": 8.3, "Concreto": 5.0, "Hierro galvanizado": 1.0}
 
 REFERENCIAS = [
     {"cita": "Ministerio de Vivienda, Ciudad y Territorio. Resolución 0330 de 2017, "
@@ -169,6 +174,28 @@ def build(p: Project) -> tuple[dict, dict]:
                         for a2 in s.accesorios],
             he=he, temperatura=p.temperatura, eficiencia=s.eficiencia)
         r = pu.solve(sistema, qb_lps / 1000)
+        # ---------- golpe de ariete: FS por tramo (WP-2c) ----------
+        # Usa Hd del sistema completo (criterio conservador, igual que la app).
+        ariete_tab = []
+        for t, tr in zip(s.tramos, r.tramos):
+            if not t.e_mm:
+                continue
+            if t.cat_material:
+                spec = pipes.pipe(t.cat_material, t.cat_serie, t.cat_dn)
+                k_el, pn_t = spec.k_elast, spec.pn_mca
+            else:
+                k_el = K_ELAST_MANUAL.get(t.material, 18.0)
+                pn_t = 0.0     # tramo manual: sin PN en el reporte (se evalúa en la app)
+            ar = pu.ariete_tramo(t.nombre, t.D_mm / 1000, t.e_mm / 1000, k_el,
+                                 tr.V, r.hd, pn_t)
+            ariete_tab.append({
+                "nombre": latex_escape(t.nombre), "c": fm.fmt_v(ar.c),
+                "dh": fm.fmt_h(ar.dh), "h_total": fm.fmt_h(ar.h_total),
+                "pn": f"{ar.pn:.0f}" if ar.pn else "—",
+                "fs": fm.fmt_num(ar.fs, 2), "uso": fm.fmt_num(ar.uso_pct, 1),
+                "margen": fm.fmt_num(ar.margen_pct, 1),
+                "cumple": ("Sí" if ar.cumple else
+                           ("No" if ar.cumple is False else "—"))})
         q_max_lps = max(qb_lps * 1.5, max((bb.puntos_qh[-1][0] for bb in s.bombas
                                            if len(bb.puntos_qh) >= 3), default=0.0))
         sys_lps = [(q * 1000, h) for q, h in
@@ -222,6 +249,7 @@ def build(p: Project) -> tuple[dict, dict]:
                         "hl": fm.fmt_perdida(t.hl)}
                        for t in r.tramos],
             "bombas": bombas_tab,
+            "ariete": ariete_tab,
             "bomba_seleccionada": latex_escape(s.bomba_seleccionada or "—"),
             "fig": f"{fig_name}.png"})
 

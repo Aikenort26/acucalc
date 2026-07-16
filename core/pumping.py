@@ -119,6 +119,53 @@ def sobrepresion_ariete(c: float, V: float) -> float:
     return c * V / hy.G
 
 
+@dataclass(frozen=True)
+class ArieteResult:
+    """Verificación de golpe de ariete de un tramo frente a su presión nominal.
+
+    El usuario pidió un "factor de seguridad frente a la rotura", pero describió
+    la razón como (hd+ΔH)/PN — que es un *porcentaje de uso*, no un factor de
+    seguridad (un FS convencional es el inverso: PN/solicitación, ≥1 = cumple).
+    Para que no haya ambigüedad se entregan AMBOS, etiquetados sin lugar a
+    confusión:
+
+    - `fs = PN / (hd + ΔH)` → **factor de seguridad**; cumple si ≥ 1.
+    - `uso_pct = (hd + ΔH) / PN · 100` → **% de la capacidad del material usada**.
+    - `margen_pct = (1 − (hd + ΔH)/PN) · 100` → margen hasta el PN.
+
+    Con `pn == 0` (tramo manual sin PN definido) no se puede evaluar: `fs`,
+    `uso_pct`, `margen_pct` y `cumple` quedan en `None` (nunca ZeroDivisionError)."""
+    tramo: str
+    c: float                    # celeridad de onda [m/s]
+    dh: float                   # sobrepresión de Joukowsky [m]
+    h_total: float              # hd + ΔH [mca]
+    pn: float                   # presión nominal del tramo [mca]
+    fs: float | None            # factor de seguridad PN/(hd+ΔH); cumple si ≥ 1
+    uso_pct: float | None       # % de la capacidad del material utilizada
+    margen_pct: float | None    # % de margen hasta el PN
+    cumple: bool | None
+
+
+def ariete_tramo(tramo: str, D: float, e: float, k_elast: float, V: float,
+                 hd: float, pn: float, a0: float = 9900.0) -> ArieteResult:
+    """Construye la verificación de ariete de un tramo.
+
+    `hd` es la altura dinámica que se suma a la sobrepresión (por criterio del
+    proyecto, la Hd del sistema completo — conservador para tramos
+    intermedios). `pn` en mca; `pn <= 0` → tramo sin PN (resultados en None)."""
+    c = celeridad(D, e, k_elast, a0)
+    dh = sobrepresion_ariete(c, V)
+    h_total = hd + dh
+    if pn and pn > 0 and h_total > 0:
+        fs = pn / h_total
+        uso_pct = h_total / pn * 100.0
+        margen_pct = (1.0 - h_total / pn) * 100.0
+        cumple = h_total <= pn
+    else:
+        fs = uso_pct = margen_pct = cumple = None
+    return ArieteResult(tramo, c, dh, h_total, pn, fs, uso_pct, margen_pct, cumple)
+
+
 def npsh_disponible(patm_m: float, h_succion: float, perdidas_succion: float,
                     presion_vapor_m: float) -> float:
     """NPSHd = Patm − Pv − h_succión_estática − pérdidas de succión [m]."""

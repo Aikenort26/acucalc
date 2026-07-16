@@ -277,8 +277,12 @@ sistemas = st.session_state.setdefault("sistemas", {})
 sistemas[sys_d.nombre] = {"sistema": sistema, "solve": r, "qb_lps": qb_lps}
 
 # ---------- golpe de ariete: verificación automática contra PN por tramo ----------
-with st.expander("Golpe de ariete (Joukowsky) — verificación PN por tramo",
+with st.expander("Golpe de ariete (Joukowsky) — factor de seguridad por tramo",
                  expanded=False):
+    st.caption("El factor de seguridad usa la **altura dinámica del sistema "
+               "completo** (Hd) sumada a la sobrepresión, no la presión propia "
+               "del tramo — criterio conservador (sobreestima en tramos "
+               "intermedios).")
     rows_ar, fallan = [], []
     k_elast_manual = {"PVC": 18.0, "PEAD": 111.11, "HD": 1.0,
                       "Acero comercial": 0.5, "GRP": 8.3, "Concreto": 5.0,
@@ -286,8 +290,9 @@ with st.expander("Golpe de ariete (Joukowsky) — verificación PN por tramo",
     for t, tr in zip(sys_d.tramos, r.tramos):
         if not t.e_mm:
             rows_ar.append({"Tramo": t.nombre, "e [mm]": None, "C [m/s]": None,
-                            "ΔH [mca]": None, "Hd+ΔH [mca]": None,
-                            "PN [mca]": None, "Cumple": "sin datos"})
+                            "ΔH [mca]": None, "Hd+ΔH [mca]": None, "PN [mca]": None,
+                            "FS (≥1)": None, "Uso [%]": None, "Margen [%]": None,
+                            "Cumple": "sin datos"})
             continue
         if t.cat_material:
             spec = pipes.pipe(t.cat_material, t.cat_serie, t.cat_dn)
@@ -297,22 +302,27 @@ with st.expander("Golpe de ariete (Joukowsky) — verificación PN por tramo",
             pn_t = num_input(f"PN del tramo manual '{t.nombre}' [mca]",
                              f"pn_{K}_{t.nombre}", 100.0, decimals=0,
                              min_value=0.0, max_value=600.0)
-        c = pu.celeridad(t.D_mm / 1000, t.e_mm / 1000, k_el)
-        dp = pu.sobrepresion_ariete(c, tr.V)
-        total = r.hd + dp
-        ok = total <= pn_t if pn_t else None
-        if ok is False:
-            fallan.append((t.nombre, total, pn_t))
-        rows_ar.append({"Tramo": t.nombre, "e [mm]": t.e_mm, "C [m/s]": c,
-                        "ΔH [mca]": dp, "Hd+ΔH [mca]": total,
+        ar = pu.ariete_tramo(t.nombre, t.D_mm / 1000, t.e_mm / 1000, k_el,
+                             tr.V, r.hd, pn_t)
+        if ar.cumple is False:
+            fallan.append((t.nombre, ar.h_total, ar.pn))
+        rows_ar.append({"Tramo": t.nombre, "e [mm]": t.e_mm, "C [m/s]": ar.c,
+                        "ΔH [mca]": ar.dh, "Hd+ΔH [mca]": ar.h_total,
                         "PN [mca]": pn_t or None,
-                        "Cumple": "✓" if ok else ("✗ FALLA" if ok is False else "—")})
+                        "FS (≥1)": ar.fs, "Uso [%]": ar.uso_pct,
+                        "Margen [%]": ar.margen_pct,
+                        "Cumple": "✓" if ar.cumple else
+                                  ("✗ FALLA" if ar.cumple is False else "—")})
     st.dataframe(pd.DataFrame(rows_ar).style.format(
-        {"e [mm]": "{:.1f}", "C [m/s]": "{:.1f}", "ΔH [mca]": "{:.1f}",
-         "Hd+ΔH [mca]": "{:.1f}", "PN [mca]": "{:.0f}"}, na_rep="—"),
+        {"e [mm]": SP_DIAMETRO, "C [m/s]": SP_VELOCIDAD, "ΔH [mca]": "{:.2f}",
+         "Hd+ΔH [mca]": "{:.2f}", "PN [mca]": "{:.0f}", "FS (≥1)": "{:.2f}",
+         "Uso [%]": "{:.1f}", "Margen [%]": "{:.1f}"}, na_rep="—"),
         hide_index=True, width="stretch")
+    st.caption("FS = PN / (Hd+ΔH) → factor de seguridad frente a la rotura "
+               "(cumple si ≥ 1). Uso [%] = (Hd+ΔH)/PN·100 → capacidad del "
+               "material utilizada. Margen [%] = 100 − Uso.")
     if fallan:
-        lista = "; ".join(f"'{n}' ({tot:.1f} > PN {pn:.0f} mca)"
+        lista = "; ".join(f"'{n}' ({tot:.2f} > PN {pn:.0f} mca)"
                           for n, tot, pn in fallan)
         st.error(f"Tramos que NO resisten la sobrepresión: {lista}.")
         st.warning("Opciones: subir la clase de presión (RDE menor) del tramo, o "
