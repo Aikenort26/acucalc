@@ -216,6 +216,41 @@ def migrate_pump_cal(cal: dict | None) -> dict:
     return {"qh": cal.get("qh", {}), "qe": cal.get("qe", {})}
 
 
+def migrate_pump_cal_v7(cal: dict | None) -> dict:
+    """Migra `PumpData.cal` al esquema WP-3a: eje X **único y compartido** entre
+    Q-H y Q-η (Q es la misma magnitud/escala para ambas curvas de la misma
+    bomba — solo Y necesita calibración independiente por curva, ya que H y η
+    viven en escalas no relacionadas). Esquema resultante:
+    `{"x": {"X1": {...}, "X2": {...}}, "qh": {"Y1": {...}, "Y2": {...}},
+      "qe": {"Y1": {...}, "Y2": {...}}}`.
+
+    Acepta y migra correctamente TRES formas de entrada, sin reventar ni
+    migrar dos veces:
+    - **v5 plano**: `{"X1": {...}, "X2": {...}, "Y1": {...}, "Y2": {...}}`
+      (una sola calibración compartida por Q-H y Q-η, la más vieja).
+    - **v6**: `{"qh": {"X1":..,"X2":..,"Y1":..,"Y2":..}, "qe": {mismo esquema}}`
+      (calibraciones independientes por curva, incluyendo X duplicado).
+    - **v7 (ya migrado)**: se devuelve tal cual (con defaults para las claves
+      de nivel superior que falten) — idempotente.
+
+    v6→v7: el eje X final se toma de `qh.X1`/`qh.X2` (elección arbitraria
+    pero consistente — Q-H es la curva principal, la que siempre se digitalizó
+    primero; si `qh` no tiene X calibrado se prueba con `qe`). `qh.Y1/Y2` y
+    `qe.Y1/Y2` se conservan tal cual."""
+    if not cal:
+        return {"x": {}, "qh": {}, "qe": {}}
+    if "x" in cal:      # ya es v7 (marca de nivel superior única de este esquema)
+        return {"x": dict(cal.get("x", {})), "qh": dict(cal.get("qh", {})),
+                "qe": dict(cal.get("qe", {}))}
+    v6 = migrate_pump_cal(cal)
+    qh, qe = dict(v6.get("qh", {})), dict(v6.get("qe", {}))
+    fuente_x = qh if ("X1" in qh or "X2" in qh) else qe
+    x = {k: fuente_x[k] for k in ("X1", "X2") if k in fuente_x}
+    qh_y = {k: v for k, v in qh.items() if k not in ("X1", "X2")}
+    qe_y = {k: v for k, v in qe.items() if k not in ("X1", "X2")}
+    return {"x": x, "qh": qh_y, "qe": qe_y}
+
+
 def _pump_system_from_dict(s: dict) -> PumpSystemData:
     from dataclasses import fields as _fields
     validos = {f.name for f in _fields(PumpSystemData)} - {"tramos", "accesorios", "bombas"}
@@ -227,7 +262,7 @@ def _pump_system_from_dict(s: dict) -> PumpSystemData:
         pump = PumpData(**b)
         pump.puntos_qh = [tuple(x) for x in pump.puntos_qh]
         pump.puntos_qe = [tuple(x) for x in pump.puntos_qe]
-        pump.cal = migrate_pump_cal(pump.cal)
+        pump.cal = migrate_pump_cal_v7(pump.cal)
         sys.bombas.append(pump)
     return sys
 
