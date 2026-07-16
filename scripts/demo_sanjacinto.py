@@ -66,7 +66,6 @@ alm.factores_hora = [0.6, 0.7, 0.8, 0.9, 1, 1.2, 1.6, 1.2, 1, 1.1, 1.1, 1.2,
                      1.1, 1.1, 1, 1.1, 1.2, 1.1, 0.9, 0.9, 0.9, 0.8, 0.8, 0.7]
 alm.ventana_captacion = [1 if 5 <= h <= 14 else 0 for h in range(24)]
 alm.suministro_hora = [1 if 6 <= h <= 15 else 0 for h in range(24)]
-alm.usar_cadena = True
 
 # bomba candidata: KSB WKL 125, rodete Ø320, 1750 rpm (digitalizada del catálogo)
 WKL = pj.PumpData(
@@ -101,11 +100,19 @@ s2.bombas = [pj.PumpData(nombre=WKL.nombre, fabricante="KSB", modelo="WKL 125",
 s2.bomba_seleccionada = WKL.nombre
 p.bombeos = [s1, s2]
 
-# tren de tanques: semienterrado (entrada = pozo 5-14) + elevado (bombeo 6-15);
-# los volúmenes los asigna automáticamente el balance de cada tanque
+# Tanques: semienterrado (suministro = pozo 5-14, salida = bombeo intermedio
+# 6-15) + elevado (suministro = bombeo 6-15, salida = consumo continuo de la
+# red). Volumen asignado = el requerido por el balance interno de cada tanque
+# (calculado con core.storage.tank_balance_check, redondeado a 5 m³ como el
+# resto de la app) — con la metodología v6 (norma->geometría->balance) el
+# usuario asigna el volumen; aquí se preasigna el mínimo que cumple balance.
 alm.tanques = [
-    pj.TankSpec("Tanque semienterrado", "bajo", "rectangular", 0, 2.5, 1.5, 5, 14),
-    pj.TankSpec("Tanque elevado", "elevado", "circular", 0, 2.5, 1.0, 6, 15),
+    pj.TankSpec("Tanque semienterrado", "bajo", "rectangular", 430, 2.5, 1.5,
+               entrada_ini=5, entrada_fin=14, salida_ini=6, salida_fin=15,
+               tipo_constructivo="semienterrado"),
+    pj.TankSpec("Tanque elevado", "elevado", "circular", 2495, 2.5, 1.0,
+               entrada_ini=6, entrada_fin=15, salida_ini=0, salida_fin=23,
+               tipo_constructivo="elevado"),
 ]
 
 ctx, figuras = report_ctx.build(p)
@@ -130,9 +137,11 @@ print(f"Población base {cfg.year0}: {cfg.p0:,.0f} hab · método: {cfg.metodo}"
 print(f"Población diseño {cfg.horizon_year}: {ctx['pob_final']} hab")
 print(f"Qmed=QMD=QMH: {ctx['qmd']} L/s (dotación 110, sin pérdidas, K=1)")
 for tb in ctx["tanques_balance"]:
-    print(f"Tanque '{tb['nombre']}': entrada {tb['horas']} h · Q {tb['q_entrada']} L/s "
-          f"· frac {tb['frac']} · V {tb['v']} m³")
-print(f"Volumen total: {ctx['v_final']} m³")
+    print(f"Tanque '{tb['nombre']}': suministro {tb['horas_suministro']} h · "
+          f"salida {tb['horas_salida']} h · frac {tb['frac']} · "
+          f"asignado {tb['v_asignado']} m³ · requerido {tb['v_req']} m³ · "
+          f"cumple {tb['cumple']}")
+print(f"Volumen total por norma ({ctx['v_gobierna']}): {ctx['v_final']} m³")
 for s in ctx["sistemas"]:
     print(f"Sistema '{s['nombre']}': Qb={s['qb']} L/s · Hd={s['hd']} m · "
           f"{s['potencia_hp']} HP · bombas: "
