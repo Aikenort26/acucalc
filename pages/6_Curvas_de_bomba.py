@@ -6,6 +6,7 @@ import streamlit as st
 from PIL import Image, ImageDraw
 from streamlit_image_coordinates import streamlit_image_coordinates
 from core import curves as cv, pumping as pu
+from core import project as pj
 from core.project import PumpData
 from pages_common import page_setup, num_input, int_input
 
@@ -144,24 +145,58 @@ def _puntos_transformados(b: PumpData) -> tuple[list, list]:
                                    b.n2_objetivo, b.n_unidades, b.arreglo)
 
 
+# ---------- WP-B2: calibración de ejes independiente Q-H / Q-η ----------
+# H y η se grafican en ejes Y distintos con escalas no relacionadas (ver
+# captura del usuario) — una sola calibración compartida (esquema viejo) era
+# incorrecta para η. La cadena de etapas ahora encadena las 4 calibraciones
+# de Q-H, luego captura de puntos Q-H, y (solo con Enter explícito, no
+# automático) pasa a calibrar Q-η y capturar sus puntos.
+ETAPAS_QH = ["Calibrar X1 (Q-H)", "Calibrar X2 (Q-H)", "Calibrar Y1 (Q-H)",
+            "Calibrar Y2 (Q-H)", "Punto Q-H"]
+ETAPAS_QE = ["Calibrar X1 (Q-η)", "Calibrar X2 (Q-η)", "Calibrar Y1 (Q-η)",
+            "Calibrar Y2 (Q-η)", "Punto Q-η"]
+ETAPAS = ETAPAS_QH + ETAPAS_QE
+_NEXT_CAL = {  # (curva, eje fijado) -> siguiente etapa, misma curva
+    ("qh", "X1"): "Calibrar X2 (Q-H)", ("qh", "X2"): "Calibrar Y1 (Q-H)",
+    ("qh", "Y1"): "Calibrar Y2 (Q-H)", ("qh", "Y2"): "Punto Q-H",
+    ("qe", "X1"): "Calibrar X2 (Q-η)", ("qe", "X2"): "Calibrar Y1 (Q-η)",
+    ("qe", "Y1"): "Calibrar Y2 (Q-η)", ("qe", "Y2"): "Punto Q-η",
+}
+# avance explícito por Enter: termina de capturar puntos de una curva y pasa
+# a calibrar la otra. En "Punto Q-η" (última etapa) Enter no hace nada.
+_ENTER_ADVANCE = {"Punto Q-H": "Calibrar X1 (Q-η)"}
+
+
+def _curva_activa(modo: str) -> str:
+    return "qh" if "Q-H" in modo else "qe"
+
+
+def _estado_cal(c: dict) -> str:
+    return (" · ".join(f"{e}={c[e]['val']}" for e in ("X1", "X2", "Y1", "Y2") if e in c)
+           or "sin calibrar")
+
+
 if img is not None:
     st.subheader("Calibración y captura de puntos")
     st.caption("1) Elige el modo · 2) haz click en la imagen · 3) afina el punto en el "
                "panel de zoom (±1 px) · 4) confirma. Los puntos confirmados quedan "
-               "marcados sobre la imagen.")
-    if f"modo_next_{BK}" in st.session_state:      # auto-avance tras confirmar
+               "marcados sobre la imagen. Q-H y Q-η tienen calibración de ejes "
+               "independiente (escalas distintas). Enter físico avanza de Q-H a Q-η "
+               "en modo 'lupa en tiempo real'; en modo clásico usa el botón ⏎ equivalente.")
+    if f"modo_next_{BK}" in st.session_state:      # auto-avance tras confirmar / Enter
         st.session_state[f"w_radio_modo_{BK}"] = st.session_state.pop(f"modo_next_{BK}")
-    modo = st.radio("Modo de click (avanza solo al confirmar)",
-                    ["Calibrar X1", "Calibrar X2", "Calibrar Y1",
-                     "Calibrar Y2", "Punto Q-H", "Punto Q-E"],
+    modo = st.radio("Modo de click (avanza solo al confirmar)", ETAPAS,
                     horizontal=True, key=f"w_radio_modo_{BK}")
+    curva = _curva_activa(modo)
     o1, o2, o3 = st.columns(3)
     log_x = o1.checkbox("Eje X logarítmico", value=False, key=f"w_chk_lx_{BK}")
     log_y = o2.checkbox("Eje Y logarítmico", value=False, key=f"w_chk_ly_{BK}")
     unidad_q = o3.selectbox("Unidad de Q en la gráfica", list(FACTOR_Q),
                             key=f"w_sel_uq_{BK}")
 
-    cal = bomba.cal or {}
+    cal_all = pj.migrate_pump_cal(bomba.cal)   # {"qh": {...}, "qe": {...}}
+    bomba.cal = cal_all
+    cal = cal_all[curva]                       # calibración de la curva activa
     pend_key = f"pend_{BK}"
     pend = st.session_state.get(pend_key)
 
@@ -185,10 +220,19 @@ if img is not None:
                        "qe": st.session_state.get(f"qe_px_{BK}", []),
                        "pending": [pend["x"], pend["y"]] if pend else None}
             click = digitizer(bomba.imagen_b64, markers, key=f"dg_{BK}")
-            if click and click.get("n") != st.session_state.get(f"last_click_{BK}"):
-                st.session_state[f"last_click_{BK}"] = click.get("n")
-                st.session_state[pend_key] = {"x": int(click["x"]), "y": int(click["y"])}
-                st.rerun()
+            if click:
+                n = click.get("n")
+                if click.get("enterPressed"):
+                    if n != st.session_state.get(f"last_enter_{BK}"):
+                        st.session_state[f"last_enter_{BK}"] = n
+                        siguiente = _ENTER_ADVANCE.get(modo)
+                        if siguiente:
+                            st.session_state[f"modo_next_{BK}"] = siguiente
+                        st.rerun()
+                elif n != st.session_state.get(f"last_click_{BK}"):
+                    st.session_state[f"last_click_{BK}"] = n
+                    st.session_state[pend_key] = {"x": int(click["x"]), "y": int(click["y"])}
+                    st.rerun()
         else:
             shown = _overlay(img, cal, pend)
             click = streamlit_image_coordinates(shown, key=f"img_{BK}")
@@ -224,19 +268,18 @@ if img is not None:
                 pend["y"] += 1; st.rerun()
 
             if modo.startswith("Calibrar"):
-                eje = modo.split()[-1]
-                val = num_input(f"Valor real en {eje}", f"val_{eje}_{BK}", 0.0,
+                eje = modo.split()[1]
+                val = num_input(f"Valor real en {eje}", f"val_{eje}_{curva}_{BK}", 0.0,
                                 decimals=3)
-                if st.button(f"✔ Fijar {eje}", key=f"w_fix_{eje}_{BK}"):
+                if st.button(f"✔ Fijar {eje}", key=f"w_fix_{eje}_{curva}_{BK}"):
                     cal[eje] = ({"px": pend["x"], "py": pend["y"]}
                                 if eje.startswith("X")
                                 else {"px": pend["y"], "px_x": pend["x"]})
                     cal[eje]["val"] = val
-                    bomba.cal = cal
+                    cal_all[curva] = cal
+                    bomba.cal = cal_all
                     st.session_state[pend_key] = None
-                    st.session_state[f"modo_next_{BK}"] = {
-                        "X1": "Calibrar X2", "X2": "Calibrar Y1",
-                        "Y1": "Calibrar Y2", "Y2": "Punto Q-H"}[eje]
+                    st.session_state[f"modo_next_{BK}"] = _NEXT_CAL[(curva, eje)]
                     st.rerun()
             else:
                 if {"X1", "X2", "Y1", "Y2"} <= set(cal):
@@ -246,10 +289,10 @@ if img is not None:
                                               cal["Y2"]["px"], cal["Y2"]["val"], log_y)
                     q, y = cv.pixel_to_data((pend["x"], pend["y"]), calx, caly)
                     q *= FACTOR_Q[unidad_q]
-                    st.caption(f"→ Q = {q:.3f} L/s · {'H' if modo.endswith('Q-H') else 'η'}"
+                    st.caption(f"→ Q = {q:.3f} L/s · {'H' if curva == 'qh' else 'η'}"
                                f" = {y:.3f}")
-                    if st.button("✔ Confirmar punto", key=f"w_ok_{BK}"):
-                        if modo.endswith("Q-H"):
+                    if st.button("✔ Confirmar punto", key=f"w_ok_{curva}_{BK}"):
+                        if curva == "qh":
                             bomba.puntos_qh.append((round(q, 4), round(y, 4)))
                             st.session_state.setdefault(f"qh_px_{BK}", []).append(
                                 (pend["x"], pend["y"]))
@@ -260,21 +303,23 @@ if img is not None:
                         st.session_state[pend_key] = None
                         st.rerun()
                 else:
-                    st.warning("Calibra X1, X2, Y1 y Y2 antes de capturar puntos.")
+                    st.warning(f"Calibra X1, X2, Y1 y Y2 de {'Q-H' if curva == 'qh' else 'Q-η'} "
+                              "antes de capturar puntos.")
         else:
             st.caption("Haz click en la imagen para ubicar un punto.")
 
-    estado_cal = " · ".join(f"{e}={cal[e]['val']}" for e in ("X1", "X2", "Y1", "Y2")
-                            if e in cal) or "sin calibrar"
-    st.caption(f"Calibración: {estado_cal}")
-    cc1, cc2 = st.columns(2)
-    if cc1.button("♻ Reiniciar calibración", key=f"w_rst_cal_{BK}"):
-        bomba.cal = {}
+    st.caption(f"Calibración Q-H: {_estado_cal(cal_all['qh'])} · "
+              f"Calibración Q-η: {_estado_cal(cal_all['qe'])}")
+    cc1, cc2, cc3 = st.columns(3)
+    if cc1.button(f"♻ Reiniciar calibración {'Q-H' if curva == 'qh' else 'Q-η'} (esta curva)",
+                  key=f"w_rst_cal_{BK}"):
+        cal_all[curva] = {}
+        bomba.cal = cal_all
         st.session_state[pend_key] = None
         st.rerun()
     if {"X1", "X2", "Y1", "Y2"} <= set(cal) and cc2.button(
-            "🪄 Detectar curva por color (usa el punto pendiente como muestra)",
-            key=f"w_auto_{BK}"):
+            f"🪄 Detectar {'Q-H' if curva == 'qh' else 'Q-η'} por color "
+            "(usa el punto pendiente como muestra)", key=f"w_auto_{curva}_{BK}"):
         if pend:
             arr = np.array(img)
             color = tuple(int(c) for c in arr[pend["y"], pend["x"]])
@@ -283,12 +328,25 @@ if img is not None:
                                       cal["X2"]["px"], cal["X2"]["val"], log_x)
             caly = cv.AxisCalibration(cal["Y1"]["px"], cal["Y1"]["val"],
                                       cal["Y2"]["px"], cal["Y2"]["val"], log_y)
-            bomba.puntos_qh = [(round(cv.pixel_to_data(pt, calx, caly)[0] * FACTOR_Q[unidad_q], 4),
-                                round(cv.pixel_to_data(pt, calx, caly)[1], 4))
-                               for pt in pts_px]
-            st.session_state[f"qh_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+            pts_data = [(round(cv.pixel_to_data(pt, calx, caly)[0] * FACTOR_Q[unidad_q], 4),
+                        round(cv.pixel_to_data(pt, calx, caly)[1], 4)) for pt in pts_px]
+            if curva == "qh":
+                bomba.puntos_qh = pts_data
+                st.session_state[f"qh_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+            else:
+                bomba.puntos_qe = pts_data
+                st.session_state[f"qe_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
             st.session_state[pend_key] = None
             st.rerun()
+    _siguiente_enter = _ENTER_ADVANCE.get(modo)
+    if cc3.button("⏎ Enter — pasar a Q-η" if _siguiente_enter
+                 else "⏎ Enter (ya en la última etapa)",
+                 key=f"w_enter_{BK}", disabled=_siguiente_enter is None,
+                 help="Equivalente al Enter físico (que solo funciona sobre la imagen "
+                      "en modo 'lupa en tiempo real'). Termina de capturar los puntos "
+                      "de la curva activa y pasa a calibrar los ejes de la otra."):
+        st.session_state[f"modo_next_{BK}"] = _siguiente_enter
+        st.rerun()
 
 # ---------- importar puntos desde CSV (de cualquier herramienta externa) ----------
 with st.expander("📥 Importar puntos desde CSV"):

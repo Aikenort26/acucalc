@@ -184,6 +184,44 @@ def test_save_atomico_sobrescribe_sin_corromper(tmp_path):
     assert f.read_text(encoding="utf-8") != original
 
 
+def test_migrate_pump_cal_esquema_plano_viejo_a_qh_qe():
+    """WP-B2: el esquema plano viejo {X1,X2,Y1,Y2} (una calibración
+    compartida) migra a {'qh': <la vieja calibración>, 'qe': {}} — Q-η queda
+    sin calibrar porque la calibración compartida ya era incorrecta para él."""
+    viejo = {"X1": {"px": 10, "val": 0.0}, "X2": {"px": 500, "val": 40.0},
+             "Y1": {"px": 300, "px_x": 5, "val": 0.0},
+             "Y2": {"px": 20, "px_x": 5, "val": 60.0}}
+    migrado = pj.migrate_pump_cal(viejo)
+    assert migrado == {"qh": viejo, "qe": {}}
+
+
+def test_migrate_pump_cal_none_o_vacio():
+    assert pj.migrate_pump_cal(None) == {"qh": {}, "qe": {}}
+    assert pj.migrate_pump_cal({}) == {"qh": {}, "qe": {}}
+
+
+def test_migrate_pump_cal_esquema_nuevo_es_idempotente():
+    nuevo = {"qh": {"X1": {"px": 1, "val": 0.0}}, "qe": {"Y1": {"px": 2, "val": 1.0}}}
+    assert pj.migrate_pump_cal(nuevo) == nuevo
+    assert pj.migrate_pump_cal({"qh": {"X1": {}}}) == {"qh": {"X1": {}}, "qe": {}}
+
+
+def test_load_migra_cal_plano_de_proyecto_viejo(tmp_path):
+    """Un proyecto guardado con el esquema plano viejo de `cal` (antes de
+    WP-B2) debe cargar con `cal` ya migrado a {'qh': ..., 'qe': {}}."""
+    p = _proyecto()
+    f = tmp_path / "cal_viejo.acucalc.json"
+    pj.save(p, f)
+    raw = json.loads(f.read_text(encoding="utf-8"))
+    raw["project"]["bombeos"][0]["bombas"][0]["cal"] = {
+        "X1": {"px": 10, "val": 0.0}, "X2": {"px": 500, "val": 40.0}}
+    f.write_text(json.dumps(raw), encoding="utf-8")
+    p2 = pj.load(f)
+    assert p2.bombeos[0].bombas[0].cal == {
+        "qh": {"X1": {"px": 10, "val": 0.0}, "X2": {"px": 500, "val": 40.0}},
+        "qe": {}}
+
+
 def test_load_ignora_claves_desconocidas_en_almacenamiento(tmp_path):
     """Regresión: un proyecto guardado por una versión anterior (v5, con el
     campo `usar_cadena` que v6 eliminó de StorageConfig) debe seguir

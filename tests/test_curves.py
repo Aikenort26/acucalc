@@ -161,6 +161,31 @@ def test_apply_pump_transform_afinidad_y_arreglo_combinados():
     assert qe == [(60.0, 0.5), (120.0, 0.4)]
 
 
+def test_calibraciones_independientes_qh_qe_no_se_interfieren():
+    """WP-B2: la calibración de ejes de Q-H (X compartido con Q-η, Y en
+    metros) y la calibración de Q-η (mismo X pero Y en fracción 0-1) son dos
+    `AxisCalibration` distintas — usarlas juntas sobre un mismo pixel debe
+    dar lecturas independientes y correctas, sin que una contamine la otra.
+    `core/curves.py` ya es independiente por instancia; esto solo ejercita
+    esa API dos veces con parámetros distintos (no requiere código nuevo)."""
+    calx_qh = cv.AxisCalibration(px1=0, val1=0.0, px2=600, val2=12.0)     # Q [L/s]
+    caly_h = cv.AxisCalibration(px1=400, val1=0.0, px2=0, val2=40.0)     # H [m], y invertida
+    calx_qe = cv.AxisCalibration(px1=0, val1=0.0, px2=600, val2=12.0)    # mismo Q
+    caly_e = cv.AxisCalibration(px1=400, val1=0.0, px2=0, val2=1.0)      # η [0-1]
+
+    q_h, h = cv.pixel_to_data((300, 100), calx_qh, caly_h)
+    q_e, eta = cv.pixel_to_data((300, 200), calx_qe, caly_e)
+
+    assert abs(q_h - 6.0) < 1e-9
+    assert abs(h - 30.0) < 1e-9
+    assert abs(q_e - 6.0) < 1e-9
+    assert abs(eta - 0.5) < 1e-9
+    # una calibración con escala Y de metros y otra con escala 0-1 sobre el
+    # mismo pixel de Y no deben dar el mismo valor "de metros" reinterpretado
+    # como fracción — confirma que no hay estado compartido entre instancias.
+    assert h != eta
+
+
 def test_apply_pump_transform_n2_igual_a_n1_no_aplica_afinidad():
     qh, qe = cv.apply_pump_transform(_QH, _QE, 3500.0, 3500.0, 1, "paralelo")
     assert qh == _QH and qe == _QE

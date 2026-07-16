@@ -84,7 +84,17 @@ wrap.addEventListener('click', e => {
   const r = img.getBoundingClientRect();
   const s = img.naturalWidth / img.clientWidth;
   setValue({x: Math.round((e.clientX - r.left) * s),
-            y: Math.round((e.clientY - r.top) * s), n: Date.now()});
+            y: Math.round((e.clientY - r.top) * s), n: Date.now(), enterPressed: false});
+});
+
+// WP-B2: Enter físico dentro del iframe del componente pasa de calibrar/
+// capturar Q-H a calibrar Q-η (el lado Python decide el destino exacto
+// según la etapa actual). Se distingue del click por enterPressed=true —
+// no reutiliza x/y (irrelevantes) para no romper el contrato existente
+// {x, y, n} que ya consume la página.
+window.addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  setValue({enterPressed: true, n: Date.now()});
 });
 
 window.addEventListener('message', e => {

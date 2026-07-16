@@ -120,7 +120,7 @@ class PumpData:
     puntos_qh: list = field(default_factory=list)
     puntos_qe: list = field(default_factory=list)
     imagen_b64: str = ""
-    cal: dict | None = None    # {"X1": {...}, ...}
+    cal: dict | None = None    # {"qh": {"X1": {...}, ...}, "qe": {"X1": {...}, ...}}
     modelo: str = ""
     fabricante: str = ""
     n_unidades: int = 1            # nº de bombas iguales en el arreglo
@@ -191,6 +191,29 @@ def _filtered(cls, d: dict) -> dict:
     return {k: v for k, v in d.items() if k in validos}
 
 
+def migrate_pump_cal(cal: dict | None) -> dict:
+    """Migra `PumpData.cal` del esquema plano viejo (una sola calibración
+    compartida por la curva Q-H y la curva Q-η: `{"X1": {...}, "X2": {...},
+    "Y1": {...}, "Y2": {...}}`) al esquema nuevo de calibraciones
+    independientes `{"qh": {...}, "qe": {...}}` (WP-B2 — H y η se grafican en
+    ejes Y distintos con escalas no relacionadas, una calibración compartida
+    era incorrecta para η).
+
+    Un proyecto viejo conserva su calibración de Q-H (la curva principal, la
+    que siempre se usó para leer H); Q-η queda sin calibrar — la calibración
+    compartida ya era incorrecta para η, así que no hay nada útil que migrar
+    ahí; el usuario debe volver a calibrar esa curva.
+
+    Idempotente: si `cal` ya viene en el esquema nuevo (tiene "qh"/"qe" como
+    claves de nivel superior, sin "X1"), se devuelve tal cual (con defaults
+    para las claves que falten)."""
+    if not cal:
+        return {"qh": {}, "qe": {}}
+    if "X1" in cal:
+        return {"qh": dict(cal), "qe": {}}
+    return {"qh": cal.get("qh", {}), "qe": cal.get("qe", {})}
+
+
 def _pump_system_from_dict(s: dict) -> PumpSystemData:
     from dataclasses import fields as _fields
     validos = {f.name for f in _fields(PumpSystemData)} - {"tramos", "accesorios", "bombas"}
@@ -202,6 +225,7 @@ def _pump_system_from_dict(s: dict) -> PumpSystemData:
         pump = PumpData(**b)
         pump.puntos_qh = [tuple(x) for x in pump.puntos_qh]
         pump.puntos_qe = [tuple(x) for x in pump.puntos_qe]
+        pump.cal = migrate_pump_cal(pump.cal)
         sys.bombas.append(pump)
     return sys
 
