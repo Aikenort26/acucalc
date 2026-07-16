@@ -124,11 +124,22 @@ def test_compilacion_fallida_da_log(tmp_path):
 
 
 def test_compilacion_sin_motor_da_mensaje(tmp_path, monkeypatch):
-    """Sin ningún motor en el PATH el log explica qué falta (no queda vacío)."""
+    """Sin ningún motor (ni PATH ni tectonic.exe local) el log explica qué falta."""
     monkeypatch.setattr(report.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(report, "_APP_DIR", tmp_path)   # carpeta sin tectonic.exe
     pdf, log = report.compile_pdf(tmp_path)
     assert pdf is None
-    assert "PATH" in log and "tectonic" in log
+    assert "Tectonic" in log
+
+
+def test_find_engine_prefiere_tectonic_local(tmp_path, monkeypatch):
+    """Un tectonic.exe soltado en la carpeta de la app gana al PATH."""
+    (tmp_path / "tectonic.exe").write_bytes(b"stub")
+    monkeypatch.setattr(report, "_APP_DIR", tmp_path)
+    monkeypatch.setattr(report.shutil, "which",
+                        lambda name: "/usr/bin/pdflatex" if name == "pdflatex" else None)
+    name, exe = report._find_engine()
+    assert name == "tectonic" and exe == str(tmp_path / "tectonic.exe")
 
 
 def test_compilacion_captura_stderr(tmp_path, monkeypatch):

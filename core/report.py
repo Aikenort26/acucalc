@@ -27,6 +27,23 @@ def render(ctx: dict, out_dir: str | Path) -> Path:
     return out
 
 
+_APP_DIR = Path(__file__).resolve().parent.parent
+
+
+def _find_engine() -> tuple[str | None, str | None]:
+    """Localiza el motor LaTeX: primero un `tectonic.exe`/`tectonic` soltado en la
+    carpeta de la app (el usuario solo copia el binario ahí, sin tocar el PATH),
+    luego tectonic → pdflatex → latexmk en el PATH."""
+    for local in (_APP_DIR / "tectonic.exe", _APP_DIR / "tectonic"):
+        if local.exists():
+            return "tectonic", str(local)
+    for name in ("tectonic", "pdflatex", "latexmk"):
+        exe = shutil.which(name)
+        if exe:
+            return name, exe
+    return None, None
+
+
 def _engine_cmd(exe_name: str, exe: str) -> tuple[list[str], int]:
     """Comando y nº de pasadas para cada motor LaTeX soportado."""
     if exe_name == "tectonic":
@@ -48,12 +65,11 @@ def compile_pdf(project_dir: Path) -> tuple[Path | None, str]:
     Captura SIEMPRE stdout **y stderr** (antes solo stdout, por eso un fallo de
     latexmk sin Perl se veía como '(sin log)'), y ante cualquier excepción del
     subprocess devuelve el mensaje real — nunca un log vacío silencioso."""
-    for exe_name in ("tectonic", "pdflatex", "latexmk"):
-        exe = shutil.which(exe_name)
-        if exe:
-            break
-    else:
-        return None, "No se encontró ningún motor LaTeX (tectonic/pdflatex/latexmk) en el PATH."
+    exe_name, exe = _find_engine()
+    if exe is None:
+        return None, ("No se encontró ningún motor LaTeX. Instala Tectonic "
+                      "(recomendado, autocontenido) o pon tectonic.exe en la carpeta "
+                      "de ACUCALC; alternativa: pdflatex/latexmk (MiKTeX) en el PATH.")
 
     cmd, runs = _engine_cmd(exe_name, exe)
     salida = f"[motor: {exe_name} — {exe}]\n"

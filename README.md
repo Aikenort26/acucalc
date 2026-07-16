@@ -88,9 +88,30 @@ python -m venv .venv
 .venv/Scripts/streamlit run app.py
 ```
 
-Para compilar la memoria a PDF directamente desde la app se necesita
-`pdflatex` o `latexmk` en el `PATH` (MiKTeX o TeX Live). Sin LaTeX instalado,
-la app entrega el proyecto como `.zip` listo para subir a Overleaf.
+### Motor LaTeX para compilar la memoria (PDF)
+
+La app compila el PDF con el primer motor que encuentra, en este orden:
+**Tectonic → pdflatex → latexmk**.
+
+**Recomendado: Tectonic** — un motor LaTeX autocontenido (un solo binario, sin
+Perl ni prompts de MiKTeX; descarga y cachea los paquetes que necesita la
+primera vez). Es la vía más confiable para "compilar desde la web sin fallar".
+Dos formas de tenerlo:
+
+1. **Solo copia el binario en la carpeta de ACUCALC:** descarga
+   `tectonic.exe` desde
+   [releases de Tectonic](https://github.com/tectonic-typesetting/tectonic/releases)
+   (archivo `…x86_64-pc-windows-msvc.zip`), extrae `tectonic.exe` y déjalo en la
+   raíz del proyecto (junto a `app.py`). ACUCALC lo detecta ahí sin tocar el
+   `PATH`.
+2. **O instálalo en el PATH** con Scoop (`scoop install tectonic`), Conda
+   (`conda install -c conda-forge tectonic`) o Cargo (`cargo install tectonic`).
+
+**Alternativa: MiKTeX/TeX Live** — `pdflatex` o `latexmk` en el `PATH`. Nota: si
+solo tienes `latexmk` de MiKTeX puede fallar por falta de Perl; ACUCALC ahora
+prefiere `pdflatex` sobre `latexmk` y muestra el error real (stdout + stderr +
+`main.log`) si algo falla. Sin ningún motor instalado, la app entrega el
+proyecto como `.zip` listo para subir a Overleaf.
 
 ## Ejecución permanente local
 

@@ -6,3 +6,5 @@ output/
 *.egg-info/
 saves/
 .worktrees/
+tectonic.exe
+tectonic
