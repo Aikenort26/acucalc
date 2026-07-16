@@ -182,3 +182,18 @@ def test_save_atomico_sobrescribe_sin_corromper(tmp_path):
     pj.save(p, f)                 # sobrescritura vía os.replace
     assert pj.load(f).nombre == "Nombre Nuevo"
     assert f.read_text(encoding="utf-8") != original
+
+
+def test_load_ignora_claves_desconocidas_en_almacenamiento(tmp_path):
+    """Regresión: un proyecto guardado por una versión anterior (v5, con el
+    campo `usar_cadena` que v6 eliminó de StorageConfig) debe seguir
+    cargando, no reventar con TypeError por un kwarg inesperado."""
+    p = _proyecto()
+    f = tmp_path / "viejo.acucalc.json"
+    pj.save(p, f)
+    raw = json.loads(f.read_text(encoding="utf-8"))
+    raw["project"]["almacenamiento"]["usar_cadena"] = True   # campo v5, ya no existe
+    f.write_text(json.dumps(raw), encoding="utf-8")
+    p2 = pj.load(f)                # no debe lanzar TypeError
+    assert p2.nombre == p.nombre
+    assert p2.almacenamiento.tanques[0].forma == "circular"

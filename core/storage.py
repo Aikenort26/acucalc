@@ -1,8 +1,11 @@
 """Volumen de almacenamiento: Art. 81 Res. 0330 + curva integral + NSR-10 J.
 
-Incluye la cadena real de tanques: captación → PTAP (sin almacenamiento) →
-tanque bajo → bombeo a caudal constante → tanque elevado → red. Cada tanque
-regula con su propia curva de suministro/consumo (balance_curve).
+Metodología (v6, norma→geometría→balance): el volumen total requerido es
+`max(volume_art81, volume_curva_integral)` (más incendio NSR-10 J). El
+proyectista define libremente los tanques (tipo, forma, cantidad, volumen
+asignado); la app solo VERIFICA — no reparte ni dimensiona — el balance
+interno de cada tanque con `tank_balance_check` (curva integral entre su
+propia ventana de suministro y su propia ventana de salida).
 """
 import math
 from dataclasses import dataclass
@@ -90,96 +93,6 @@ def tank_balance_check(nombre: str, qmd_m3d: float, ventana_suministro: list[flo
     horas_o = float(sum(1 for w in ventana_salida if w))
     return TankBalanceCheck(nombre, v_asignado, v_req, frac, horas_s, horas_o,
                             v_asignado + 1e-9 >= v_req)
-
-
-@dataclass(frozen=True)
-class TankBalance:
-    nombre: str
-    frac_regulacion: float
-    q_entrada_lps: float          # caudal constante del bombeo/gravedad que lo alimenta
-    horas_entrada: float
-    q_salida_lps: float | None    # caudal constante de salida; en el último tanque,
-                                   # si se pasa qmh_lps, es el QMH de referencia (no constante)
-    horas_salida: float | None    # None = último tanque (consumo variable de la red)
-    v_regulacion: float
-    v_incendio: float
-    v_total: float
-    v_total_redondeado: int
-
-
-def tank_train(qmd_m3d: float, entradas: list[tuple[str, list[float]]],
-               factores_consumo: list[float], frac_incendio: float = 0.15,
-               dias_reserva: float = 1, qmh_lps: float | None = None) -> list[TankBalance]:
-    """Cadena de N tanques en serie. `entradas` = [(nombre, ventana_entrada[24])]
-    en orden hidráulico. La salida de cada tanque es la ventana de entrada del
-    siguiente (bombeo intermedio a caudal constante = QMD·24/h de esa ventana);
-    la salida del último es el patrón horario de consumo de la población (Q
-    variable) — si se pasa `qmh_lps`, se reporta como referencia de pico
-    horario (QMH), aunque el consumo real siga siendo variable hora a hora.
-    Balance de regulación por tanque con `balance_curve`."""
-    if not entradas:
-        raise ValueError("Se requiere al menos un tanque")
-    if len(factores_consumo) != 24:
-        raise ValueError("Se requieren 24 factores de consumo")
-    consumo = _normalize(factores_consumo, "consumo")
-    qmd_lps = qmd_m3d / 86.4
-    out = []
-    for i, (nombre, ventana) in enumerate(entradas):
-        supply = _normalize(ventana, f"entrada de '{nombre}'")
-        es_ultimo = i + 1 >= len(entradas)
-        if es_ultimo:
-            demand = consumo
-            horas_salida, q_salida = None, qmh_lps
-        else:
-            ventana_sig = entradas[i + 1][1]
-            demand = _normalize(ventana_sig, f"entrada de '{entradas[i+1][0]}'")
-            horas_salida = float(sum(1 for w in ventana_sig if w))
-            q_salida = qmd_lps * 24.0 / horas_salida if horas_salida else 0.0
-        frac, _ = balance_curve(supply, demand)
-        horas = sum(1 for w in ventana if w)
-        vreg = frac * qmd_m3d
-        vinc = vreg * frac_incendio
-        vtot = (vreg + vinc) * dias_reserva
-        out.append(TankBalance(nombre, frac, qmd_lps * 24.0 / horas if horas else 0.0,
-                               float(horas), q_salida, horas_salida,
-                               vreg, vinc, vtot, _round_up_5(vtot)))
-    return out
-
-
-@dataclass(frozen=True)
-class ChainResult:
-    bajo: StorageResult
-    elevado: StorageResult
-    total_redondeado: int
-
-
-def tank_chain(qmd_m3d: float, factores_consumo: list[float],
-               ventana_captacion: list[float], ventana_bombeo: list[float],
-               frac_incendio: float = 0.15, dias_reserva: float = 1) -> ChainResult:
-    """Cadena captación→tanque bajo→bombeo constante→tanque elevado→red.
-
-    - Tanque bajo: suministro = captación constante en su ventana;
-      consumo = bombeo constante en su ventana (Qb = QMD·24/h de bombeo).
-    - Tanque elevado: suministro = bombeo constante; consumo = patrón horario
-      de la población (factores).
-    """
-    if len(factores_consumo) != 24:
-        raise ValueError("Se requieren 24 factores de consumo")
-    capta = _normalize(ventana_captacion, "captación")
-    bombeo = _normalize(ventana_bombeo, "bombeo")
-    consumo = _normalize(factores_consumo, "consumo")
-
-    def _tank(nombre: str, supply, demand) -> StorageResult:
-        frac, _ = balance_curve(supply, demand)
-        vreg = frac * qmd_m3d
-        vinc = vreg * frac_incendio
-        vtot = (vreg + vinc) * dias_reserva
-        return StorageResult(nombre, vreg, vinc, vtot, _round_up_5(vtot), frac)
-
-    bajo = _tank("Tanque bajo (captación vs bombeo)", capta, bombeo)
-    elevado = _tank("Tanque elevado (bombeo vs consumo)", bombeo, consumo)
-    return ChainResult(bajo, elevado,
-                       bajo.v_total_redondeado + elevado.v_total_redondeado)
 
 
 def final_volume(a: StorageResult, b: StorageResult) -> int:

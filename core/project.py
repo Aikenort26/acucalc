@@ -82,7 +82,6 @@ class StorageConfig:
     factores_hora: list = field(default_factory=list)
     suministro_hora: list = field(default_factory=list)   # ventana de bombeo bajo→elevado
     ventana_captacion: list = field(default_factory=list)
-    usar_cadena: bool = True
     tanques: list = field(default_factory=list)           # TankSpec
 
 
@@ -182,6 +181,16 @@ def save(p: Project, path: str | Path) -> None:
     os.replace(tmp, path)
 
 
+def _filtered(cls, d: dict) -> dict:
+    """Descarta claves de un JSON viejo que ya no existen en `cls` (ej. un
+    campo eliminado en una migración) — evita que `Cls(**d)` reviente con
+    `TypeError: unexpected keyword argument` al cargar un proyecto guardado
+    con una versión anterior de la app."""
+    from dataclasses import fields as _fields
+    validos = {f.name for f in _fields(cls)}
+    return {k: v for k, v in d.items() if k in validos}
+
+
 def _pump_system_from_dict(s: dict) -> PumpSystemData:
     from dataclasses import fields as _fields
     validos = {f.name for f in _fields(PumpSystemData)} - {"tramos", "accesorios", "bombas"}
@@ -228,11 +237,12 @@ def load(path: str | Path) -> Project:
                                              "corregimiento", "consultor", "fecha")},
                 altitud=d.get("altitud", 0.0), temperatura=d.get("temperatura", 20.0))
     p.censo = [tuple(x) for x in d.get("censo", [])]
-    p.poblacion = PopulationConfig(**d.get("poblacion", {}))
-    p.demanda = DemandConfig(**d.get("demanda", {}))
+    p.poblacion = PopulationConfig(**_filtered(PopulationConfig, d.get("poblacion", {})))
+    p.demanda = DemandConfig(**_filtered(DemandConfig, d.get("demanda", {})))
     p.demanda.usos = [tuple(u) for u in p.demanda.usos]
-    p.almacenamiento = StorageConfig(**d.get("almacenamiento", {}))
-    p.almacenamiento.tanques = [TankSpec(**t) for t in p.almacenamiento.tanques]
+    p.almacenamiento = StorageConfig(**_filtered(StorageConfig, d.get("almacenamiento", {})))
+    p.almacenamiento.tanques = [TankSpec(**_filtered(TankSpec, t))
+                                for t in p.almacenamiento.tanques]
     p.bombeos = [_pump_system_from_dict(s) for s in d.get("bombeos", [])]
     p.red_inp = d.get("red_inp", "")
     p.red_material = d.get("red_material", "")
