@@ -29,23 +29,25 @@ operación, y generación de la memoria técnica en LaTeX.
    método sugerido por menor desviación
 3. **Caudales** — dotación neta (3 modos), pérdidas, Qmed/QMD/QMH; K1/K2
    automáticos según el tamaño de la población proyectada (Par. 2 Art. 47)
-4. **Almacenamiento** — tren de N tanques en serie con ventana de entrada por
-   tanque: cada uno balancea su curva integral (la salida es la entrada del
-   siguiente; la del último, el consumo de la población) y su volumen se asigna
-   automáticamente; el caudal de cada bombeo intermedio sale de las horas de su
-   ventana; patrón horario cargable desde Excel/CSV; predimensionado con formas
-   circular/cuadrada/rectangular (o tanque único Art. 81 + curva integral)
+4. **Almacenamiento** — volumen total por criterio Art. 81 (QMD/3) e integral
+   horaria (máx de ambos); proyectista define geometría libre de tanques
+   (tipo: bajo/elevado/enterrado/semienterrado, forma: circular/cuadrada/rectangular,
+   dimensiones); verificación per-tanque de balance interno (curva integral de su
+   ventana de suministro vs salida); predimensionado con cálculo de diámetros
+   redondeados constructivos; patrón horario cargable desde Excel/CSV
 5. **Bombeo** — N sistemas nombrados, cada uno un paquete completo: tramos con
    catálogo normativo de tuberías (RDE/clase, DN50–1200: PEAD, PVC-U en
    pulgadas, hierro dúctil K9/C, acero, GRP) con **DN propuesto** (Bresse +
    V ≤ 6 m/s Art. 56) y edición posterior; accesorios con Km visible; potencia;
    golpe de ariete verificado automáticamente contra la **PN de cada tramo**
    con recomendación de protecciones; arreglos paralelo/serie y leyes de afinidad
-6. **Curvas de bomba** — por sistema: digitalizador con **lupa en tiempo real**,
-   crosshair, auto-avance de calibración y puntos marcados sobre la imagen;
-   entrada manual Q-H/Q-η; regresiones H=A·Q²+B·Q+C y η=D·Q²+E·Q+F con
-   coeficientes y R²; doble gráfica Q-H/Q-η con punto de diseño (Qb, Hd) y de
-   operación; **catálogo de bombas desde Excel** con ranking por eficiencia
+6. **Curvas de bomba** — por sistema: carga de curvas desde **PDF** (imagen PNG)
+   o imagen PNG/JPG directo; digitalizador con **lupa en tiempo real**, crosshair,
+   calibración independiente Q-H vs Q-η (escalas distintas, botón Enter avanza
+   entre curvas); entrada manual Q-H/Q-η; regresiones H=A·Q²+B·Q+C y
+   η=D·Q²+E·Q+F con coeficientes y R²; doble gráfica Q-H/Q-η con punto de diseño
+   (Qb, Hd) y de operación; curva original en anexo del reporte; **catálogo de
+   bombas desde Excel** con ranking por eficiencia
 7. **Red de distribución** — carga de red desde archivo **EPANET .inp**
    ([JUNCTIONS]/[RESERVOIRS]/[TANKS]/[PIPES]); asignación automática de
    demandas por longitud aferente a partir del QMD calculado en la página 3;
@@ -156,10 +158,12 @@ permanente:
 .venv/Scripts/python -m pytest -v
 ```
 
-Más de 130 tests cubren toda la lógica de `core/` (sin Streamlit), incluyendo golden
+152 tests cubren toda la lógica de `core/` (sin Streamlit), incluyendo golden
 tests contra los valores reales de la memoria de cálculo de El Salado
-(`docs/specs/2026-07-10-acucalc-v1-design.md`). Dos desviaciones deliberadas
-frente al Excel original están documentadas en `docs/plans/2026-07-10-acucalc-v1.md`
+(`docs/specs/2026-07-10-acucalc-v1-design.md`). Casos nuevos en v6: PDF render
+de curvas, calibraciones independientes Q-H/Q-η, tanque balance check vs norma,
+generador anexo de curvas en reporte, atomicidad guardado proyecto. Dos desviaciones
+deliberadas frente al Excel original están documentadas en `docs/plans/2026-07-10-acucalc-v1.md`
 ("Nota de consistencia"): el método aritmético de población usa tasa
 constante en vez de recursiva, y las pérdidas hidráulicas usan siempre la
 velocidad del diámetro comercial del tramo (no la del diámetro económico de Bresse).
