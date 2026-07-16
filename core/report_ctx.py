@@ -141,8 +141,8 @@ def build(p: Project) -> tuple[dict, dict]:
                          or [{"tipo_bomba": "superficie"}])
     _save(rf.fig_esquema(sistemas_bomba_ctx, alm.tanques), "esquema")
 
-    # ---------- logos de portada ----------
-    def _save_logo(b64: str, name: str) -> str | None:
+    # ---------- imágenes b64 embebidas (logos, curvas de bomba) ----------
+    def _save_b64_image(b64: str, name: str) -> str | None:
         if not b64:
             return None
         raw = base64.b64decode(b64)
@@ -152,8 +152,8 @@ def build(p: Project) -> tuple[dict, dict]:
         figuras[name] = str(fp)
         return fp.name
 
-    logo_cliente = _save_logo(p.logo_cliente_b64, "logo_cliente")
-    logo_consultor = _save_logo(p.logo_consultor_b64, "logo_consultor")
+    logo_cliente = _save_b64_image(p.logo_cliente_b64, "logo_cliente")
+    logo_consultor = _save_b64_image(p.logo_consultor_b64, "logo_consultor")
 
     # ---------- sistemas de bombeo ----------
     sistemas_ctx = []
@@ -225,16 +225,6 @@ def build(p: Project) -> tuple[dict, dict]:
             "fig": f"{fig_name}.png"})
 
     # ---------- anexo: curvas de bombas seleccionadas (imagen original del catálogo) ----------
-    def _save_curva(b64: str, name: str) -> str | None:
-        if not b64:
-            return None
-        raw = base64.b64decode(b64)
-        ext = "jpg" if raw[:3] == b"\xff\xd8\xff" else "png"
-        fp = figdir / f"{name}.{ext}"
-        fp.write_bytes(raw)
-        figuras[name] = str(fp)
-        return fp.name
-
     anexos_curvas = []
     for i, s in enumerate(p.bombeos):
         if not s.bomba_seleccionada:
@@ -242,7 +232,7 @@ def build(p: Project) -> tuple[dict, dict]:
         for j, bb in enumerate(s.bombas):
             if bb.nombre != s.bomba_seleccionada or not bb.imagen_b64:
                 continue
-            fig_curva = _save_curva(bb.imagen_b64, f"curva_{i}_{j}")
+            fig_curva = _save_b64_image(bb.imagen_b64, f"curva_{i}_{j}")
             if fig_curva:
                 anexos_curvas.append({
                     "sistema": latex_escape(s.nombre),
