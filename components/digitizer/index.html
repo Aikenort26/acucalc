@@ -5,7 +5,13 @@
 <style>
   body { margin: 0; overflow: hidden; background: transparent; }
   #wrap { position: relative; display: inline-block; cursor: crosshair; }
-  #img { display: block; max-width: 100%; }
+  /* Altura fija (ítem 8): sin max-height, un PDF vertical renderizado a alta
+     resolución infla el iframe hasta empujar los controles fuera de la
+     pantalla y obliga a hacer scroll para digitalizar. max-height + width/
+     height:auto deja al navegador escalar preservando aspecto, sin recortar
+     ni deformar la imagen — mismo comportamiento con PNG apaisado o PDF
+     vertical. */
+  #img { display: block; max-width: 100%; max-height: 640px; width: auto; height: auto; }
   #overlay { position: absolute; left: 0; top: 0; pointer-events: none; }
   #loupe { position: absolute; left: 8px; top: 8px; border: 2px solid #22C55E;
            border-radius: 4px; background: #000; pointer-events: auto; z-index: 10;

@@ -278,11 +278,25 @@ def _bloque_calibracion():
                     st.session_state[pend_key] = {"x": int(click["x"]), "y": int(click["y"])}
         else:
             shown = _overlay(img, cal_merged, pend)
+            # Altura fija (ítem 8, modo clásico): a diferencia del componente
+            # JS, streamlit_image_coordinates muestra la imagen a resolución
+            # nativa (sin CSS que la escale) — un PDF vertical de alta
+            # resolución revienta la altura del iframe igual que en modo
+            # lupa. Se reescala aquí a la misma altura máxima y las
+            # coordenadas de click se reproyectan al espacio de pixel
+            # original antes de guardarlas (cal/puntos siguen en ese
+            # espacio, igual que en el componente).
+            ESCALA_MAX_ALTO = 640
+            factor = min(1.0, ESCALA_MAX_ALTO / shown.height)
+            if factor < 1.0:
+                shown = shown.resize((max(1, round(shown.width * factor)),
+                                      max(1, round(shown.height * factor))))
             # WP-5: mismo motivo — streamlit_image_coordinates ya reruns al
             # cambiar su valor devuelto, un st.rerun() extra era redundante.
             click = streamlit_image_coordinates(shown, key=f"img_{BK}")
             if click is not None:
-                nuevo_p = {"x": int(click["x"]), "y": int(click["y"])}
+                nuevo_p = {"x": int(round(click["x"] / factor)),
+                          "y": int(round(click["y"] / factor))}
                 if nuevo_p != st.session_state.get(f"last_click_{BK}"):
                     st.session_state[f"last_click_{BK}"] = nuevo_p
                     st.session_state[pend_key] = dict(nuevo_p)
@@ -302,14 +316,19 @@ def _bloque_calibracion():
             st.image(crop, width="stretch")
             st.caption(f"pixel ({pend['x']}, {pend['y']})")
             n1, n2, n3, n4 = st.columns(4)
+            # scope="fragment": pend solo lo lee este fragmento (nada fuera de
+            # _bloque_calibracion toca bomba.cal ni el punto pendiente), así que
+            # un rerun de página completa por cada pixel de ajuste era puro
+            # desperdicio — exactamente el caso que el reviewer detectó sin
+            # arreglar en el primer pase de WP-5.
             if n1.button("←", key=f"w_l_{BK}"):
-                pend["x"] -= 1; st.rerun()
+                pend["x"] -= 1; st.rerun(scope="fragment")
             if n2.button("→", key=f"w_r_{BK}"):
-                pend["x"] += 1; st.rerun()
+                pend["x"] += 1; st.rerun(scope="fragment")
             if n3.button("↑", key=f"w_u_{BK}"):
-                pend["y"] -= 1; st.rerun()
+                pend["y"] -= 1; st.rerun(scope="fragment")
             if n4.button("↓", key=f"w_d_{BK}"):
-                pend["y"] += 1; st.rerun()
+                pend["y"] += 1; st.rerun(scope="fragment")
 
             if modo.startswith("Calibrar"):
                 eje = modo.split()[1]
@@ -323,7 +342,7 @@ def _bloque_calibracion():
                     bomba.cal = cal_all
                     st.session_state[pend_key] = None
                     st.session_state[f"modo_next_{BK}"] = _NEXT_CAL[(destino, eje)]
-                    st.rerun()
+                    st.rerun(scope="fragment")
             else:
                 if {"X1", "X2"} <= set(cal_x) and {"Y1", "Y2"} <= set(cal_y):
                     calx = cv.AxisCalibration(cal_x["X1"]["px"], cal_x["X1"]["val"],
@@ -362,12 +381,12 @@ def _bloque_calibracion():
             cal_all[curva] = {}
             bomba.cal = cal_all
             st.session_state[pend_key] = None
-            st.rerun()
+            st.rerun(scope="fragment")
         if rb2.button("♻ Reiniciar X (compartido)", key=f"w_rst_calx_{BK}"):
             cal_all["x"] = {}
             bomba.cal = cal_all
             st.session_state[pend_key] = None
-            st.rerun()
+            st.rerun(scope="fragment")
         # WP-6: controles reales de autodetección — antes tolerance=60/
         # n_points=15 estaban fijos en el código y el bbox no se restringía
         # a la región calibrada (recogía ejes/texto/leyenda).
@@ -437,7 +456,7 @@ def _bloque_calibracion():
                           "de Q-H y pasa a calibrar Y de Q-η (X ya quedó calibrado, "
                           "es compartido)."):
             st.session_state[f"modo_next_{BK}"] = _siguiente_enter
-            st.rerun()
+            st.rerun(scope="fragment")
 
 
 if img is not None:
