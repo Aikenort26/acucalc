@@ -9,7 +9,7 @@ from core import curves as cv, pumping as pu
 from core import project as pj
 from core.project import PumpData
 from pages_common import (page_setup, num_input, int_input, f_num, fila_incompleta,
-                          fmt_h, sel_state, SP_CAUDAL, SP_ALTURA, SP_POTENCIA)
+                          fmt_h, fmt_q, sel_state, SP_CAUDAL, SP_ALTURA, SP_POTENCIA)
 
 try:
     from components.digitizer import digitizer
@@ -351,8 +351,8 @@ def _bloque_calibracion():
                                               cal_y["Y2"]["px"], cal_y["Y2"]["val"], log_y)
                     q, y = cv.pixel_to_data((pend["x"], pend["y"]), calx, caly)
                     q *= FACTOR_Q[unidad_q]
-                    st.caption(f"→ Q = {q:.3f} L/s · {'H' if curva == 'qh' else 'η'}"
-                               f" = {y:.3f}")
+                    st.caption(f"→ Q = {fmt_q(q)} L/s · {'H' if curva == 'qh' else 'η'}"
+                               f" = {fmt_h(y) if curva == 'qh' else f'{y:.3f}'}")
                     if st.button("✔ Confirmar punto", key=f"w_ok_{curva}_{BK}"):
                         if curva == "qh":
                             bomba.puntos_qh.append((round(q, 4), round(y, 4)))

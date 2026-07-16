@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 from core import catalogs, demand
-from pages_common import page_setup, num_input, show_issues, f_num
+from pages_common import page_setup, num_input, show_issues, f_num, fmt_q, SP_CAUDAL
 
 p = page_setup()
 st.header("3 · Dotación y caudales de diseño")
@@ -79,9 +79,9 @@ else:
     st.subheader("Caudales de diseño (año horizonte)")
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Dotación bruta", f"{r.dbruta:.1f} L/hab/d")
-    m2.metric("Qmed", f"{r.qmed_lps:.3f} L/s")
-    m3.metric("QMD", f"{r.qmd_lps:.3f} L/s")
-    m4.metric("QMH", f"{r.qmh_lps:.3f} L/s")
+    m2.metric("Qmed", f"{fmt_q(r.qmed_lps)} L/s")
+    m3.metric("QMD", f"{fmt_q(r.qmd_lps)} L/s")
+    m4.metric("QMH", f"{fmt_q(r.qmh_lps)} L/s")
     st.session_state["flows"] = r
 
     # ---------- proyección de caudales año a año (Art. 47) ----------
@@ -96,12 +96,12 @@ else:
              for (t, fr), (_, pob_t) in zip(serie_q, pob_series)])
         st.line_chart(df_q.set_index("Año")[["Qmed [L/s]", "QMD [L/s]", "QMH [L/s]"]])
         st.dataframe(df_q.style.format({"Población (hab)": "{:,.0f}",
-                                        "Qmed [L/s]": "{:.3f}", "QMD [L/s]": "{:.3f}",
-                                        "QMH [L/s]": "{:.3f}"}),
+                                        "Qmed [L/s]": SP_CAUDAL, "QMD [L/s]": SP_CAUDAL,
+                                        "QMH [L/s]": SP_CAUDAL}),
                      hide_index=True, width="stretch")
         st.session_state["flows_series"] = serie_q
 
     st.subheader("Caudal por componente (Art. 47 Res. 0330)")
     comp = demand.design_flows_by_component(r)
     st.dataframe(pd.DataFrame(comp.items(), columns=["Componente", "Q diseño [L/s]"])
-                 .style.format({"Q diseño [L/s]": "{:.3f}"}), width="stretch")
+                 .style.format({"Q diseño [L/s]": SP_CAUDAL}), width="stretch")
