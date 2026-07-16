@@ -185,14 +185,29 @@ if img is not None:
                "en modo 'lupa en tiempo real'; en modo clásico usa el botón ⏎ equivalente.")
     if f"modo_next_{BK}" in st.session_state:      # auto-avance tras confirmar / Enter
         st.session_state[f"w_radio_modo_{BK}"] = st.session_state.pop(f"modo_next_{BK}")
-    modo = st.radio("Modo de click (avanza solo al confirmar)", ETAPAS,
-                    horizontal=True, key=f"w_radio_modo_{BK}")
-    curva = _curva_activa(modo)
-    o1, o2, o3 = st.columns(3)
-    log_x = o1.checkbox("Eje X logarítmico", value=False, key=f"w_chk_lx_{BK}")
-    log_y = o2.checkbox("Eje Y logarítmico", value=False, key=f"w_chk_ly_{BK}")
-    unidad_q = o3.selectbox("Unidad de Q en la gráfica", list(FACTOR_Q),
-                            key=f"w_sel_uq_{BK}")
+
+    # WP-B3: layout de una sola pantalla — imagen a la izquierda (más ancha,
+    # es lo que el usuario necesita ver grande) y TODOS los controles
+    # (modo/ejes/unidad/clásico + zoom + calibración + confirmar/nudge/enter)
+    # apilados en una única columna angosta a la derecha, en vez de una fila
+    # de controles a todo el ancho arriba + una columna angosta aparte para
+    # el zoom (el layout viejo dejaba hueco vacío y obligaba a hacer scroll
+    # en la barra de controles). [3, 2] deja la imagen dominante sin dejar
+    # los controles demasiado angostos para sus botones/inputs.
+    col_img, col_ctrl = st.columns([3, 2])
+
+    with col_ctrl:
+        modo = st.radio("Modo de click (avanza solo al confirmar)", ETAPAS,
+                        key=f"w_radio_modo_{BK}")
+        curva = _curva_activa(modo)
+        oc1, oc2 = st.columns(2)
+        log_x = oc1.checkbox("Eje X log", value=False, key=f"w_chk_lx_{BK}")
+        log_y = oc2.checkbox("Eje Y log", value=False, key=f"w_chk_ly_{BK}")
+        unidad_q = st.selectbox("Unidad de Q en la gráfica", list(FACTOR_Q),
+                                key=f"w_sel_uq_{BK}")
+        clasico = st.checkbox("Modo clásico (sin lupa en vivo)",
+                              value=not DIGITIZER_OK, disabled=not DIGITIZER_OK,
+                              key=f"w_chk_clasico_{BK}")
 
     cal_all = pj.migrate_pump_cal(bomba.cal)   # {"qh": {...}, "qe": {...}}
     bomba.cal = cal_all
@@ -200,12 +215,7 @@ if img is not None:
     pend_key = f"pend_{BK}"
     pend = st.session_state.get(pend_key)
 
-    col_zoom, col_img = st.columns([1, 3])
-
     with col_img:
-        clasico = st.checkbox("Modo clásico (sin lupa en vivo)",
-                              value=not DIGITIZER_OK, disabled=not DIGITIZER_OK,
-                              key=f"w_chk_clasico_{BK}")
         if not clasico:
             marks_cal = []
             for eje, v in (cal or {}).items():
@@ -243,7 +253,7 @@ if img is not None:
                     st.session_state[pend_key] = dict(nuevo_p)
                     st.rerun()
 
-    with col_zoom:
+    with col_ctrl:
         st.markdown("**Zoom de precisión**")
         if pend:
             Z, R = 4, 30
@@ -308,45 +318,46 @@ if img is not None:
         else:
             st.caption("Haz click en la imagen para ubicar un punto.")
 
-    st.caption(f"Calibración Q-H: {_estado_cal(cal_all['qh'])} · "
-              f"Calibración Q-η: {_estado_cal(cal_all['qe'])}")
-    cc1, cc2, cc3 = st.columns(3)
-    if cc1.button(f"♻ Reiniciar calibración {'Q-H' if curva == 'qh' else 'Q-η'} (esta curva)",
-                  key=f"w_rst_cal_{BK}"):
-        cal_all[curva] = {}
-        bomba.cal = cal_all
-        st.session_state[pend_key] = None
-        st.rerun()
-    if {"X1", "X2", "Y1", "Y2"} <= set(cal) and cc2.button(
-            f"🪄 Detectar {'Q-H' if curva == 'qh' else 'Q-η'} por color "
-            "(usa el punto pendiente como muestra)", key=f"w_auto_{curva}_{BK}"):
-        if pend:
-            arr = np.array(img)
-            color = tuple(int(c) for c in arr[pend["y"], pend["x"]])
-            pts_px = cv.detect_curve_by_color(arr, color, tolerance=60, n_points=15)
-            calx = cv.AxisCalibration(cal["X1"]["px"], cal["X1"]["val"],
-                                      cal["X2"]["px"], cal["X2"]["val"], log_x)
-            caly = cv.AxisCalibration(cal["Y1"]["px"], cal["Y1"]["val"],
-                                      cal["Y2"]["px"], cal["Y2"]["val"], log_y)
-            pts_data = [(round(cv.pixel_to_data(pt, calx, caly)[0] * FACTOR_Q[unidad_q], 4),
-                        round(cv.pixel_to_data(pt, calx, caly)[1], 4)) for pt in pts_px]
-            if curva == "qh":
-                bomba.puntos_qh = pts_data
-                st.session_state[f"qh_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
-            else:
-                bomba.puntos_qe = pts_data
-                st.session_state[f"qe_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+        st.caption(f"Calibración Q-H: {_estado_cal(cal_all['qh'])} · "
+                  f"Calibración Q-η: {_estado_cal(cal_all['qe'])}")
+        # botones en fila propia (no en la columna angosta de controles) para
+        # que quepan legibles — apilados verticalmente en vez de a 3 por fila.
+        if st.button(f"♻ Reiniciar calibración {'Q-H' if curva == 'qh' else 'Q-η'} (esta curva)",
+                     key=f"w_rst_cal_{BK}"):
+            cal_all[curva] = {}
+            bomba.cal = cal_all
             st.session_state[pend_key] = None
             st.rerun()
-    _siguiente_enter = _ENTER_ADVANCE.get(modo)
-    if cc3.button("⏎ Enter — pasar a Q-η" if _siguiente_enter
-                 else "⏎ Enter (ya en la última etapa)",
-                 key=f"w_enter_{BK}", disabled=_siguiente_enter is None,
-                 help="Equivalente al Enter físico (que solo funciona sobre la imagen "
-                      "en modo 'lupa en tiempo real'). Termina de capturar los puntos "
-                      "de la curva activa y pasa a calibrar los ejes de la otra."):
-        st.session_state[f"modo_next_{BK}"] = _siguiente_enter
-        st.rerun()
+        if {"X1", "X2", "Y1", "Y2"} <= set(cal) and st.button(
+                f"🪄 Detectar {'Q-H' if curva == 'qh' else 'Q-η'} por color "
+                "(usa el punto pendiente como muestra)", key=f"w_auto_{curva}_{BK}"):
+            if pend:
+                arr = np.array(img)
+                color = tuple(int(c) for c in arr[pend["y"], pend["x"]])
+                pts_px = cv.detect_curve_by_color(arr, color, tolerance=60, n_points=15)
+                calx = cv.AxisCalibration(cal["X1"]["px"], cal["X1"]["val"],
+                                          cal["X2"]["px"], cal["X2"]["val"], log_x)
+                caly = cv.AxisCalibration(cal["Y1"]["px"], cal["Y1"]["val"],
+                                          cal["Y2"]["px"], cal["Y2"]["val"], log_y)
+                pts_data = [(round(cv.pixel_to_data(pt, calx, caly)[0] * FACTOR_Q[unidad_q], 4),
+                            round(cv.pixel_to_data(pt, calx, caly)[1], 4)) for pt in pts_px]
+                if curva == "qh":
+                    bomba.puntos_qh = pts_data
+                    st.session_state[f"qh_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+                else:
+                    bomba.puntos_qe = pts_data
+                    st.session_state[f"qe_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+                st.session_state[pend_key] = None
+                st.rerun()
+        _siguiente_enter = _ENTER_ADVANCE.get(modo)
+        if st.button("⏎ Enter — pasar a Q-η" if _siguiente_enter
+                     else "⏎ Enter (ya en la última etapa)",
+                     key=f"w_enter_{BK}", disabled=_siguiente_enter is None,
+                     help="Equivalente al Enter físico (que solo funciona sobre la imagen "
+                          "en modo 'lupa en tiempo real'). Termina de capturar los puntos "
+                          "de la curva activa y pasa a calibrar los ejes de la otra."):
+            st.session_state[f"modo_next_{BK}"] = _siguiente_enter
+            st.rerun()
 
 # ---------- importar puntos desde CSV (de cualquier herramienta externa) ----------
 with st.expander("📥 Importar puntos desde CSV"):
