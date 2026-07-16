@@ -94,16 +94,24 @@ la app entrega el proyecto como `.zip` listo para subir a Overleaf.
 
 ## Ejecución permanente local
 
-`run.bat` no tiene límite de tiempo — la app queda corriendo mientras esa
-consola esté abierta; se cierra únicamente si se cierra la consola.
+**Opción recomendada — servidor que no se cierra:** doble clic en
+`run_persistente.bat`. Prepara el entorno y lanza el servidor **desacoplado de
+la consola** (vía `run_persistente.vbs`, oculto): la app queda en
+`http://localhost:8501` **aunque cierres la ventana o la consola**. Para
+detenerlo, doble clic en `detener_acucalc.bat` (mata el proceso del puerto
+8501). El autosave sigue guardando en la ruta de proyecto que definas en la
+página 1, así que no pierdes el trabajo aunque reinicies el equipo.
 
-- **Acceso directo:** crea un acceso directo a `run.bat` en el escritorio o
-  en la carpeta de inicio de Windows (`shell:startup`) para lanzarla con un
-  doble clic o automáticamente al iniciar sesión.
+**Opción simple:** `run.bat` — la app corre mientras esa consola esté abierta;
+se cierra si cierras la consola.
+
+- **Acceso directo / inicio con Windows:** crea un acceso directo a
+  `run_persistente.bat` en el escritorio o en la carpeta de inicio
+  (`shell:startup`) para arrancarla con un doble clic o al iniciar sesión.
 - **Inicio automático con el Programador de tareas:** `Programador de tareas`
   → *Crear tarea básica* → desencadenador *Al iniciar sesión* → acción
-  *Iniciar un programa* → apuntar a `run.bat` con "Iniciar en" la carpeta del
-  proyecto.
+  *Iniciar un programa* → apuntar a `run_persistente.bat` con "Iniciar en" la
+  carpeta del proyecto.
 
 ## Compartir en la web
 
