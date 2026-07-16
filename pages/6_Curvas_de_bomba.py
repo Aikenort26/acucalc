@@ -9,7 +9,7 @@ from core import curves as cv, pumping as pu
 from core import project as pj
 from core.project import PumpData
 from pages_common import (page_setup, num_input, int_input, f_num, fila_incompleta,
-                          fmt_h, SP_CAUDAL, SP_ALTURA, SP_POTENCIA)
+                          fmt_h, sel_state, SP_CAUDAL, SP_ALTURA, SP_POTENCIA)
 
 try:
     from components.digitizer import digitizer
@@ -368,27 +368,66 @@ def _bloque_calibracion():
             bomba.cal = cal_all
             st.session_state[pend_key] = None
             st.rerun()
-        if {"X1", "X2"} <= set(cal_x) and {"Y1", "Y2"} <= set(cal_y) and st.button(
-                f"🪄 Detectar {'Q-H' if curva == 'qh' else 'Q-η'} por color "
-                "(usa el punto pendiente como muestra)", key=f"w_auto_{curva}_{BK}"):
+        # WP-6: controles reales de autodetección — antes tolerance=60/
+        # n_points=15 estaban fijos en el código y el bbox no se restringía
+        # a la región calibrada (recogía ejes/texto/leyenda).
+        if {"X1", "X2"} <= set(cal_x) and {"Y1", "Y2"} <= set(cal_y):
+            st.markdown("**Autodetección por color**")
+            ad1, ad2 = st.columns(2)
+            tol = num_input("Distancia de color (tolerancia)", f"auto_tol_{destino}_{BK}",
+                            40.0, decimals=0, container=ad1, min_value=10.0, max_value=150.0)
+            n_pts = int_input("Nº de puntos (bandas en X, como en automeris)",
+                              f"auto_npts_{destino}_{BK}", 20, container=ad2,
+                              min_value=5, max_value=100)
             if pend:
-                arr = np.array(img)
-                color = tuple(int(c) for c in arr[pend["y"], pend["x"]])
-                pts_px = cv.detect_curve_by_color(arr, color, tolerance=60, n_points=15)
-                calx = cv.AxisCalibration(cal_x["X1"]["px"], cal_x["X1"]["val"],
-                                          cal_x["X2"]["px"], cal_x["X2"]["val"], log_x)
-                caly = cv.AxisCalibration(cal_y["Y1"]["px"], cal_y["Y1"]["val"],
-                                          cal_y["Y2"]["px"], cal_y["Y2"]["val"], log_y)
-                pts_data = [(round(cv.pixel_to_data(pt, calx, caly)[0] * FACTOR_Q[unidad_q], 4),
-                            round(cv.pixel_to_data(pt, calx, caly)[1], 4)) for pt in pts_px]
-                if curva == "qh":
-                    bomba.puntos_qh = pts_data
-                    st.session_state[f"qh_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+                color_prev = tuple(int(c) for c in np.array(img)[pend["y"], pend["x"]])
+                st.color_picker("Color muestreado (del punto pendiente)",
+                                value="#%02X%02X%02X" % color_prev,
+                                key=f"auto_color_{destino}_{BK}", disabled=True)
+            else:
+                st.caption("Haz click cerca de la curva (o arrastra en la lupa) para "
+                          "fijar el color de muestra.")
+            puntos_existentes = bomba.puntos_qh if curva == "qh" else bomba.puntos_qe
+            sobrescribir = (st.checkbox(
+                f"Sobrescribir los {len(puntos_existentes)} puntos existentes de "
+                f"{'Q-H' if curva == 'qh' else 'Q-η'}", key=f"auto_ow_{curva}_{BK}")
+                if puntos_existentes else True)
+            if st.button(f"🪄 Detectar {'Q-H' if curva == 'qh' else 'Q-η'} por color "
+                        "(usa el punto pendiente como muestra)",
+                        key=f"w_auto_{curva}_{BK}", disabled=not pend):
+                if not sobrescribir:
+                    st.warning("Marca la casilla de sobrescritura para reemplazar los "
+                              "puntos existentes con la detección automática — no se "
+                              "pisan puntos ya capturados sin confirmar.")
                 else:
-                    bomba.puntos_qe = pts_data
-                    st.session_state[f"qe_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
-                st.session_state[pend_key] = None
-                st.rerun()
+                    arr = np.array(img)
+                    color = tuple(int(c) for c in arr[pend["y"], pend["x"]])
+                    # bbox = rectángulo calibrado (X1..X2 · Y1..Y2 de la curva
+                    # activa) con margen — fija sola la búsqueda a la zona de la
+                    # gráfica, sin que el usuario tenga que dibujarlo a mano.
+                    margen_x = max(int(0.05 * abs(cal_x["X2"]["px"] - cal_x["X1"]["px"])), 5)
+                    margen_y = max(int(0.10 * abs(cal_y["Y2"]["px"] - cal_y["Y1"]["px"])), 5)
+                    x0 = min(cal_x["X1"]["px"], cal_x["X2"]["px"]) - margen_x
+                    x1 = max(cal_x["X1"]["px"], cal_x["X2"]["px"]) + margen_x
+                    y0 = min(cal_y["Y1"]["px"], cal_y["Y2"]["px"]) - margen_y
+                    y1 = max(cal_y["Y1"]["px"], cal_y["Y2"]["px"]) + margen_y
+                    bbox = (max(x0, 0), max(y0, 0), min(x1, img.width), min(y1, img.height))
+                    pts_px = cv.detect_curve_by_color(arr, color, tolerance=tol,
+                                                      n_points=n_pts, bbox=bbox)
+                    calx = cv.AxisCalibration(cal_x["X1"]["px"], cal_x["X1"]["val"],
+                                              cal_x["X2"]["px"], cal_x["X2"]["val"], log_x)
+                    caly = cv.AxisCalibration(cal_y["Y1"]["px"], cal_y["Y1"]["val"],
+                                              cal_y["Y2"]["px"], cal_y["Y2"]["val"], log_y)
+                    pts_data = [(round(cv.pixel_to_data(pt, calx, caly)[0] * FACTOR_Q[unidad_q], 4),
+                                round(cv.pixel_to_data(pt, calx, caly)[1], 4)) for pt in pts_px]
+                    if curva == "qh":
+                        bomba.puntos_qh = pts_data
+                        st.session_state[f"qh_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+                    else:
+                        bomba.puntos_qe = pts_data
+                        st.session_state[f"qe_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+                    st.session_state[pend_key] = None
+                    st.rerun()
         _siguiente_enter = _ENTER_ADVANCE.get(modo)
         if st.button("⏎ Enter — pasar a Q-η" if _siguiente_enter
                      else "⏎ Enter (ya en la última etapa)",
@@ -642,8 +681,14 @@ if rows:
     else:
         mejor = rows[0]["Bomba"]
     opciones = [r["Bomba"] for r in rows]
+    # `opciones` cambia entre reruns (se añaden/quitan bombas con >=3 puntos,
+    # o cambia el sistema activo) — un `selectbox(index=calculado)` con key
+    # estable revienta en cuanto el valor guardado en session_state deja de
+    # estar en la lista nueva de opciones. `sel_state` resiembra el key solo
+    # cuando el valor guardado ya no es válido (mismo patrón que el resto de
+    # selects de la app; ver su docstring en pages_common.py).
+    k_final = sel_state(opciones, f"sel_final_{sel_sys}",
+                        sys_d.bomba_seleccionada if sys_d.bomba_seleccionada in opciones
+                        else mejor)
     sys_d.bomba_seleccionada = st.selectbox(
-        "Bomba seleccionada para este sistema (va al reporte)", opciones,
-        index=opciones.index(sys_d.bomba_seleccionada)
-        if sys_d.bomba_seleccionada in opciones else opciones.index(mejor),
-        key=f"w_sel_final_{sel_sys}")
+        "Bomba seleccionada para este sistema (va al reporte)", opciones, key=k_final)
