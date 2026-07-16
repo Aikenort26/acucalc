@@ -235,3 +235,33 @@ def test_load_ignora_claves_desconocidas_en_almacenamiento(tmp_path):
     p2 = pj.load(f)                # no debe lanzar TypeError
     assert p2.nombre == p.nombre
     assert p2.almacenamiento.tanques[0].forma == "circular"
+
+
+def test_load_proyecto_viejo_sin_nivel_riesgo(tmp_path):
+    """Regresión WP-2b: un proyecto guardado ANTES de existir `nivel_riesgo`
+    solo trae `frac_incendio` en `almacenamiento`. Debe cargar sin reventar,
+    conservar su `frac_incendio` y quedar con el nivel vacío ('' =
+    personalizado/legado)."""
+    p = _proyecto()
+    f = tmp_path / "sin_nivel.acucalc.json"
+    pj.save(p, f)
+    raw = json.loads(f.read_text(encoding="utf-8"))
+    # Simula exactamente la forma vieja: sin la clave nivel_riesgo, con un
+    # frac_incendio no estándar que debe preservarse tal cual.
+    raw["project"]["almacenamiento"].pop("nivel_riesgo", None)
+    raw["project"]["almacenamiento"]["frac_incendio"] = 0.18
+    f.write_text(json.dumps(raw), encoding="utf-8")
+    p2 = pj.load(f)
+    assert p2.almacenamiento.frac_incendio == 0.18
+    assert p2.almacenamiento.nivel_riesgo == ""     # personalizado/legado
+
+
+def test_nivel_riesgo_persiste_en_json(tmp_path):
+    p = _proyecto()
+    p.almacenamiento.nivel_riesgo = "medio"
+    p.almacenamiento.frac_incendio = 0.20
+    f = tmp_path / "nivel.acucalc.json"
+    pj.save(p, f)
+    p2 = pj.load(f)
+    assert p2.almacenamiento.nivel_riesgo == "medio"
+    assert p2.almacenamiento.frac_incendio == 0.20

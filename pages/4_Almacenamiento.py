@@ -1,10 +1,11 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
-from core import report_figs as rf, storage
+from core import catalogs, report_figs as rf, storage
 from core.project import TankSpec
 from pages_common import (SP_ALTURA, SP_VOLUMEN, f_num, fila_incompleta,
-                          fmt_vol, get_project, i_num, num_input, page_setup)
+                          fmt_vol, get_project, i_num, num_input, page_setup,
+                          sel_state)
 
 p = page_setup()
 st.header("4 · Almacenamiento")
@@ -15,10 +16,30 @@ if flows is None:
     st.stop()
 qmd_m3d = flows.qmd_lps * 86.4
 
+# ---------- nivel de riesgo contra incendio (catálogo, WP-2b) ----------
+riesgo_niveles = catalogs.riesgo_incendio()["niveles"]
+opciones_riesgo = list(riesgo_niveles.keys())   # bajo, medio, alto, personalizado
+
+
+def _label_riesgo(n: str) -> str:
+    fr = riesgo_niveles[n]["frac"]
+    return f"{n.capitalize()} ({fr * 100:.0f}%)" if fr is not None else "Personalizado"
+
+
 c1, c2 = st.columns(2)
-cfg.frac_incendio = num_input("Afectación incendio [%] (NSR-10 J)", "incendio",
-                              cfg.frac_incendio * 100, decimals=1, container=c1,
-                              min_value=0.0, max_value=100.0) / 100
+# "" (legado, proyectos sin nivel_riesgo) → personalizado, conservando su frac.
+k_riesgo = sel_state(opciones_riesgo, "nivel_riesgo",
+                     cfg.nivel_riesgo or "personalizado")
+cfg.nivel_riesgo = c1.selectbox(
+    "Nivel de riesgo contra incendio (NSR-10 Título J · Art. 81 Res. 0330/2017)",
+    opciones_riesgo, format_func=_label_riesgo, key=k_riesgo)
+if cfg.nivel_riesgo == "personalizado":
+    cfg.frac_incendio = num_input("Afectación incendio [%]", "incendio",
+                                  cfg.frac_incendio * 100, decimals=1, container=c1,
+                                  min_value=0.0, max_value=100.0) / 100
+else:
+    cfg.frac_incendio = riesgo_niveles[cfg.nivel_riesgo]["frac"]
+    c1.caption(f"{cfg.frac_incendio * 100:.0f}% — {riesgo_niveles[cfg.nivel_riesgo]['nota']}")
 cfg.dias_reserva = num_input("Días de reserva", "reserva", cfg.dias_reserva,
                              decimals=1, container=c2, min_value=0.5, max_value=5.0)
 

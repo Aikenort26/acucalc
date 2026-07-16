@@ -1,0 +1,21 @@
+{
+ "referencia": "Fracción de afectación por incendio aplicada al volumen de regulación (v_incendio = v_regulacion · frac). Criterio de ingeniería del proyecto orientado por NSR-10 Título J (protección contra incendios en edificaciones) y el Art. 81 de la Res. 0330 de 2017 (volumen de almacenamiento). Los porcentajes por nivel son la calibración adoptada por el consultor; el nivel 'personalizado' permite fijar un valor propio.",
+ "niveles": {
+  "bajo": {
+   "frac": 0.15,
+   "nota": "Zonas residenciales de baja densidad, ocupación dispersa y carga de fuego reducida. 15% del volumen de regulación."
+  },
+  "medio": {
+   "frac": 0.20,
+   "nota": "Cascos urbanos con densidad media, comercio menor y equipamientos comunitarios. 20% del volumen de regulación."
+  },
+  "alto": {
+   "frac": 0.25,
+   "nota": "Zonas con alta densidad, uso industrial/comercial intensivo o carga de fuego elevada. 25% del volumen de regulación."
+  },
+  "personalizado": {
+   "frac": null,
+   "nota": "El usuario define la fracción de afectación por incendio manualmente."
+  }
+ }
+}

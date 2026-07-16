@@ -317,6 +317,8 @@ def build(p: Project) -> tuple[dict, dict]:
         "v_gobierna": gobierna,
         "v_asignado_total": f"{v_asignado_total:.0f}",
         "v_final": v_final,
+        "riesgo_nivel": latex_escape((alm.nivel_riesgo or "personalizado").capitalize()),
+        "riesgo_pct": f"{alm.frac_incendio * 100:.0f}",
         "tanques": tanques_ctx,
         "sistemas": sistemas_ctx,
         "figuras": figuras,

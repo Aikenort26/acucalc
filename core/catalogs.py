@@ -46,3 +46,19 @@ def minor_loss_coefficients() -> dict[str, float]:
 
 def dotacion_references() -> dict:
     return _load("dotaciones.json")
+
+
+def riesgo_incendio() -> dict:
+    """Catálogo de niveles de riesgo contra incendio (data/riesgo_incendio.json).
+
+    Estructura: {"referencia": str, "niveles": {nivel: {"frac": float|None,
+    "nota": str}}}. `frac` es la fracción del volumen de regulación que se
+    reserva para incendio; `personalizado` la trae en None (el usuario la fija)."""
+    return _load("riesgo_incendio.json")
+
+
+def frac_riesgo_incendio(nivel: str) -> float | None:
+    """Fracción de afectación por incendio del nivel dado, o None si el nivel
+    es 'personalizado' o no existe (el llamador conserva su frac_incendio)."""
+    niveles = riesgo_incendio()["niveles"]
+    return niveles.get(nivel, {}).get("frac")

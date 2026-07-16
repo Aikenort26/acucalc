@@ -78,6 +78,7 @@ class TankSpec:
 class StorageConfig:
     frac_regulacion: float = 1 / 3
     frac_incendio: float = 0.15
+    nivel_riesgo: str = ""     # bajo|medio|alto|personalizado ("" = personalizado/legado)
     dias_reserva: float = 1.0
     factores_hora: list = field(default_factory=list)
     suministro_hora: list = field(default_factory=list)   # ventana de bombeo bajo→elevado

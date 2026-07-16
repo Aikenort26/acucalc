@@ -29,3 +29,22 @@ def test_dotaciones_referencias():
     assert alturas[">2000"] == 120
     ids = {r["id"] for r in d["otras_referencias"]}
     assert {"res0844_2018", "cra_conceptos", "minimo_vital"} <= ids
+
+
+def test_riesgo_incendio_niveles():
+    cat = catalogs.riesgo_incendio()
+    niveles = cat["niveles"]
+    assert niveles["bajo"]["frac"] == 0.15
+    assert niveles["medio"]["frac"] == 0.20
+    assert niveles["alto"]["frac"] == 0.25
+    assert niveles["personalizado"]["frac"] is None
+    assert all(niveles[n]["nota"] for n in ("bajo", "medio", "alto"))
+    ref = cat["referencia"]
+    assert "NSR-10" in ref and "0330" in ref and "81" in ref
+
+
+def test_frac_riesgo_incendio():
+    assert catalogs.frac_riesgo_incendio("bajo") == 0.15
+    assert catalogs.frac_riesgo_incendio("alto") == 0.25
+    assert catalogs.frac_riesgo_incendio("personalizado") is None
+    assert catalogs.frac_riesgo_incendio("inexistente") is None
