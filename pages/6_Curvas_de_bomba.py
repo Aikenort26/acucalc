@@ -15,6 +15,26 @@ try:
 except Exception:
     DIGITIZER_OK = False
 
+try:
+    import pypdfium2 as pdfium
+    PDFIUM_OK = True
+except Exception:
+    PDFIUM_OK = False
+
+
+def _pdf_page1_to_png_bytes(pdf_bytes: bytes, scale: float = 3.5) -> bytes:
+    """Renderiza la página 1 de un PDF (ficha técnica del catálogo) a PNG en
+    alta resolución (scale~3.5x, igual o mejor que la resolución de impresión
+    típica de un PDF de catálogo), para digitalizar la curva con la misma
+    calidad que un PNG/JPG de buena fuente."""
+    doc = pdfium.PdfDocument(pdf_bytes)
+    page = doc.get_page(0)
+    bitmap = page.render(scale=scale)
+    pil_img = bitmap.to_pil().convert("RGB")
+    buf = io.BytesIO()
+    pil_img.save(buf, format="PNG")
+    return buf.getvalue()
+
 p = page_setup()
 st.header("6 · Curvas de bomba — digitalización y punto de operación")
 
@@ -62,10 +82,23 @@ with st.popover("🗑 Eliminar esta bomba"):
         st.rerun()
 
 # ---------- imagen ----------
-up = st.file_uploader("Imagen de la curva (png/jpg del catálogo)",
-                      type=["png", "jpg", "jpeg"], key=f"w_up_{BK}")
+up = st.file_uploader("Imagen de la curva (png/jpg/pdf del catálogo)",
+                      type=["png", "jpg", "jpeg", "pdf"], key=f"w_up_{BK}")
 if up is not None:
-    bomba.imagen_b64 = base64.b64encode(up.getvalue()).decode()
+    raw = up.getvalue()
+    es_pdf = raw[:4] == b"%PDF" or up.name.lower().endswith(".pdf")
+    if es_pdf:
+        if not PDFIUM_OK:
+            st.error("No se pudo cargar el soporte de PDF (pypdfium2). "
+                     "Sube la imagen como PNG/JPG en su lugar.")
+        else:
+            try:
+                png_bytes = _pdf_page1_to_png_bytes(raw)
+                bomba.imagen_b64 = base64.b64encode(png_bytes).decode()
+            except Exception as e:
+                st.error(f"No se pudo renderizar el PDF: {e}")
+    else:
+        bomba.imagen_b64 = base64.b64encode(raw).decode()
 if not bomba.imagen_b64:
     st.info("Sube la imagen del catálogo, o ingresa los puntos Q-H / Q-η a mano abajo.")
 img = None

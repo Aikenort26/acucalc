@@ -90,6 +90,25 @@ def test_render_tex_con_red(tmp_path):
     assert "Red de distribución" in tex and "J1" in tex and "63" in tex
 
 
+def test_render_tex_sin_anexos_curvas_omite_seccion(tmp_path):
+    """CTX no trae 'anexos_curvas' (ctx.get / Undefined jinja) — la sección
+    de anexo de curvas no debe aparecer."""
+    out = report.render(CTX, tmp_path)
+    tex = (out / "main.tex").read_text(encoding="utf-8")
+    assert "Anexo: curvas de bombas" not in tex
+
+
+def test_render_tex_con_anexos_curvas(tmp_path):
+    ctx_con_curvas = dict(CTX)
+    ctx_con_curvas["anexos_curvas"] = [
+        {"sistema": "Captación→T.Bajo", "bomba": "Bomba A", "fig": "curva_0_0.png"}]
+    out = report.render(ctx_con_curvas, tmp_path)
+    tex = (out / "main.tex").read_text(encoding="utf-8")
+    assert "Anexo: curvas de bombas" in tex
+    assert "curva_0_0.png" in tex
+    assert "Bomba A" in tex
+
+
 def test_render_crea_zip(tmp_path):
     out = report.render(CTX, tmp_path)
     z = report.make_zip(out)

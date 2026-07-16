@@ -321,6 +321,20 @@ datos suministrados por el usuario. En consecuencia:
     responsable ni las revisiones de las autoridades competentes.
 \end{itemize}
 
+\BLOCK{if anexos_curvas}
+\section{Anexo: curvas de bombas}
+Se incluye a continuación la curva original del fabricante (ficha técnica del
+catálogo) de cada bomba seleccionada, para contraste directo con los puntos
+digitalizados y las regresiones polinómicas presentadas en la sección de
+Sistemas de bombeo.
+\BLOCK{for a in anexos_curvas}
+\begin{figure}[H]\centering
+\includegraphics[width=0.85\textwidth]{figures/\VAR{a.fig}}
+\caption{Curva de catálogo --- \VAR{a.bomba} (\VAR{a.sistema}).}
+\end{figure}
+\BLOCK{endfor}
+\BLOCK{endif}
+
 \section{Referencias}
 \begin{enumerate}
 \BLOCK{for ref in referencias}

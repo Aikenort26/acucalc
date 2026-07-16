@@ -224,6 +224,32 @@ def build(p: Project) -> tuple[dict, dict]:
             "bomba_seleccionada": latex_escape(s.bomba_seleccionada or "—"),
             "fig": f"{fig_name}.png"})
 
+    # ---------- anexo: curvas de bombas seleccionadas (imagen original del catálogo) ----------
+    def _save_curva(b64: str, name: str) -> str | None:
+        if not b64:
+            return None
+        raw = base64.b64decode(b64)
+        ext = "jpg" if raw[:3] == b"\xff\xd8\xff" else "png"
+        fp = figdir / f"{name}.{ext}"
+        fp.write_bytes(raw)
+        figuras[name] = str(fp)
+        return fp.name
+
+    anexos_curvas = []
+    for i, s in enumerate(p.bombeos):
+        if not s.bomba_seleccionada:
+            continue
+        for j, bb in enumerate(s.bombas):
+            if bb.nombre != s.bomba_seleccionada or not bb.imagen_b64:
+                continue
+            fig_curva = _save_curva(bb.imagen_b64, f"curva_{i}_{j}")
+            if fig_curva:
+                anexos_curvas.append({
+                    "sistema": latex_escape(s.nombre),
+                    "bomba": latex_escape(bb.nombre),
+                    "fig": fig_curva})
+            break
+
     # ---------- tanques ----------
     tanques_ctx = []
     for t in alm.tanques:
@@ -307,5 +333,6 @@ def build(p: Project) -> tuple[dict, dict]:
         "logo_consultor": logo_consultor,
         "referencias": REFERENCIAS,
         "red": red_ctx,
+        "anexos_curvas": anexos_curvas,
     }
     return ctx, figuras

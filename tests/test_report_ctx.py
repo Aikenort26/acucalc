@@ -121,3 +121,35 @@ def test_logo_entra_al_diccionario_de_figuras_y_se_copia(tmp_path):
     assert ctx["logo_cliente"] == "logo_cliente.png"
     out = report.render(ctx, tmp_path)
     assert (out / "figures" / "logo_cliente.png").exists()
+
+
+def test_curva_de_bomba_seleccionada_entra_al_anexo(tmp_path):
+    """WP-B1: la bomba seleccionada del sistema (bomba_seleccionada) con
+    imagen_b64 debe entrar en figuras (para que report.render la copie) y en
+    ctx['anexos_curvas'] (para que la plantilla la incluya como anexo)."""
+    p = _sistema_con_bomba()
+    p.bombeos[0].bombas[0].imagen_b64 = _logo_png_b64()
+    p.bombeos[0].bomba_seleccionada = "Bomba X"
+    ctx, figuras = report_ctx.build(p)
+
+    assert "curva_0_0" in figuras
+    assert ctx["anexos_curvas"] == [
+        {"sistema": "Bombeo 1", "bomba": "Bomba X", "fig": "curva_0_0.png"}]
+    out = report.render(ctx, tmp_path)
+    assert (out / "figures" / "curva_0_0.png").exists()
+
+
+def test_sin_bomba_seleccionada_no_hay_anexo():
+    p = _sistema_con_bomba()
+    p.bombeos[0].bombas[0].imagen_b64 = _logo_png_b64()
+    # bomba_seleccionada queda vacía (default)
+    ctx, figuras = report_ctx.build(p)
+    assert ctx["anexos_curvas"] == []
+    assert "curva_0_0" not in figuras
+
+
+def test_bomba_seleccionada_sin_imagen_no_hay_anexo():
+    p = _sistema_con_bomba()
+    p.bombeos[0].bomba_seleccionada = "Bomba X"   # sin imagen_b64
+    ctx, figuras = report_ctx.build(p)
+    assert ctx["anexos_curvas"] == []
