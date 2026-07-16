@@ -101,13 +101,41 @@ def operating_point(pump_fit: CurveFit,
 
 
 def detect_curve_by_color(img_rgb, target_rgb: tuple[int, int, int],
-                          tolerance: int = 40, n_points: int = 30) -> list[tuple[float, float]]:
-    """Extrae puntos (px_x, px_y) de la curva cuyo color ≈ target_rgb.
-    img_rgb: array HxWx3 uint8 (RGB). Devuelve ≤ n_points ordenados por x
-    (mediana de y por banda de x). Lista vacía si no hay pixeles del color."""
-    img = np.asarray(img_rgb, dtype=np.int16)
-    dist = np.abs(img - np.array(target_rgb, dtype=np.int16)).sum(axis=2)
-    mask = dist <= tolerance * 3
+                          tolerance: int = 40, n_points: int = 30,
+                          bbox: tuple[int, int, int, int] | None = None,
+                          mask_extra=None) -> list[tuple[float, float]]:
+    """Extrae puntos (px_x, px_y) de la curva cuyo color ≈ target_rgb, estilo
+    WebPlotDigitizer/automeris. Devuelve ≤ n_points ordenados por x.
+
+    Correcciones vs. la versión vieja (que tomaba "puntos aleatorios"):
+    - **Distancia euclidiana en RGB** (no L1 cruda): un umbral en L1 de ~180
+      hacía match con grises y ejes; la euclidiana con `tolerance` acota mucho
+      mejor la vecindad del color objetivo.
+    - **Restricción al rectángulo `bbox`** (x0, y0, x1, y1) del área de la
+      gráfica — típicamente el rectángulo calibrado. Fuera de ahí quedan ejes,
+      texto y leyenda que contaminaban la máscara.
+    - **`mask_extra`**: máscara booleana HxW opcional ("pen") para limitar la
+      búsqueda a la zona pintada por el usuario.
+    - **Clustering por conectividad en cada banda** en vez de la mediana global:
+      si en una banda de x coexisten la curva y una línea de rejilla, la mediana
+      caía ENTRE ambas (un punto que no está en ninguna). Ahora se toma el
+      cluster contiguo de y más grande (la curva es la traza más densa) y se
+      devuelve su centro.
+
+    img_rgb: array HxWx3 uint8 (RGB). Lista vacía si no hay pixeles del color."""
+    img = np.asarray(img_rgb, dtype=np.float32)
+    target = np.array(target_rgb, dtype=np.float32)
+    dist = np.sqrt(((img - target) ** 2).sum(axis=2))
+    mask = dist <= float(tolerance)
+    if bbox is not None:
+        x0, y0, x1, y1 = bbox
+        x0, x1 = sorted((max(int(x0), 0), min(int(x1), mask.shape[1])))
+        y0, y1 = sorted((max(int(y0), 0), min(int(y1), mask.shape[0])))
+        recorte = np.zeros_like(mask)
+        recorte[y0:y1, x0:x1] = True
+        mask &= recorte
+    if mask_extra is not None:
+        mask &= np.asarray(mask_extra, dtype=bool)
     ys, xs = np.nonzero(mask)
     if len(xs) == 0:
         return []
@@ -116,9 +144,85 @@ def detect_curve_by_color(img_rgb, target_rgb: tuple[int, int, int],
     pts = []
     for a, b in zip(bands, bands[1:]):
         sel = (xs >= a) & (xs < b)
-        if sel.any():
-            pts.append((float(np.median(xs[sel])), float(np.median(ys[sel]))))
+        if not sel.any():
+            continue
+        ys_band = np.sort(ys[sel])
+        y_centro = _cluster_y_dominante(ys_band)
+        x_centro = float(np.median(xs[sel]))
+        pts.append((x_centro, y_centro))
     return pts
+
+
+def _cluster_y_dominante(ys_sorted, gap: int = 5) -> float:
+    """Centro del cluster contiguo de y más grande (la traza de la curva es más
+    densa que una línea de rejilla aislada). `gap`: separación en px que corta
+    un cluster del siguiente."""
+    inicio = 0
+    mejor_ini, mejor_fin = 0, 0
+    for i in range(1, len(ys_sorted) + 1):
+        if i == len(ys_sorted) or ys_sorted[i] - ys_sorted[i - 1] > gap:
+            if (i - inicio) > (mejor_fin - mejor_ini):
+                mejor_ini, mejor_fin = inicio, i
+            inicio = i
+    cluster = ys_sorted[mejor_ini:mejor_fin]
+    return float(np.mean(cluster))
+
+
+def suggest_n2(qh: list[tuple[float, float]], qe: list[tuple[float, float]],
+               n1_nominal: float, n_unidades: int, arreglo: str,
+               sys_lps: list[tuple[float, float]],
+               q_objetivo: float | None = None,
+               h_objetivo: float | None = None) -> float | None:
+    """Sugiere N₂ (rpm/Hz) tal que el punto de operación de la bomba
+    transformada (afinidad N1→N2, luego arreglo ×n_unidades) contra la curva
+    de sistema `sys_lps` caiga en `q_objetivo` O `h_objetivo` (exactamente
+    uno de los dos, no ambos). Es solo una sugerencia — el llamador decide si
+    aplicarla a `PumpData.n2_objetivo`; esta función NO modifica nada.
+
+    Busca la raíz por `brentq` sobre r = N2/N1 en el bracket [0.3, 3.0]
+    (afinidad físicamente razonable para el mismo rodete). Devuelve None si
+    no se puede evaluar (menos de 3 puntos, N1 <= 0) o si no hay raíz
+    acotada en el bracket (el objetivo está fuera de lo alcanzable variando
+    N2 solo)."""
+    if (q_objetivo is None) == (h_objetivo is None):
+        raise ValueError("Debes dar exactamente uno de q_objetivo o h_objetivo")
+    if n1_nominal <= 0 or len(qh) < 3:
+        return None
+
+    def _objetivo(r: float) -> float | None:
+        n2 = n1_nominal * r
+        qh_t, _ = apply_pump_transform(qh, qe, n1_nominal, n2, n_unidades, arreglo)
+        try:
+            fit = fit_curve(qh_t, 2)
+        except ValueError:
+            return None
+        op = operating_point(fit, sys_lps)
+        if op is None:
+            return None
+        return op[0] - q_objetivo if q_objetivo is not None else op[1] - h_objetivo
+
+    lo, hi = 0.3, 3.0
+    f_lo, f_hi = _objetivo(lo), _objetivo(hi)
+    if f_lo is None or f_hi is None:
+        # barrido fino para encontrar un sub-intervalo bracketable, en vez de
+        # rendirse ante un solo None en los extremos (ej. r bajo sin cruce)
+        rs = np.linspace(lo, hi, 40)
+        vals = [_objetivo(r) for r in rs]
+        for a, b, fa, fb in zip(rs, rs[1:], vals, vals[1:]):
+            if fa is None or fb is None:
+                continue
+            if fa == 0.0:
+                return float(n1_nominal * a)
+            if fa * fb < 0:
+                r_root = brentq(lambda r: _objetivo(r), a, b)
+                return float(n1_nominal * r_root)
+        return None
+    if f_lo == 0.0:
+        return float(n1_nominal * lo)
+    if f_lo * f_hi < 0:
+        r_root = brentq(lambda r: _objetivo(r), lo, hi)
+        return float(n1_nominal * r_root)
+    return None
 
 
 def scale_points(points: list[tuple[float, float]], r: float) -> list[tuple[float, float]]:

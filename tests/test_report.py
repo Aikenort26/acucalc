@@ -26,6 +26,7 @@ CTX = {
          "frac": "0.5167", "v_asignado": "110", "v_req": "110.0", "cumple": "Sí"}],
     "v_art81": 75, "v_curva": 110, "v_gobierna": "Curva integral",
     "v_asignado_total": "140", "v_final": 140,
+    "riesgo_nivel": "Medio", "riesgo_pct": "20",
     "tanques": [{"nombre": "T. bajo", "tipo": "bajo", "tipo_constructivo": "semienterrado",
                  "forma": "rectangular", "cantidad": 1,
                  "dim": "3.00 × 4.50 m", "volumen": "30", "volumen_real": "31.2",
@@ -40,6 +41,9 @@ CTX = {
         "potencia_kw": "5.10", "potencia_hp": "6.84",
         "tramos": [{"nombre": "Impulsión", "L": "284.8", "D_mm": "79.5",
                     "material": "PEAD", "V": "1.04", "hf": "3.756", "hl": "0.798"}],
+        "ariete": [{"nombre": "Impulsión", "c": "215.90", "dh": "22.83",
+                    "h_total": "97.18", "pn": "82", "fs": "0.84", "uso": "118.5",
+                    "margen": "-18.5", "cumple": "No"}],
         "bombas": [{"nombre": "Bomba A", "q_op": "5.30", "h_op": "74.50",
                     "eta_op": "0.490", "bep_q": "7.80", "desv_bep": "-32.1",
                     "p_hp": "6.90", "arreglo": "nominal",
@@ -73,6 +77,9 @@ def test_render_tex(tmp_path):
     assert "Recomendaciones y limitaciones" in tex
     assert "Resolución 0330 de 2017, MVCT." in tex          # referencias
     assert "listoffigures" in tex and "listoftables" in tex
+    assert "Medio" in tex and "20\\%" in tex                # nivel de riesgo incendio (WP-2b)
+    assert "factor de seguridad" in tex.lower()             # golpe de ariete FS (WP-2c)
+    assert "215.90" in tex                                  # celeridad del tramo
     assert "semienterrado" in tex and "112.4" in tex        # tipo constructivo + V real
     assert "Arreglo" in tex                                  # columna de arreglo por bomba
 

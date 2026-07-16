@@ -65,7 +65,9 @@ def test_pipeline_completo(tmp_path):
 
     # contexto del reporte: mismo pipeline que usa la página 7 y los scripts demo
     ctx, figuras = report_ctx.build(p)
-    assert abs(float(ctx["qmd"]) - 2.14234) < 1e-3
+    # El reporte formatea los caudales con la convención de 2 decimales
+    # (WP-2a, core/formato.fmt_q): "2.14". La tolerancia refleja esa precisión.
+    assert abs(float(ctx["qmd"]) - 2.14234) < 5e-3
     # flujo norma-first: v_final = max(art81 QMD/3, curva integral) = 110 (golden)
     assert ctx["v_final"] == 110 and ctx["v_curva"] == 110 and ctx["v_gobierna"] == "Curva integral"
     assert ctx["tanques_balance"] and ctx["tanques_balance"][0]["v_asignado"] == "110"

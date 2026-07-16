@@ -8,7 +8,8 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 from core import curves as cv, pumping as pu
 from core import project as pj
 from core.project import PumpData
-from pages_common import page_setup, num_input, int_input
+from pages_common import (page_setup, num_input, int_input, f_num, fila_incompleta,
+                          fmt_h, sel_state, SP_CAUDAL, SP_ALTURA, SP_POTENCIA)
 
 try:
     from components.digitizer import digitizer
@@ -53,7 +54,7 @@ if resuelto is None:
     st.stop()
 qb_lps = resuelto["qb_lps"]
 hd = resuelto["solve"].hd
-st.caption(f"Punto de diseño del sistema: **Q = {qb_lps:.2f} L/s · Hd = {hd:.1f} m** "
+st.caption(f"Punto de diseño del sistema: **Q = {qb_lps:.2f} L/s · Hd = {fmt_h(hd)} m** "
            f"(caudal de bombeo por {sys_d.horas:.0f} h/día)")
 
 # ---------- selección / creación / eliminación de bomba ----------
@@ -102,9 +103,18 @@ if up is not None:
         bomba.imagen_b64 = base64.b64encode(raw).decode()
 if not bomba.imagen_b64:
     st.info("Sube la imagen del catálogo, o ingresa los puntos Q-H / Q-η a mano abajo.")
+@st.cache_data(show_spinner=False)
+def _decode_imagen(imagen_b64: str) -> Image.Image:
+    """Decodifica base64→PIL RGB, cacheado por el hash del propio string b64
+    (WP-5: `st.cache_data` hashea sus args — decodificar y materializar todos
+    los pixeles con `.convert('RGB')` en cada rerun era el costo más caro y
+    completamente evitable, ya que la imagen no cambia entre clicks)."""
+    return Image.open(io.BytesIO(base64.b64decode(imagen_b64))).convert("RGB")
+
+
 img = None
 if bomba.imagen_b64:
-    img = Image.open(io.BytesIO(base64.b64decode(bomba.imagen_b64))).convert("RGB")
+    img = _decode_imagen(bomba.imagen_b64)
 
 FACTOR_Q = {"L/s": 1.0, "L/min": 1 / 60, "m³/h": 1 / 3.6, "GPM": 0.0630902}
 
@@ -145,30 +155,41 @@ def _puntos_transformados(b: PumpData) -> tuple[list, list]:
                                    b.n2_objetivo, b.n_unidades, b.arreglo)
 
 
-# ---------- WP-B2: calibración de ejes independiente Q-H / Q-η ----------
-# H y η se grafican en ejes Y distintos con escalas no relacionadas (ver
-# captura del usuario) — una sola calibración compartida (esquema viejo) era
-# incorrecta para η. La cadena de etapas ahora encadena las 4 calibraciones
-# de Q-H, luego captura de puntos Q-H, y (solo con Enter explícito, no
-# automático) pasa a calibrar Q-η y capturar sus puntos.
-ETAPAS_QH = ["Calibrar X1 (Q-H)", "Calibrar X2 (Q-H)", "Calibrar Y1 (Q-H)",
-            "Calibrar Y2 (Q-H)", "Punto Q-H"]
-ETAPAS_QE = ["Calibrar X1 (Q-η)", "Calibrar X2 (Q-η)", "Calibrar Y1 (Q-η)",
-            "Calibrar Y2 (Q-η)", "Punto Q-η"]
-ETAPAS = ETAPAS_QH + ETAPAS_QE
-_NEXT_CAL = {  # (curva, eje fijado) -> siguiente etapa, misma curva
-    ("qh", "X1"): "Calibrar X2 (Q-H)", ("qh", "X2"): "Calibrar Y1 (Q-H)",
+# ---------- WP-3a: eje X (Q) único y compartido entre Q-H y Q-η ----------
+# Q es la misma magnitud/escala para ambas curvas de la misma bomba (ya existe
+# el selector "Unidad de Q en la gráfica" compartido más abajo) — calibrar X
+# dos veces (esquema WP-B2) era trabajo redundante. Solo Y necesita
+# calibración independiente por curva (H y η viven en escalas no
+# relacionadas). Cadena de 6 calibraciones + 2 capturas: X1 → X2 →
+# Y1(Q-H) → Y2(Q-H) → Punto Q-H → [Enter] → Y1(Q-η) → Y2(Q-η) → Punto Q-η.
+ETAPAS = ["Calibrar X1", "Calibrar X2", "Calibrar Y1 (Q-H)", "Calibrar Y2 (Q-H)",
+         "Punto Q-H", "Calibrar Y1 (Q-η)", "Calibrar Y2 (Q-η)", "Punto Q-η"]
+_NEXT_CAL = {  # (destino en cal_all, eje fijado) -> siguiente etapa
+    ("x", "X1"): "Calibrar X2", ("x", "X2"): "Calibrar Y1 (Q-H)",
     ("qh", "Y1"): "Calibrar Y2 (Q-H)", ("qh", "Y2"): "Punto Q-H",
-    ("qe", "X1"): "Calibrar X2 (Q-η)", ("qe", "X2"): "Calibrar Y1 (Q-η)",
     ("qe", "Y1"): "Calibrar Y2 (Q-η)", ("qe", "Y2"): "Punto Q-η",
 }
-# avance explícito por Enter: termina de capturar puntos de una curva y pasa
-# a calibrar la otra. En "Punto Q-η" (última etapa) Enter no hace nada.
-_ENTER_ADVANCE = {"Punto Q-H": "Calibrar X1 (Q-η)"}
+# avance explícito por Enter: termina de capturar puntos de Q-H y pasa a
+# calibrar Q-η. X ya está calibrado (compartido) — se salta directo a Y1(Q-η)
+# en vez de repetir X. En "Punto Q-η" (última etapa) Enter no hace nada.
+_ENTER_ADVANCE = {"Punto Q-H": "Calibrar Y1 (Q-η)"}
+
+
+def _modo_destino(modo: str) -> str:
+    """'x' (etapas de X, compartidas) | 'qh' | 'qe' — a qué sub-diccionario de
+    `cal_all` pertenece la etapa de calibración actual."""
+    if modo in ("Calibrar X1", "Calibrar X2"):
+        return "x"
+    return "qh" if "Q-H" in modo else "qe"
 
 
 def _curva_activa(modo: str) -> str:
-    return "qh" if "Q-H" in modo else "qe"
+    """Curva de PUNTOS asociada a la etapa (para markers/tabla/captura). En
+    las etapas de X (compartidas, sin curva propia) se usa Q-H como contexto
+    de despliegue por defecto — no afecta el dato calibrado, que siempre va a
+    `cal_all['x']` sin importar esta elección."""
+    destino = _modo_destino(modo)
+    return "qh" if destino == "x" else destino
 
 
 def _estado_cal(c: dict) -> str:
@@ -176,13 +197,20 @@ def _estado_cal(c: dict) -> str:
            or "sin calibrar")
 
 
-if img is not None:
+# WP-5: todo el bloque de calibración/captura vive en un `st.fragment` — un
+# click de digitalización (o cualquier widget de este bloque) solo vuelve a
+# ejecutar ESTE bloque, no la página entera (evita rehacer fit_curve +
+# operating_point + best_efficiency_point + system_curve + el render
+# matplotlib de la comparación de bombas, más abajo, en cada click de punto).
+@st.fragment
+def _bloque_calibracion():
     st.subheader("Calibración y captura de puntos")
     st.caption("1) Elige el modo · 2) haz click en la imagen · 3) afina el punto en el "
                "panel de zoom (±1 px) · 4) confirma. Los puntos confirmados quedan "
-               "marcados sobre la imagen. Q-H y Q-η tienen calibración de ejes "
-               "independiente (escalas distintas). Enter físico avanza de Q-H a Q-η "
-               "en modo 'lupa en tiempo real'; en modo clásico usa el botón ⏎ equivalente.")
+               "marcados sobre la imagen. El eje X (Q) se calibra una sola vez y se "
+               "comparte entre Q-H y Q-η; Y se calibra por separado en cada curva "
+               "(escalas distintas). Enter físico avanza de Q-H a Q-η en modo 'lupa "
+               "en tiempo real'; en modo clásico usa el botón ⏎ equivalente.")
     if f"modo_next_{BK}" in st.session_state:      # auto-avance tras confirmar / Enter
         st.session_state[f"w_radio_modo_{BK}"] = st.session_state.pop(f"modo_next_{BK}")
 
@@ -199,6 +227,7 @@ if img is not None:
     with col_ctrl:
         modo = st.radio("Modo de click (avanza solo al confirmar)", ETAPAS,
                         key=f"w_radio_modo_{BK}")
+        destino = _modo_destino(modo)
         curva = _curva_activa(modo)
         oc1, oc2 = st.columns(2)
         log_x = oc1.checkbox("Eje X log", value=False, key=f"w_chk_lx_{BK}")
@@ -209,16 +238,18 @@ if img is not None:
                               value=not DIGITIZER_OK, disabled=not DIGITIZER_OK,
                               key=f"w_chk_clasico_{BK}")
 
-    cal_all = pj.migrate_pump_cal(bomba.cal)   # {"qh": {...}, "qe": {...}}
+    cal_all = pj.migrate_pump_cal_v7(bomba.cal)   # {"x": {...}, "qh": {...}, "qe": {...}}
     bomba.cal = cal_all
-    cal = cal_all[curva]                       # calibración de la curva activa
+    cal_x = cal_all["x"]                       # calibración X (compartida)
+    cal_y = cal_all[curva]                     # calibración Y de la curva activa
+    cal_merged = {**cal_x, **cal_y}            # para overlay / markers / pixel_to_data
     pend_key = f"pend_{BK}"
     pend = st.session_state.get(pend_key)
 
     with col_img:
         if not clasico:
             marks_cal = []
-            for eje, v in (cal or {}).items():
+            for eje, v in cal_merged.items():
                 if eje.startswith("X"):
                     marks_cal.append({"x": v["px"], "y": v.get("py", img.height - 20),
                                       "label": eje})
@@ -229,6 +260,10 @@ if img is not None:
                        "qh": st.session_state.get(f"qh_px_{BK}", []),
                        "qe": st.session_state.get(f"qe_px_{BK}", []),
                        "pending": [pend["x"], pend["y"]] if pend else None}
+            # WP-5: sin st.rerun() explícito aquí — setValue() del componente
+            # (index.html) ya dispara un rerun de Streamlit al cambiar su
+            # valor; un segundo st.rerun() duplicaba el costo de cada click
+            # (doble ciclo de render completo por punto capturado).
             click = digitizer(bomba.imagen_b64, markers, key=f"dg_{BK}")
             if click:
                 n = click.get("n")
@@ -238,20 +273,33 @@ if img is not None:
                         siguiente = _ENTER_ADVANCE.get(modo)
                         if siguiente:
                             st.session_state[f"modo_next_{BK}"] = siguiente
-                        st.rerun()
                 elif n != st.session_state.get(f"last_click_{BK}"):
                     st.session_state[f"last_click_{BK}"] = n
                     st.session_state[pend_key] = {"x": int(click["x"]), "y": int(click["y"])}
-                    st.rerun()
         else:
-            shown = _overlay(img, cal, pend)
+            shown = _overlay(img, cal_merged, pend)
+            # Altura fija (ítem 8, modo clásico): a diferencia del componente
+            # JS, streamlit_image_coordinates muestra la imagen a resolución
+            # nativa (sin CSS que la escale) — un PDF vertical de alta
+            # resolución revienta la altura del iframe igual que en modo
+            # lupa. Se reescala aquí a la misma altura máxima y las
+            # coordenadas de click se reproyectan al espacio de pixel
+            # original antes de guardarlas (cal/puntos siguen en ese
+            # espacio, igual que en el componente).
+            ESCALA_MAX_ALTO = 640
+            factor = min(1.0, ESCALA_MAX_ALTO / shown.height)
+            if factor < 1.0:
+                shown = shown.resize((max(1, round(shown.width * factor)),
+                                      max(1, round(shown.height * factor))))
+            # WP-5: mismo motivo — streamlit_image_coordinates ya reruns al
+            # cambiar su valor devuelto, un st.rerun() extra era redundante.
             click = streamlit_image_coordinates(shown, key=f"img_{BK}")
             if click is not None:
-                nuevo_p = {"x": int(click["x"]), "y": int(click["y"])}
+                nuevo_p = {"x": int(round(click["x"] / factor)),
+                          "y": int(round(click["y"] / factor))}
                 if nuevo_p != st.session_state.get(f"last_click_{BK}"):
                     st.session_state[f"last_click_{BK}"] = nuevo_p
                     st.session_state[pend_key] = dict(nuevo_p)
-                    st.rerun()
 
     with col_ctrl:
         st.markdown("**Zoom de precisión**")
@@ -268,35 +316,39 @@ if img is not None:
             st.image(crop, width="stretch")
             st.caption(f"pixel ({pend['x']}, {pend['y']})")
             n1, n2, n3, n4 = st.columns(4)
+            # scope="fragment": pend solo lo lee este fragmento (nada fuera de
+            # _bloque_calibracion toca bomba.cal ni el punto pendiente), así que
+            # un rerun de página completa por cada pixel de ajuste era puro
+            # desperdicio — exactamente el caso que el reviewer detectó sin
+            # arreglar en el primer pase de WP-5.
             if n1.button("←", key=f"w_l_{BK}"):
-                pend["x"] -= 1; st.rerun()
+                pend["x"] -= 1; st.rerun(scope="fragment")
             if n2.button("→", key=f"w_r_{BK}"):
-                pend["x"] += 1; st.rerun()
+                pend["x"] += 1; st.rerun(scope="fragment")
             if n3.button("↑", key=f"w_u_{BK}"):
-                pend["y"] -= 1; st.rerun()
+                pend["y"] -= 1; st.rerun(scope="fragment")
             if n4.button("↓", key=f"w_d_{BK}"):
-                pend["y"] += 1; st.rerun()
+                pend["y"] += 1; st.rerun(scope="fragment")
 
             if modo.startswith("Calibrar"):
                 eje = modo.split()[1]
-                val = num_input(f"Valor real en {eje}", f"val_{eje}_{curva}_{BK}", 0.0,
+                val = num_input(f"Valor real en {eje}", f"val_{eje}_{destino}_{BK}", 0.0,
                                 decimals=3)
-                if st.button(f"✔ Fijar {eje}", key=f"w_fix_{eje}_{curva}_{BK}"):
-                    cal[eje] = ({"px": pend["x"], "py": pend["y"]}
-                                if eje.startswith("X")
-                                else {"px": pend["y"], "px_x": pend["x"]})
-                    cal[eje]["val"] = val
-                    cal_all[curva] = cal
+                if st.button(f"✔ Fijar {eje}", key=f"w_fix_{eje}_{destino}_{BK}"):
+                    entrada = ({"px": pend["x"], "py": pend["y"]} if eje.startswith("X")
+                              else {"px": pend["y"], "px_x": pend["x"]})
+                    entrada["val"] = val
+                    cal_all[destino][eje] = entrada
                     bomba.cal = cal_all
                     st.session_state[pend_key] = None
-                    st.session_state[f"modo_next_{BK}"] = _NEXT_CAL[(curva, eje)]
-                    st.rerun()
+                    st.session_state[f"modo_next_{BK}"] = _NEXT_CAL[(destino, eje)]
+                    st.rerun(scope="fragment")
             else:
-                if {"X1", "X2", "Y1", "Y2"} <= set(cal):
-                    calx = cv.AxisCalibration(cal["X1"]["px"], cal["X1"]["val"],
-                                              cal["X2"]["px"], cal["X2"]["val"], log_x)
-                    caly = cv.AxisCalibration(cal["Y1"]["px"], cal["Y1"]["val"],
-                                              cal["Y2"]["px"], cal["Y2"]["val"], log_y)
+                if {"X1", "X2"} <= set(cal_x) and {"Y1", "Y2"} <= set(cal_y):
+                    calx = cv.AxisCalibration(cal_x["X1"]["px"], cal_x["X1"]["val"],
+                                              cal_x["X2"]["px"], cal_x["X2"]["val"], log_x)
+                    caly = cv.AxisCalibration(cal_y["Y1"]["px"], cal_y["Y1"]["val"],
+                                              cal_y["Y2"]["px"], cal_y["Y2"]["val"], log_y)
                     q, y = cv.pixel_to_data((pend["x"], pend["y"]), calx, caly)
                     q *= FACTOR_Q[unidad_q]
                     st.caption(f"→ Q = {q:.3f} L/s · {'H' if curva == 'qh' else 'η'}"
@@ -313,51 +365,102 @@ if img is not None:
                         st.session_state[pend_key] = None
                         st.rerun()
                 else:
-                    st.warning(f"Calibra X1, X2, Y1 y Y2 de {'Q-H' if curva == 'qh' else 'Q-η'} "
-                              "antes de capturar puntos.")
+                    st.warning("Calibra X1, X2 (eje compartido) y Y1, Y2 de "
+                              f"{'Q-H' if curva == 'qh' else 'Q-η'} antes de capturar puntos.")
         else:
             st.caption("Haz click en la imagen para ubicar un punto.")
 
-        st.caption(f"Calibración Q-H: {_estado_cal(cal_all['qh'])} · "
-                  f"Calibración Q-η: {_estado_cal(cal_all['qe'])}")
+        st.caption(f"Calibración X (compartida): {_estado_cal(cal_x)} · "
+                  f"Calibración Y Q-H: {_estado_cal(cal_all['qh'])} · "
+                  f"Calibración Y Q-η: {_estado_cal(cal_all['qe'])}")
         # botones en fila propia (no en la columna angosta de controles) para
-        # que quepan legibles — apilados verticalmente en vez de a 3 por fila.
-        if st.button(f"♻ Reiniciar calibración {'Q-H' if curva == 'qh' else 'Q-η'} (esta curva)",
+        # que quepan legibles.
+        rb1, rb2 = st.columns(2)
+        if rb1.button(f"♻ Reiniciar Y ({'Q-H' if curva == 'qh' else 'Q-η'})",
                      key=f"w_rst_cal_{BK}"):
             cal_all[curva] = {}
             bomba.cal = cal_all
             st.session_state[pend_key] = None
-            st.rerun()
-        if {"X1", "X2", "Y1", "Y2"} <= set(cal) and st.button(
-                f"🪄 Detectar {'Q-H' if curva == 'qh' else 'Q-η'} por color "
-                "(usa el punto pendiente como muestra)", key=f"w_auto_{curva}_{BK}"):
+            st.rerun(scope="fragment")
+        if rb2.button("♻ Reiniciar X (compartido)", key=f"w_rst_calx_{BK}"):
+            cal_all["x"] = {}
+            bomba.cal = cal_all
+            st.session_state[pend_key] = None
+            st.rerun(scope="fragment")
+        # WP-6: controles reales de autodetección — antes tolerance=60/
+        # n_points=15 estaban fijos en el código y el bbox no se restringía
+        # a la región calibrada (recogía ejes/texto/leyenda).
+        if {"X1", "X2"} <= set(cal_x) and {"Y1", "Y2"} <= set(cal_y):
+            st.markdown("**Autodetección por color**")
+            ad1, ad2 = st.columns(2)
+            tol = num_input("Distancia de color (tolerancia)", f"auto_tol_{destino}_{BK}",
+                            40.0, decimals=0, container=ad1, min_value=10.0, max_value=150.0)
+            n_pts = int_input("Nº de puntos (bandas en X, como en automeris)",
+                              f"auto_npts_{destino}_{BK}", 20, container=ad2,
+                              min_value=5, max_value=100)
             if pend:
-                arr = np.array(img)
-                color = tuple(int(c) for c in arr[pend["y"], pend["x"]])
-                pts_px = cv.detect_curve_by_color(arr, color, tolerance=60, n_points=15)
-                calx = cv.AxisCalibration(cal["X1"]["px"], cal["X1"]["val"],
-                                          cal["X2"]["px"], cal["X2"]["val"], log_x)
-                caly = cv.AxisCalibration(cal["Y1"]["px"], cal["Y1"]["val"],
-                                          cal["Y2"]["px"], cal["Y2"]["val"], log_y)
-                pts_data = [(round(cv.pixel_to_data(pt, calx, caly)[0] * FACTOR_Q[unidad_q], 4),
-                            round(cv.pixel_to_data(pt, calx, caly)[1], 4)) for pt in pts_px]
-                if curva == "qh":
-                    bomba.puntos_qh = pts_data
-                    st.session_state[f"qh_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+                color_prev = tuple(int(c) for c in np.array(img)[pend["y"], pend["x"]])
+                st.color_picker("Color muestreado (del punto pendiente)",
+                                value="#%02X%02X%02X" % color_prev,
+                                key=f"auto_color_{destino}_{BK}", disabled=True)
+            else:
+                st.caption("Haz click cerca de la curva (o arrastra en la lupa) para "
+                          "fijar el color de muestra.")
+            puntos_existentes = bomba.puntos_qh if curva == "qh" else bomba.puntos_qe
+            sobrescribir = (st.checkbox(
+                f"Sobrescribir los {len(puntos_existentes)} puntos existentes de "
+                f"{'Q-H' if curva == 'qh' else 'Q-η'}", key=f"auto_ow_{curva}_{BK}")
+                if puntos_existentes else True)
+            if st.button(f"🪄 Detectar {'Q-H' if curva == 'qh' else 'Q-η'} por color "
+                        "(usa el punto pendiente como muestra)",
+                        key=f"w_auto_{curva}_{BK}", disabled=not pend):
+                if not sobrescribir:
+                    st.warning("Marca la casilla de sobrescritura para reemplazar los "
+                              "puntos existentes con la detección automática — no se "
+                              "pisan puntos ya capturados sin confirmar.")
                 else:
-                    bomba.puntos_qe = pts_data
-                    st.session_state[f"qe_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
-                st.session_state[pend_key] = None
-                st.rerun()
+                    arr = np.array(img)
+                    color = tuple(int(c) for c in arr[pend["y"], pend["x"]])
+                    # bbox = rectángulo calibrado (X1..X2 · Y1..Y2 de la curva
+                    # activa) con margen — fija sola la búsqueda a la zona de la
+                    # gráfica, sin que el usuario tenga que dibujarlo a mano.
+                    margen_x = max(int(0.05 * abs(cal_x["X2"]["px"] - cal_x["X1"]["px"])), 5)
+                    margen_y = max(int(0.10 * abs(cal_y["Y2"]["px"] - cal_y["Y1"]["px"])), 5)
+                    x0 = min(cal_x["X1"]["px"], cal_x["X2"]["px"]) - margen_x
+                    x1 = max(cal_x["X1"]["px"], cal_x["X2"]["px"]) + margen_x
+                    y0 = min(cal_y["Y1"]["px"], cal_y["Y2"]["px"]) - margen_y
+                    y1 = max(cal_y["Y1"]["px"], cal_y["Y2"]["px"]) + margen_y
+                    bbox = (max(x0, 0), max(y0, 0), min(x1, img.width), min(y1, img.height))
+                    pts_px = cv.detect_curve_by_color(arr, color, tolerance=tol,
+                                                      n_points=n_pts, bbox=bbox)
+                    calx = cv.AxisCalibration(cal_x["X1"]["px"], cal_x["X1"]["val"],
+                                              cal_x["X2"]["px"], cal_x["X2"]["val"], log_x)
+                    caly = cv.AxisCalibration(cal_y["Y1"]["px"], cal_y["Y1"]["val"],
+                                              cal_y["Y2"]["px"], cal_y["Y2"]["val"], log_y)
+                    pts_data = [(round(cv.pixel_to_data(pt, calx, caly)[0] * FACTOR_Q[unidad_q], 4),
+                                round(cv.pixel_to_data(pt, calx, caly)[1], 4)) for pt in pts_px]
+                    if curva == "qh":
+                        bomba.puntos_qh = pts_data
+                        st.session_state[f"qh_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+                    else:
+                        bomba.puntos_qe = pts_data
+                        st.session_state[f"qe_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+                    st.session_state[pend_key] = None
+                    st.rerun()
         _siguiente_enter = _ENTER_ADVANCE.get(modo)
         if st.button("⏎ Enter — pasar a Q-η" if _siguiente_enter
                      else "⏎ Enter (ya en la última etapa)",
                      key=f"w_enter_{BK}", disabled=_siguiente_enter is None,
                      help="Equivalente al Enter físico (que solo funciona sobre la imagen "
                           "en modo 'lupa en tiempo real'). Termina de capturar los puntos "
-                          "de la curva activa y pasa a calibrar los ejes de la otra."):
+                          "de Q-H y pasa a calibrar Y de Q-η (X ya quedó calibrado, "
+                          "es compartido)."):
             st.session_state[f"modo_next_{BK}"] = _siguiente_enter
-            st.rerun()
+            st.rerun(scope="fragment")
+
+
+if img is not None:
+    _bloque_calibracion()
 
 # ---------- importar puntos desde CSV (de cualquier herramienta externa) ----------
 with st.expander("📥 Importar puntos desde CSV"):
@@ -391,16 +494,34 @@ with st.expander("📥 Importar puntos desde CSV"):
 # ---------- tablas de puntos (siempre editables) ----------
 st.subheader("Puntos de la bomba (editables)")
 c1, c2 = st.columns(2)
-qh_df = c1.data_editor(pd.DataFrame(bomba.puntos_qh or [(0.0, 0.0)],
-                                    columns=["Q [L/s]", "H [m]"]),
-                       num_rows="dynamic", key=f"w_qh_{BK}")
-bomba.puntos_qh = [(float(r["Q [L/s]"]), float(r["H [m]"]))
-                   for _, r in qh_df.iterrows() if r["Q [L/s]"] or r["H [m]"]]
-qe_df = c2.data_editor(pd.DataFrame(bomba.puntos_qe or [(0.0, 0.0)],
-                                    columns=["Q [L/s]", "η [-]"]),
-                       num_rows="dynamic", key=f"w_qe_{BK}")
-bomba.puntos_qe = [(float(r["Q [L/s]"]), float(r["η [-]"]))
-                   for _, r in qe_df.iterrows() if r["Q [L/s]"] or r["η [-]"]]
+def _tabla_puntos(container, puntos, cols, key):
+    """Tabla editable de puntos. Sin el viejo fallback `or [(0.0,0.0)]` (impedía
+    vaciar la tabla: al borrar la última fila se resembraba sola) y filtrando por
+    presencia de dato, no por truthiness — `if q or h` descartaba un punto legítimo
+    en Q=0 y además dejaba pasar NaN (que es truthy) hacia `fit_curve`."""
+    df = pd.DataFrame(puntos, columns=cols) if puntos else pd.DataFrame(
+        {c: pd.Series(dtype="float64") for c in cols})
+    ed = container.data_editor(df, num_rows="dynamic", key=key, width="stretch")
+    return [(f_num(r[cols[0]]), f_num(r[cols[1]]))
+            for _, r in ed.iterrows() if not fila_incompleta(r, cols)]
+
+
+bomba.puntos_qh = _tabla_puntos(c1, bomba.puntos_qh, ["Q [L/s]", "H [m]"], f"w_qh_{BK}")
+bomba.puntos_qe = _tabla_puntos(c2, bomba.puntos_qe, ["Q [L/s]", "η [-]"], f"w_qe_{BK}")
+
+d1, d2 = st.columns(2)
+if d1.button("↩ Deshacer último punto Q-H", key=f"w_undo_qh_{BK}",
+             disabled=not bomba.puntos_qh):
+    bomba.puntos_qh.pop()
+    st.session_state.pop(f"w_qh_{BK}", None)   # el editor se resiembra del modelo
+    st.rerun()
+if d2.button("↩ Deshacer último punto Q-η", key=f"w_undo_qe_{BK}",
+             disabled=not bomba.puntos_qe):
+    bomba.puntos_qe.pop()
+    st.session_state.pop(f"w_qe_{BK}", None)
+    st.rerun()
+st.caption("Para borrar filas sueltas: selecciona la fila en la tabla y usa el "
+           "ícono 🗑 de la barra del editor.")
 
 # ---------- catálogo de bombas desde Excel ----------
 st.divider()
@@ -438,7 +559,9 @@ with st.expander("📚 Catálogo de bombas (Excel) — evalúa y escoge la más 
                                 "η(Q_op)": eta_c, "_pump": b})
             df_rank = (pd.DataFrame(ranking).drop(columns="_pump")
                        .sort_values("η(Q_op)", ascending=False))
-            st.dataframe(df_rank.style.format(precision=3, na_rep="sin cruce"),
+            st.dataframe(df_rank.style.format(
+                {"Q_op [L/s]": SP_CAUDAL, "H_op [m]": SP_ALTURA,
+                 "η(Q_op)": "{:.3f}"}, na_rep="sin cruce"),
                          hide_index=True, width="stretch")
             validas_cat = [r for r in ranking if r["η(Q_op)"] == r["η(Q_op)"]]
             if validas_cat:
@@ -483,6 +606,30 @@ for b in sys_d.bombas:
         b.arreglo = af4.selectbox("Arreglo", ["paralelo", "serie"],
                                   index=["paralelo", "serie"].index(b.arreglo),
                                   key=f"w_sel_arr_{BK}_{b.nombre}")
+        # WP-3c: sugerencia de N₂ objetivo — solo informativa, NO se aplica
+        # sola a b.n2_objetivo (el ingeniero revisa y decide).
+        st.caption("💡 Sugerir N₂ para un punto de operación objetivo (no se aplica sola):")
+        sg1, sg2, sg3 = st.columns(3)
+        modo_obj = sg1.radio("Objetivo", ["Q [L/s]", "H [m]"],
+                             key=f"w_sug_modo_{BK}_{b.nombre}", horizontal=True)
+        obj_val = num_input(f"Valor {modo_obj}", f"sug_val_{BK}_{b.nombre}", 0.0,
+                            decimals=2, container=sg2, min_value=0.0)
+        if sg3.button("💡 Sugerir N₂", key=f"w_sug_btn_{BK}_{b.nombre}"):
+            if b.n1_nominal <= 0:
+                st.warning("Fija N₁ nominal (> 0) arriba antes de pedir una sugerencia de N₂.")
+                n2_sug = None
+            else:
+                kw = ({"q_objetivo": obj_val} if modo_obj == "Q [L/s]"
+                     else {"h_objetivo": obj_val})
+                n2_sug = cv.suggest_n2(b.puntos_qh, b.puntos_qe, b.n1_nominal,
+                                       b.n_unidades, b.arreglo, sys_lps, **kw)
+                if n2_sug is None:
+                    st.warning("No se encontró un N₂ que alcance ese objetivo "
+                              "(fuera de rango con N₁ y afinidad razonable, r∈[0.3, 3.0]).")
+            if n2_sug is not None:
+                st.info(f"N₂ sugerido ≈ **{n2_sug:.0f}** (r = N₂/N₁ = "
+                       f"{n2_sug / b.n1_nominal:.3f}) — revísalo y, si te convence, "
+                       "cópialo en el campo 'N₂ objetivo' arriba.")
     qh_t, qe_t = _puntos_transformados(b)
     fit = cv.fit_curve(qh_t, 2)
     op = cv.operating_point(fit, sys_lps)
@@ -541,7 +688,11 @@ if ecuaciones:
 
 if rows:
     df_cmp = pd.DataFrame(rows)
-    st.dataframe(df_cmp.style.format(precision=3), hide_index=True, width="stretch")
+    st.dataframe(df_cmp.style.format(
+        {"Q_op [L/s]": SP_CAUDAL, "H_op [m]": SP_ALTURA, "η(Q_op)": "{:.3f}",
+         "BEP Q [L/s]": SP_CAUDAL, "Desv. BEP [%]": "{:.2f}",
+         "P absorbida [HP]": SP_POTENCIA}, na_rep="—"),
+        hide_index=True, width="stretch")
     validas = df_cmp.dropna(subset=["η(Q_op)"])
     if not validas.empty:
         mejor = validas.loc[validas["η(Q_op)"].idxmax(), "Bomba"]
@@ -549,8 +700,14 @@ if rows:
     else:
         mejor = rows[0]["Bomba"]
     opciones = [r["Bomba"] for r in rows]
+    # `opciones` cambia entre reruns (se añaden/quitan bombas con >=3 puntos,
+    # o cambia el sistema activo) — un `selectbox(index=calculado)` con key
+    # estable revienta en cuanto el valor guardado en session_state deja de
+    # estar en la lista nueva de opciones. `sel_state` resiembra el key solo
+    # cuando el valor guardado ya no es válido (mismo patrón que el resto de
+    # selects de la app; ver su docstring en pages_common.py).
+    k_final = sel_state(opciones, f"sel_final_{sel_sys}",
+                        sys_d.bomba_seleccionada if sys_d.bomba_seleccionada in opciones
+                        else mejor)
     sys_d.bomba_seleccionada = st.selectbox(
-        "Bomba seleccionada para este sistema (va al reporte)", opciones,
-        index=opciones.index(sys_d.bomba_seleccionada)
-        if sys_d.bomba_seleccionada in opciones else opciones.index(mejor),
-        key=f"w_sel_final_{sel_sys}")
+        "Bomba seleccionada para este sistema (va al reporte)", opciones, key=k_final)

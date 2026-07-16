@@ -164,6 +164,28 @@ def test_ruta_guardado_default_vacio(tmp_path):
     assert pj.load(f).ruta_guardado == ""
 
 
+def test_red_en_informe_default_true_y_persiste_false(tmp_path):
+    p = _proyecto()
+    assert p.red_en_informe is True
+    p.red_en_informe = False
+    f = tmp_path / "red_off.acucalc.json"
+    pj.save(p, f)
+    assert pj.load(f).red_en_informe is False
+
+
+def test_red_en_informe_backward_compat_json_viejo(tmp_path):
+    """Un proyecto guardado ANTES de que existiera red_en_informe (sin la
+    clave) debe cargar con el default True, no reventar."""
+    import json
+    f = tmp_path / "viejo.acucalc.json"
+    data = {"schema_version": pj.SCHEMA_VERSION,
+            "project": {"nombre": "Viejo", "red_inp": "algo"}}
+    f.write_text(json.dumps(data), encoding="utf-8")
+    p = pj.load(f)
+    assert p.red_en_informe is True
+    assert p.red_inp == "algo"
+
+
 def test_save_atomico_no_deja_tmp(tmp_path):
     p = _proyecto()
     f = tmp_path / "atomic.acucalc.json"
@@ -208,7 +230,8 @@ def test_migrate_pump_cal_esquema_nuevo_es_idempotente():
 
 def test_load_migra_cal_plano_de_proyecto_viejo(tmp_path):
     """Un proyecto guardado con el esquema plano viejo de `cal` (antes de
-    WP-B2) debe cargar con `cal` ya migrado a {'qh': ..., 'qe': {}}."""
+    WP-B2/WP-3a) debe cargar con `cal` ya migrado al esquema v7 vigente:
+    {'x': {X1,X2}, 'qh': {}, 'qe': {}}."""
     p = _proyecto()
     f = tmp_path / "cal_viejo.acucalc.json"
     pj.save(p, f)
@@ -218,8 +241,65 @@ def test_load_migra_cal_plano_de_proyecto_viejo(tmp_path):
     f.write_text(json.dumps(raw), encoding="utf-8")
     p2 = pj.load(f)
     assert p2.bombeos[0].bombas[0].cal == {
-        "qh": {"X1": {"px": 10, "val": 0.0}, "X2": {"px": 500, "val": 40.0}},
+        "x": {"X1": {"px": 10, "val": 0.0}, "X2": {"px": 500, "val": 40.0}},
+        "qh": {}, "qe": {}}
+
+
+# ---------- WP-3a: migración a esquema v7 (eje X único compartido) ----------
+
+def test_migrate_pump_cal_v7_desde_v5_plano():
+    """v5 plano (una sola calibración compartida) -> X va a 'x', Y1/Y2 a 'qh'
+    (Q-H es la curva principal, la que siempre existió en v5) y 'qe' vacío."""
+    viejo = {"X1": {"px": 10, "val": 0.0}, "X2": {"px": 500, "val": 40.0},
+             "Y1": {"px": 300, "px_x": 5, "val": 0.0},
+             "Y2": {"px": 20, "px_x": 5, "val": 60.0}}
+    migrado = pj.migrate_pump_cal_v7(viejo)
+    assert migrado == {
+        "x": {"X1": {"px": 10, "val": 0.0}, "X2": {"px": 500, "val": 40.0}},
+        "qh": {"Y1": {"px": 300, "px_x": 5, "val": 0.0},
+               "Y2": {"px": 20, "px_x": 5, "val": 60.0}},
         "qe": {}}
+
+
+def test_migrate_pump_cal_v7_desde_v6():
+    """v6 (calibración independiente por curva, X duplicado en qh y qe) -> X
+    final se toma de qh (elección documentada), Y1/Y2 de cada curva se
+    conservan."""
+    v6 = {
+        "qh": {"X1": {"px": 10, "val": 0.0}, "X2": {"px": 500, "val": 40.0},
+               "Y1": {"px": 300, "val": 0.0}, "Y2": {"px": 20, "val": 60.0}},
+        "qe": {"X1": {"px": 12, "val": 0.0}, "X2": {"px": 498, "val": 40.0},
+               "Y1": {"px": 310, "val": 0.0}, "Y2": {"px": 25, "val": 0.85}},
+    }
+    migrado = pj.migrate_pump_cal_v7(v6)
+    assert migrado == {
+        "x": {"X1": {"px": 10, "val": 0.0}, "X2": {"px": 500, "val": 40.0}},
+        "qh": {"Y1": {"px": 300, "val": 0.0}, "Y2": {"px": 20, "val": 60.0}},
+        "qe": {"Y1": {"px": 310, "val": 0.0}, "Y2": {"px": 25, "val": 0.85}},
+    }
+
+
+def test_migrate_pump_cal_v7_desde_v6_sin_x_en_qh_usa_qe():
+    """Si 'qh' no tiene X calibrado (caso raro, ej. calibración parcial) se
+    usa el X de 'qe' en su lugar — mejor que perder la calibración X."""
+    v6 = {"qh": {"Y1": {"px": 300, "val": 0.0}},
+          "qe": {"X1": {"px": 12, "val": 0.0}, "X2": {"px": 498, "val": 40.0}}}
+    migrado = pj.migrate_pump_cal_v7(v6)
+    assert migrado["x"] == {"X1": {"px": 12, "val": 0.0}, "X2": {"px": 498, "val": 40.0}}
+    assert migrado["qh"] == {"Y1": {"px": 300, "val": 0.0}}
+    assert migrado["qe"] == {}
+
+
+def test_migrate_pump_cal_v7_desde_v7_es_idempotente():
+    v7 = {"x": {"X1": {"px": 1, "val": 0.0}, "X2": {"px": 2, "val": 1.0}},
+          "qh": {"Y1": {"px": 3, "val": 0.0}}, "qe": {"Y2": {"px": 4, "val": 1.0}}}
+    assert pj.migrate_pump_cal_v7(v7) == v7
+    assert pj.migrate_pump_cal_v7(pj.migrate_pump_cal_v7(v7)) == v7
+
+
+def test_migrate_pump_cal_v7_none_o_vacio():
+    assert pj.migrate_pump_cal_v7(None) == {"x": {}, "qh": {}, "qe": {}}
+    assert pj.migrate_pump_cal_v7({}) == {"x": {}, "qh": {}, "qe": {}}
 
 
 def test_load_ignora_claves_desconocidas_en_almacenamiento(tmp_path):
@@ -235,3 +315,33 @@ def test_load_ignora_claves_desconocidas_en_almacenamiento(tmp_path):
     p2 = pj.load(f)                # no debe lanzar TypeError
     assert p2.nombre == p.nombre
     assert p2.almacenamiento.tanques[0].forma == "circular"
+
+
+def test_load_proyecto_viejo_sin_nivel_riesgo(tmp_path):
+    """Regresión WP-2b: un proyecto guardado ANTES de existir `nivel_riesgo`
+    solo trae `frac_incendio` en `almacenamiento`. Debe cargar sin reventar,
+    conservar su `frac_incendio` y quedar con el nivel vacío ('' =
+    personalizado/legado)."""
+    p = _proyecto()
+    f = tmp_path / "sin_nivel.acucalc.json"
+    pj.save(p, f)
+    raw = json.loads(f.read_text(encoding="utf-8"))
+    # Simula exactamente la forma vieja: sin la clave nivel_riesgo, con un
+    # frac_incendio no estándar que debe preservarse tal cual.
+    raw["project"]["almacenamiento"].pop("nivel_riesgo", None)
+    raw["project"]["almacenamiento"]["frac_incendio"] = 0.18
+    f.write_text(json.dumps(raw), encoding="utf-8")
+    p2 = pj.load(f)
+    assert p2.almacenamiento.frac_incendio == 0.18
+    assert p2.almacenamiento.nivel_riesgo == ""     # personalizado/legado
+
+
+def test_nivel_riesgo_persiste_en_json(tmp_path):
+    p = _proyecto()
+    p.almacenamiento.nivel_riesgo = "medio"
+    p.almacenamiento.frac_incendio = 0.20
+    f = tmp_path / "nivel.acucalc.json"
+    pj.save(p, f)
+    p2 = pj.load(f)
+    assert p2.almacenamiento.nivel_riesgo == "medio"
+    assert p2.almacenamiento.frac_incendio == 0.20

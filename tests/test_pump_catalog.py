@@ -3,6 +3,7 @@ import io
 import pandas as pd
 import pytest
 
+from core import curves as cv
 from core import pump_catalog as pc
 from core.project import PumpSystemData, PumpData
 
@@ -48,6 +49,10 @@ def test_parse_pocos_puntos():
 
 
 def test_export_xlsx_roundtrip():
+    """WP-3d: el export ya no vuelca los puntos crudos digitalizados — resamplea
+    N_EXPORT=10 puntos equiespaciados en Q sobre la curva AJUSTADA. El roundtrip
+    conserva la bomba y sus 10 puntos siguen cayendo sobre la parábola original
+    (los puntos de entrada son exactos para un ajuste de grado 2 con 3 puntos)."""
     s1 = PumpSystemData(nombre="Sistema 1")
     s1.bombas = [PumpData(nombre="Bomba A",
                           puntos_qh=[(10.0, 50.0), (20.0, 45.0), (30.0, 35.0)],
@@ -61,8 +66,13 @@ def test_export_xlsx_roundtrip():
     bombas = pc.parse(buf)
     assert {b.nombre for b in bombas} == {"Bomba A", "Bomba B"}
     a = next(b for b in bombas if b.nombre == "Bomba A")
-    assert a.puntos_qh == [(10.0, 50.0), (20.0, 45.0), (30.0, 35.0)]
-    assert len(a.puntos_qe) == 3
+    assert len(a.puntos_qh) == pc.N_EXPORT
+    assert a.puntos_qh[0][0] == pytest.approx(10.0, abs=1e-6)
+    assert a.puntos_qh[-1][0] == pytest.approx(30.0, abs=1e-6)
+    fit_a = cv.fit_curve([(10.0, 50.0), (20.0, 45.0), (30.0, 35.0)], 2)
+    for q, h in a.puntos_qh:
+        assert h == pytest.approx(fit_a(q), abs=1e-6)
+    assert len(a.puntos_qe) == pc.N_EXPORT
 
 
 def test_export_xlsx_qh_qe_grillas_independientes():
@@ -82,3 +92,59 @@ def test_export_xlsx_qh_qe_grillas_independientes():
     bombas = pc.parse(buf)
     b = next(x for x in bombas if x.nombre == "WKL 125")
     assert b.puntos_qe != []
+
+
+def test_export_xlsx_aplica_transformada_n2_y_arreglo():
+    """WP-3d — el bug real: antes se exportaba la curva NOMINAL cruda,
+    ignorando N2/afinidad y arreglo. Con n_unidades=2 en paralelo, el Q
+    exportado debe reflejar el caudal DOBLADO (mismo H), no el Q nominal."""
+    s = PumpSystemData(nombre="Sistema 1")
+    b = PumpData(nombre="Doble", puntos_qh=[(10.0, 50.0), (20.0, 45.0), (30.0, 35.0)],
+                puntos_qe=[], n_unidades=2, arreglo="paralelo")
+    s.bombas = [b]
+    data = pc.export_xlsx([s])
+    df = pd.read_excel(io.BytesIO(data))
+    fila = df[df["Bomba"] == "Doble"]
+    assert len(fila) == pc.N_EXPORT
+    # arreglo paralelo: mismo H, Q multiplicado por n_unidades=2 -> rango
+    # de Q exportado debe ir de 20 a 60 (=2×[10,30]), no de 10 a 30 (nominal).
+    assert fila["Q [L/s]"].min() == pytest.approx(20.0, abs=1e-6)
+    assert fila["Q [L/s]"].max() == pytest.approx(60.0, abs=1e-6)
+    assert fila["H [m]"].max() == pytest.approx(50.0, abs=1e-6)
+    assert fila["H [m]"].min() == pytest.approx(35.0, abs=1e-6)
+
+
+def test_export_xlsx_incluye_columnas_de_coeficientes():
+    """Columnas de los coeficientes H(Q)=A·Q²+B·Q+C y η(Q)=D·Q²+E·Q+F + R²
+    de cada bomba, presentes y consistentes en todas sus filas."""
+    s = PumpSystemData(nombre="Sistema 1")
+    s.bombas = [PumpData(nombre="A",
+                         puntos_qh=[(10.0, 50.0), (20.0, 45.0), (30.0, 35.0)],
+                         puntos_qe=[(10.0, 0.6), (20.0, 0.75), (30.0, 0.7)])]
+    data = pc.export_xlsx([s])
+    df = pd.read_excel(io.BytesIO(data))
+    for col in ("H: A", "H: B", "H: C", "H: R2", "eta: D", "eta: E", "eta: F", "eta: R2"):
+        assert col in df.columns
+    assert len(df) == pc.N_EXPORT
+    assert df["H: A"].nunique() == 1     # mismo coeficiente repetido en las 10 filas
+
+
+def test_export_xlsx_menos_de_3_puntos_se_omite():
+    s = PumpSystemData(nombre="Sistema 1")
+    s.bombas = [PumpData(nombre="Incompleta", puntos_qh=[(10.0, 50.0), (20.0, 45.0)])]
+    data = pc.export_xlsx([s])
+    df = pd.read_excel(io.BytesIO(data))
+    assert "Incompleta" not in set(df.get("Bomba", []))
+
+
+def test_parse_tolera_columnas_extra_de_un_export_nuevo():
+    """Un archivo exportado con el formato nuevo (columnas de coeficientes)
+    debe seguir siendo importable — extra columns se ignoran al leer."""
+    s = PumpSystemData(nombre="Sistema 1")
+    s.bombas = [PumpData(nombre="A",
+                         puntos_qh=[(10.0, 50.0), (20.0, 45.0), (30.0, 35.0)])]
+    data = pc.export_xlsx([s])
+    buf = io.BytesIO(data)
+    buf.name = "export.xlsx"
+    bombas = pc.parse(buf)
+    assert [b.nombre for b in bombas] == ["A"]

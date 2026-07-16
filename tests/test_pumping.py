@@ -1,3 +1,4 @@
+import pytest
 from core import pumping as pu
 
 
@@ -112,3 +113,54 @@ def test_leyes_de_afinidad():
     assert abs(pu.frecuencia_para_caudal(5.0, 10.0, 60.0) - 30.0) < 1e-9
 
 
+
+
+# ---------- golpe de ariete: factor de seguridad / uso / margen (WP-2c) ----------
+def test_celeridad_y_sobrepresion_valores_conocidos():
+    # PEAD DN90 RDE21: D≈0.0795 m, e≈0.0043 m, k_elast=111.11.
+    c = pu.celeridad(0.0795, 0.0043, 111.11)
+    assert abs(c - 215.9) < 1.0           # 9900/√(48.3 + 111.11·0.0795/0.0043)
+    dh = pu.sobrepresion_ariete(c, 1.0)   # V = 1 m/s → ΔH = C·V/g
+    assert abs(dh - c / 9.81) < 1e-6
+
+
+def test_ariete_tramo_fs_uso_margen_coherentes():
+    # Se calcula primero h_total con las mismas fórmulas y se fija PN = 2·h_total
+    # para verificar la aritmética del FS de forma exacta: FS=2, uso=50%, margen=50%.
+    c = pu.celeridad(0.0795, 0.0043, 111.11)
+    dh = pu.sobrepresion_ariete(c, 1.2)
+    hd = 74.0
+    h_total = hd + dh
+    r = pu.ariete_tramo("Impulsión", 0.0795, 0.0043, 111.11, 1.2, hd, 2 * h_total)
+    assert abs(r.h_total - h_total) < 1e-6
+    assert abs(r.dh - dh) < 1e-9
+    assert abs(r.fs - 2.0) < 1e-9
+    assert abs(r.uso_pct - 50.0) < 1e-9
+    assert abs(r.margen_pct - 50.0) < 1e-9
+    assert r.cumple is True
+    # relaciones internas siempre válidas
+    assert abs(r.fs * r.uso_pct - 100.0) < 1e-9
+    assert abs(r.margen_pct - (100.0 - r.uso_pct)) < 1e-9
+
+
+def test_ariete_tramo_no_cumple_cuando_supera_pn():
+    r = pu.ariete_tramo("T", 0.0795, 0.0043, 111.11, 2.0, 74.0, pn=80.0)
+    assert r.h_total > 80.0
+    assert r.fs < 1.0
+    assert r.uso_pct > 100.0
+    assert r.margen_pct < 0.0
+    assert r.cumple is False
+
+
+def test_ariete_tramo_pn_cero_no_revienta():
+    r = pu.ariete_tramo("Manual sin PN", 0.0795, 0.0043, 111.11, 1.5, 74.0, pn=0.0)
+    assert r.c > 0 and r.dh > 0 and r.h_total > 0   # sí se calcula la hidráulica
+    assert r.fs is None and r.uso_pct is None
+    assert r.margen_pct is None and r.cumple is None
+
+
+def test_ariete_tramo_frozen():
+    import dataclasses
+    r = pu.ariete_tramo("T", 0.0795, 0.0043, 111.11, 1.0, 50.0, 150.0)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        r.fs = 9.0

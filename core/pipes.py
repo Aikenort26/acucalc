@@ -10,7 +10,8 @@ DATA = Path(__file__).resolve().parent.parent / "data" / "tuberias.json"
 
 # material del catálogo → clave de rugosidad en data/ks.json
 KS_KEY = {"PEAD PE100": "PEAD", "PVC-U": "PVC", "Hierro dúctil": "HD",
-          "Acero comercial": "Acero comercial", "GRP": "GRP"}
+          "Acero comercial": "Acero comercial", "GRP": "GRP",
+          "PVC-O": "PVC-O", "PVC biaxial": "PVC biaxial"}
 
 
 @dataclass(frozen=True)
@@ -72,6 +73,21 @@ def pipe(material: str, serie: str, dn: float) -> PipeSpec:
 def dn_label(spec_material: str, dn: float) -> str:
     u = _cat()[spec_material]["unidad_dn"]
     return f'{dn}"' if u == "in" else f"{dn:g} mm"
+
+
+def serie_pn(material: str, serie: str) -> float:
+    """Presión nominal [mca] de una serie/clase, 0 si no está catalogada."""
+    return _cat()[material].get("pn_mca", {}).get(serie, 0.0)
+
+
+def serie_label(material: str, serie: str) -> str:
+    """Etiqueta de serie con su PN cuando existe: `RDE 11 (PN 163 mca)`.
+
+    Muestra la presión nominal junto a la serie (nomenclatura tipo "PE100
+    PN10") sin renombrar la clave del catálogo — así los proyectos guardados
+    conservan su `cat_serie`."""
+    pn = serie_pn(material, serie)
+    return f"{serie} (PN {pn:.0f} mca)" if pn else serie
 
 
 def suggest_dn(material: str, serie: str, q_m3s: float,

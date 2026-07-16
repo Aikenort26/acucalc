@@ -67,3 +67,54 @@ def test_suggest_dn():
     assert v <= 6.0
     # caudal pequeño: 5.14 L/s → Bresse 86 mm → DN 110 (ID 99.6)
     assert pipes.suggest_dn("PEAD PE100", "RDE 21", 5.1416e-3) == 110
+
+
+# ---------- PVC-O y PVC biaxial (WP-2d) ----------
+def test_pvco_y_biaxial_registrados():
+    ms = pipes.materials()
+    assert "PVC-O" in ms and "PVC biaxial" in ms
+    # las claves preexistentes NO se tocaron
+    assert {"PEAD PE100", "PVC-U", "Hierro dúctil", "Acero comercial", "GRP"} <= set(ms)
+    assert "PN 16" in pipes.series("PVC-O")
+    assert "PN 16" in pipes.series("PVC biaxial")
+
+
+def test_pvco_resuelve_y_calcula_id():
+    s = pipes.pipe("PVC-O", "PN 16", 200)
+    assert s.unidad_dn == "mm" and s.od_mm == 200.0
+    assert abs(s.id_mm - (200.0 - 2 * s.e_mm)) < 1e-9   # base od
+    assert s.pn_mca == 163
+    assert s.ks_mm == 0.0015
+    assert s.k_elast == 13.5
+    assert "referencial" in s.nota.lower()               # honestidad: marcado referencial
+
+
+def test_biaxial_resuelve_y_pn():
+    s = pipes.pipe("PVC biaxial", "PN 20", 315)
+    assert s.pn_mca == 204
+    assert s.k_elast == 15.5
+    assert abs(s.id_mm - (315.0 - 2 * s.e_mm)) < 1e-9
+    assert "referencial" in s.nota.lower()
+
+
+def test_ks_key_cubre_los_nuevos_materiales():
+    from core import catalogs
+    ks = catalogs.roughness()
+    for mat in ("PVC-O", "PVC biaxial"):
+        assert pipes.KS_KEY[mat] in ks                    # la clave existe en ks.json
+
+
+def test_suggest_dn_pvco():
+    import math
+    q = 0.05     # 50 L/s
+    dn = pipes.suggest_dn("PVC-O", "PN 16", q)
+    spec = pipes.pipe("PVC-O", "PN 16", dn)
+    v = 4 * q / (math.pi * (spec.id_mm / 1000) ** 2)
+    assert v <= 6.0
+    assert dn in pipes.diameters("PVC-O", "PN 16")
+
+
+def test_serie_label_muestra_pn():
+    assert pipes.serie_label("PVC-O", "PN 16") == "PN 16 (PN 163 mca)"
+    assert pipes.serie_label("PEAD PE100", "RDE 11") == "RDE 11 (PN 163 mca)"
+    assert pipes.serie_pn("PVC biaxial", "PN 20") == 204

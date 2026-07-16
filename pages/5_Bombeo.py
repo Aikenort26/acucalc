@@ -2,7 +2,9 @@ import pandas as pd
 import streamlit as st
 from core import catalogs, pipes, pumping as pu
 from core.project import PumpSystemData, SegmentData, AccessoryData
-from pages_common import page_setup, num_input, show_issues
+from pages_common import (page_setup, num_input, show_issues, i_num, fmt_q,
+                          fmt_h, fmt_v, fmt_d, fmt_perdida, fmt_p,
+                          SP_VELOCIDAD, SP_PERDIDA, SP_COEF, SP_DIAMETRO)
 
 p = page_setup()
 st.header("5 · Sistemas de bombeo")
@@ -47,6 +49,12 @@ with st.popover("✏ Renombrar sistema"):
             sistemas_dict = st.session_state.get("sistemas", {})
             if viejo in sistemas_dict:
                 sistemas_dict[nuevo_nombre] = sistemas_dict.pop(viejo)
+            # Los keys de los widgets llevan el nombre del sistema, así que hay
+            # que moverlos con él: si no, quedan huérfanos y renombrar de vuelta
+            # al nombre anterior resucita valores viejos ya descartados.
+            k_viejo, k_nuevo = viejo.replace(" ", "_"), nuevo_nombre.replace(" ", "_")
+            for wk in [k for k in st.session_state if k.endswith(f"_{k_viejo}")]:
+                st.session_state[wk[: -len(k_viejo)] + k_nuevo] = st.session_state.pop(wk)
             st.session_state["sel_sys_next"] = nuevo_nombre
             st.rerun()
 
@@ -57,10 +65,15 @@ if tanques_tren:
                            for t in tanques_tren]
     sel_tk = st.selectbox("Sincronizar horas de bombeo con la ventana de suministro del tanque…",
                           opciones_tk, key=f"w_sel_synctk_{K}")
-    if sel_tk != "—":
-        horas_tk = float(sum(tanques_tren[opciones_tk.index(sel_tk) - 1]
-                             .entrada_flags()))
-        st.session_state["w_horas_" + K] = horas_tk
+    # Sincroniza SOLO cuando la selección cambia. Antes se escribía en cada
+    # rerun mientras hubiera un tanque elegido, lo que pisaba las horas recién
+    # tecleadas (el widget se dibuja más abajo) y obligaba a teclear dos veces.
+    if sel_tk != "—" and st.session_state.get(f"last_synctk_{K}") != sel_tk:
+        st.session_state[f"last_synctk_{K}"] = sel_tk
+        st.session_state["w_horas_" + K] = float(
+            sum(tanques_tren[opciones_tk.index(sel_tk) - 1].entrada_flags()))
+    elif sel_tk == "—":
+        st.session_state.pop(f"last_synctk_{K}", None)
 
 # ---------- parámetros del sistema ----------
 c0, c1, c2, c3, c4 = st.columns(5)
@@ -76,10 +89,10 @@ sys_d.sumar_5m_ras = c3.checkbox("+5 m (RAS B 9.4.11)", sys_d.sumar_5m_ras,
 sys_d.eficiencia = num_input("Eficiencia η", f"efi_{K}", sys_d.eficiencia,
                              decimals=3, container=c4, min_value=0.05, max_value=1.0)
 qb_lps = pu.q_bombeo(flows.qmd_lps, sys_d.horas)
-st.metric("Caudal de bombeo", f"{qb_lps:.3f} L/s")
+st.metric("Caudal de bombeo", f"{fmt_q(qb_lps)} L/s")
 st.caption(f"Diámetro económico Bresse (referencia): continuo "
-           f"{pu.bresse_continuo(qb_lps/1000)*1000:.1f} mm · no continuo "
-           f"{pu.bresse_no_continuo(qb_lps/1000, sys_d.horas)*1000:.1f} mm")
+           f"{fmt_d(pu.bresse_continuo(qb_lps/1000)*1000)} mm · no continuo "
+           f"{fmt_d(pu.bresse_no_continuo(qb_lps/1000, sys_d.horas)*1000)} mm")
 
 # ---------- agregar / editar tramo (catálogo en cascada) ----------
 st.subheader("Tramos de tubería")
@@ -121,7 +134,9 @@ with st.expander("➕ Agregar / ✏ editar tramo", expanded=not sys_d.tramos):
     if modo_t == "Catálogo normativo":
         b1, b2, b3 = st.columns(3)
         mat = b1.selectbox("Material", pipes.materials(), key=f"w_sel_mat_{K}")
-        ser = b2.selectbox("Serie / clase (RDE)", pipes.series(mat), key=f"w_sel_ser_{K}")
+        ser = b2.selectbox("Serie / clase (RDE)", pipes.series(mat),
+                           format_func=lambda s: pipes.serie_label(mat, s),
+                           key=f"w_sel_ser_{K}")
         dns = pipes.diameters(mat, ser)
         dn_prop = pipes.suggest_dn(mat, ser, qb_lps / 1000)
         if f"w_sel_dn_{K}" not in st.session_state:
@@ -131,12 +146,12 @@ with st.expander("➕ Agregar / ✏ editar tramo", expanded=not sys_d.tramos):
         dn = b3.selectbox("Diámetro nominal", dns,
                           format_func=lambda d: pipes.dn_label(mat, d),
                           key=f"w_sel_dn_{K}")
-        st.caption(f"Propuesto para Qb={qb_lps:.1f} L/s: "
+        st.caption(f"Propuesto para Qb={fmt_q(qb_lps)} L/s: "
                    f"**{pipes.dn_label(mat, dn_prop)}** (≥ Bresse y V ≤ 6 m/s, Art. 56)")
         spec = pipes.pipe(mat, ser, dn)
         st.caption(
             f"DN **{spec.dn_mm:.0f} mm / {spec.dn_in:.2f}\"** · D interno "
-            f"**{spec.id_mm:.1f} mm** · espesor **{spec.e_mm:.1f} mm** · "
+            f"**{fmt_d(spec.id_mm)} mm** · espesor **{fmt_d(spec.e_mm)} mm** · "
             f"ks **{spec.ks_mm} mm** · PN **{spec.pn_mca:.0f} mca** · "
             f"largo de presentación **{spec.largo_m:.0f} m**"
             + (f" · {spec.nota}" if spec.nota else ""))
@@ -188,7 +203,10 @@ if sys_d.tramos:
                           "D interno [mm]": t.D_mm, "e [mm]": t.e_mm or None,
                           "ks [mm]": round(ks, 4), "PN [mca]": None,
                           "Largo present. [m]": None})
-    st.dataframe(pd.DataFrame(filas).style.format(precision=2, na_rep="—"),
+    st.dataframe(pd.DataFrame(filas).style.format(
+        {"L [m]": SP_DIAMETRO, "DN [mm]": "{:.0f}", "DN [in]": "{:.2f}",
+         "D interno [mm]": SP_DIAMETRO, "e [mm]": SP_DIAMETRO, "ks [mm]": "{:.4f}",
+         "PN [mca]": "{:.0f}", "Largo present. [m]": "{:.0f}"}, na_rep="—"),
                  hide_index=True, width="stretch")
     cdel1, cdel2, cdel3 = st.columns([3, 1, 1])
     t_sel = cdel1.selectbox("Tramo a editar/eliminar",
@@ -218,11 +236,12 @@ acc_df = st.data_editor(pd.DataFrame(
         "Tramo": st.column_config.SelectboxColumn(options=nombres_tramos)})
 sys_d.accesorios = []
 for _, r in acc_df.iterrows():
-    if not r["Cantidad"]:
+    cant = i_num(r["Cantidad"], 0)     # `not NaN` es False: la guarda vieja no servía
+    if cant <= 0:
         continue
     tipo_acc = str(r["Accesorio"]).split("  (Km=")[0]
     if tipo_acc in km_cat and str(r["Tramo"]) in nombres_tramos:
-        sys_d.accesorios.append(AccessoryData(tipo_acc, int(r["Cantidad"]), str(r["Tramo"])))
+        sys_d.accesorios.append(AccessoryData(tipo_acc, cant, str(r["Tramo"])))
 if sys_d.accesorios:
     km_total = sum(km_cat[a.tipo] * a.cantidad for a in sys_d.accesorios)
     st.caption(f"ΣKm del sistema = **{km_total:.1f}**")
@@ -244,33 +263,38 @@ st.subheader("Pérdidas por tramo (acumuladas)")
 st.dataframe(pd.DataFrame(
     [{"Tramo": t.segment.nombre, "V [m/s]": t.V, "Re": t.Re, "f": t.f,
       "hf [m]": t.hf, "ΣKm": t.sum_km, "hl [m]": t.hl} for t in r.tramos])
-    .style.format({"V [m/s]": "{:.3f}", "Re": "{:,.0f}", "f": "{:.5f}",
-                   "hf [m]": "{:.3f}", "ΣKm": "{:.1f}", "hl [m]": "{:.3f}"}),
+    .style.format({"V [m/s]": SP_VELOCIDAD, "Re": "{:,.0f}", "f": SP_COEF,
+                   "hf [m]": SP_PERDIDA, "ΣKm": "{:.1f}", "hl [m]": SP_PERDIDA}),
     hide_index=True, width="stretch")
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Σ pérdidas", f"{r.hf_total + r.hl_total:.2f} m")
 m2.metric("Altura dinámica Hd", f"{r.hd:.2f} m")
 m3.metric("Potencia", f"{r.potencia_kw:.2f} kW")
 m4.metric("Potencia", f"{r.potencia_hp:.2f} HP")
-st.info(f"Bomba mínima requerida: **Q = {qb_lps:.1f} L/s · H = {r.hd:.0f} m · "
-        f"P = {r.potencia_hp:.1f} HP** → compárala en la página 6 con las curvas "
+st.info(f"Bomba mínima requerida: **Q = {fmt_q(qb_lps)} L/s · H = {fmt_h(r.hd)} m · "
+        f"P = {fmt_p(r.potencia_hp)} HP** → compárala en la página 6 con las curvas "
         f"de las bombas candidatas de este sistema.")
 
 sistemas = st.session_state.setdefault("sistemas", {})
 sistemas[sys_d.nombre] = {"sistema": sistema, "solve": r, "qb_lps": qb_lps}
 
 # ---------- golpe de ariete: verificación automática contra PN por tramo ----------
-with st.expander("Golpe de ariete (Joukowsky) — verificación PN por tramo",
+with st.expander("Golpe de ariete (Joukowsky) — factor de seguridad por tramo",
                  expanded=False):
+    st.caption("El factor de seguridad usa la **altura dinámica del sistema "
+               "completo** (Hd) sumada a la sobrepresión, no la presión propia "
+               "del tramo — criterio conservador (sobreestima en tramos "
+               "intermedios).")
     rows_ar, fallan = [], []
-    k_elast_manual = {"PVC": 18.0, "PEAD": 111.11, "HD": 1.0,
-                      "Acero comercial": 0.5, "GRP": 8.3, "Concreto": 5.0,
-                      "Hierro galvanizado": 1.0}
+    k_elast_manual = {"PVC": 18.0, "PVC-O": 13.5, "PVC biaxial": 15.5,
+                      "PEAD": 111.11, "HD": 1.0, "Acero comercial": 0.5,
+                      "GRP": 8.3, "Concreto": 5.0, "Hierro galvanizado": 1.0}
     for t, tr in zip(sys_d.tramos, r.tramos):
         if not t.e_mm:
             rows_ar.append({"Tramo": t.nombre, "e [mm]": None, "C [m/s]": None,
-                            "ΔH [mca]": None, "Hd+ΔH [mca]": None,
-                            "PN [mca]": None, "Cumple": "sin datos"})
+                            "ΔH [mca]": None, "Hd+ΔH [mca]": None, "PN [mca]": None,
+                            "FS (≥1)": None, "Uso [%]": None, "Margen [%]": None,
+                            "Cumple": "sin datos"})
             continue
         if t.cat_material:
             spec = pipes.pipe(t.cat_material, t.cat_serie, t.cat_dn)
@@ -280,22 +304,27 @@ with st.expander("Golpe de ariete (Joukowsky) — verificación PN por tramo",
             pn_t = num_input(f"PN del tramo manual '{t.nombre}' [mca]",
                              f"pn_{K}_{t.nombre}", 100.0, decimals=0,
                              min_value=0.0, max_value=600.0)
-        c = pu.celeridad(t.D_mm / 1000, t.e_mm / 1000, k_el)
-        dp = pu.sobrepresion_ariete(c, tr.V)
-        total = r.hd + dp
-        ok = total <= pn_t if pn_t else None
-        if ok is False:
-            fallan.append((t.nombre, total, pn_t))
-        rows_ar.append({"Tramo": t.nombre, "e [mm]": t.e_mm, "C [m/s]": c,
-                        "ΔH [mca]": dp, "Hd+ΔH [mca]": total,
+        ar = pu.ariete_tramo(t.nombre, t.D_mm / 1000, t.e_mm / 1000, k_el,
+                             tr.V, r.hd, pn_t)
+        if ar.cumple is False:
+            fallan.append((t.nombre, ar.h_total, ar.pn))
+        rows_ar.append({"Tramo": t.nombre, "e [mm]": t.e_mm, "C [m/s]": ar.c,
+                        "ΔH [mca]": ar.dh, "Hd+ΔH [mca]": ar.h_total,
                         "PN [mca]": pn_t or None,
-                        "Cumple": "✓" if ok else ("✗ FALLA" if ok is False else "—")})
+                        "FS (≥1)": ar.fs, "Uso [%]": ar.uso_pct,
+                        "Margen [%]": ar.margen_pct,
+                        "Cumple": "✓" if ar.cumple else
+                                  ("✗ FALLA" if ar.cumple is False else "—")})
     st.dataframe(pd.DataFrame(rows_ar).style.format(
-        {"e [mm]": "{:.1f}", "C [m/s]": "{:.1f}", "ΔH [mca]": "{:.1f}",
-         "Hd+ΔH [mca]": "{:.1f}", "PN [mca]": "{:.0f}"}, na_rep="—"),
+        {"e [mm]": SP_DIAMETRO, "C [m/s]": SP_VELOCIDAD, "ΔH [mca]": "{:.2f}",
+         "Hd+ΔH [mca]": "{:.2f}", "PN [mca]": "{:.0f}", "FS (≥1)": "{:.2f}",
+         "Uso [%]": "{:.1f}", "Margen [%]": "{:.1f}"}, na_rep="—"),
         hide_index=True, width="stretch")
+    st.caption("FS = PN / (Hd+ΔH) → factor de seguridad frente a la rotura "
+               "(cumple si ≥ 1). Uso [%] = (Hd+ΔH)/PN·100 → capacidad del "
+               "material utilizada. Margen [%] = 100 − Uso.")
     if fallan:
-        lista = "; ".join(f"'{n}' ({tot:.1f} > PN {pn:.0f} mca)"
+        lista = "; ".join(f"'{n}' ({tot:.2f} > PN {pn:.0f} mca)"
                           for n, tot, pn in fallan)
         st.error(f"Tramos que NO resisten la sobrepresión: {lista}.")
         st.warning("Opciones: subir la clase de presión (RDE menor) del tramo, o "

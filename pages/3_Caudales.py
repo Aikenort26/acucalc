@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 from core import catalogs, demand
-from pages_common import page_setup, num_input, show_issues
+from pages_common import page_setup, num_input, show_issues, f_num
 
 p = page_setup()
 st.header("3 · Dotación y caudales de diseño")
@@ -25,8 +25,8 @@ elif p.demanda.modo == "usos":
                               for u in refs["usos_default"]]
     df = st.data_editor(pd.DataFrame(base, columns=["Actividad", "Dotación [L/hab/d]"]),
                         num_rows="dynamic", width="stretch", key="w_ed_usos")
-    p.demanda.usos = [(str(r["Actividad"]), float(r["Dotación [L/hab/d]"]))
-                      for _, r in df.iterrows()]
+    p.demanda.usos = [(str(r["Actividad"]), f_num(r["Dotación [L/hab/d]"], 0.0))
+                      for _, r in df.iterrows() if str(r["Actividad"] or "").strip()]
     p.demanda.dneta = demand.dotacion_usos(p.demanda.usos)
     st.metric("Dotación neta adoptada", f"{p.demanda.dneta:.0f} L/hab/d")
 else:

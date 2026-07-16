@@ -155,3 +155,158 @@ def test_optimize_diameters_avisa_si_p_min_no_se_resuelve():
                                p_min=1000.0, p_max=70.0)
     assert r.avisos
     assert any("J2" in aviso or "J1" in aviso for aviso in r.avisos)
+
+
+# ---------- WP-4a: escritura de diámetros y rugosidad al INP ----------
+
+INP_PIPES = """[JUNCTIONS]
+J1   10.0  0
+J2   8.0   5.5   ; consumo
+
+[RESERVOIRS]
+R1   50.0
+
+[PIPES]
+;ID  Node1  Node2  Length  Diameter  Roughness  MinorLoss
+P1   R1     J1     200     150       130        0    ; tramo principal
+P2   J1     J2     150     100       130        0
+
+[OPTIONS]
+Headloss H-W
+"""
+
+
+def test_write_inp_pipes_reescribe_diametro_y_rugosidad():
+    # simula el resultado de la optimización: nuevos diámetros internos y C
+    cambios = {"P1": (168.3, 150.0), "P2": (110.2, 150.0)}
+    nuevo = net.write_inp_pipes(INP_PIPES, cambios)
+    n2 = net.parse_inp(nuevo)
+    p1 = next(p for p in n2.pipes if p.id == "P1")
+    p2 = next(p for p in n2.pipes if p.id == "P2")
+    assert abs(p1.diameter_mm - 168.3) < 1e-6
+    assert abs(p1.roughness - 150.0) < 1e-6
+    assert abs(p2.diameter_mm - 110.2) < 1e-6
+
+
+def test_write_inp_pipes_preserva_todo_lo_demas():
+    nuevo = net.write_inp_pipes(INP_PIPES, {"P1": (168.3, 150.0)})
+    # otras secciones intactas
+    assert "[RESERVOIRS]" in nuevo and "R1   50.0" in nuevo
+    assert "; consumo" in nuevo                     # comentario de [JUNCTIONS]
+    assert "; tramo principal" in nuevo             # comentario del propio tramo
+    # tramo NO tocado conserva su diámetro original
+    n2 = net.parse_inp(nuevo)
+    assert next(p for p in n2.pipes if p.id == "P2").diameter_mm == 100.0
+    # el minorloss del tramo tocado se preserva
+    assert next(p for p in n2.pipes if p.id == "P1").minorloss == 0.0
+
+
+def test_roundtrip_parse_optimize_write_parse():
+    n = net.parse_inp(INP_PIPES)
+    opt = net.optimize_diameters(n, "PEAD PE100", "RDE 21",
+                                 v_max=2.0, p_min=5.0, p_max=200.0)
+    c = net.coef_rugosidad("PEAD PE100", "H-W")
+    cambios = {p.id: (opt.dn_optimizado[p.id], c) for p in n.pipes}
+    nuevo = net.write_inp_pipes(INP_PIPES, cambios)
+    n2 = net.parse_inp(nuevo)
+    for p in n2.pipes:
+        assert abs(p.diameter_mm - opt.dn_optimizado[p.id]) < 1e-6
+        assert abs(p.roughness - c) < 1e-6
+
+
+def test_coef_rugosidad_hw_y_dw():
+    # H-W: coeficiente C (adimensional, plásticos altos)
+    c_pead = net.coef_rugosidad("PEAD PE100", "H-W")
+    assert 140 <= c_pead <= 155
+    # D-W: rugosidad absoluta ks en mm (del catálogo)
+    ks_pead = net.coef_rugosidad("PEAD PE100", "D-W")
+    assert 0.0 < ks_pead < 0.1
+    # material desconocido no revienta: devuelve un default razonable
+    assert net.coef_rugosidad("Material inexistente", "H-W") > 0
+
+
+# ---------- WP-8: transferir curvas de bomba al INP ----------
+
+def test_write_inp_pump_curves_agrega_curves_y_pumps():
+    curvas = {"Bomba A": [(0.0, 45.0), (10.0, 40.0), (20.0, 28.0)],
+              "Bomba B": [(0.0, 60.0), (15.0, 50.0)]}
+    nuevo = net.write_inp_pump_curves(INP_PIPES, curvas)
+    assert "[CURVES]" in nuevo
+    assert "[PUMPS]" in nuevo
+    # los puntos Q-H de cada bomba aparecen
+    assert "45" in nuevo and "28" in nuevo and "60" in nuevo
+    # el nombre de la bomba queda como comentario/referencia
+    assert "Bomba A" in nuevo and "Bomba B" in nuevo
+    # el resto del archivo se preserva y sigue parseando
+    n2 = net.parse_inp(nuevo)
+    assert set(n2.junctions) == {"J1", "J2"}
+    assert len(n2.pipes) == 2
+
+
+def test_write_inp_pump_curves_vacio_no_cambia_nada():
+    assert net.write_inp_pump_curves(INP_PIPES, {}) == INP_PIPES
+
+
+def test_write_inp_pump_curves_preserva_curves_existente():
+    inp_con_curves = INP_PIPES + "\n[CURVES]\n;ID X Y\nCEXIST 1 2\n"
+    nuevo = net.write_inp_pump_curves(inp_con_curves, {"B1": [(0.0, 30.0)]})
+    assert "CEXIST" in nuevo            # no se pierde la curva que ya existía
+    assert "B1" in nuevo
+
+
+# ---------- WP-7: coordenadas y tipo de fuente para el mapa ----------
+
+INP_COORDS = """[JUNCTIONS]
+J1 10 0
+J2 8 5.5
+
+[RESERVOIRS]
+R1 50
+
+[TANKS]
+T1 30 5 0 10 5 100
+
+[PIPES]
+P1 R1 J1 200 150 130
+P2 J1 J2 150 100 130
+
+[COORDINATES]
+;Node X Y
+J1 100 200
+J2 150 200
+R1 0 200
+T1 300 250
+
+[OPTIONS]
+Headloss H-W
+"""
+
+
+def test_parse_coordenadas_y_tipo_fuente():
+    n = net.parse_inp(INP_COORDS)
+    assert n.junctions["J1"].x == 100 and n.junctions["J1"].y == 200
+    assert n.sources["R1"].tipo == "reservorio"
+    assert n.sources["T1"].tipo == "tanque"
+    assert n.sources["R1"].x == 0
+    assert n.sources["T1"].x == 300
+
+
+def test_parse_sin_coordenadas_no_rompe():
+    n = net.parse_inp(INP_MINIMO)          # INP_MINIMO no tiene [COORDINATES]
+    assert n.junctions["J1"].x is None
+
+
+def test_mapa_con_y_sin_coordenadas():
+    from core import network_map as nm
+    n = net.parse_inp(INP_COORDS)
+    assert nm.tiene_coordenadas(n) is True
+    fig = nm.fig_red(n)
+    assert fig is not None
+    import matplotlib.pyplot as plt
+    plt.close(fig)
+    # sin coordenadas: usa layout automático, no revienta
+    n2 = net.parse_inp(INP_MINIMO)
+    assert nm.tiene_coordenadas(n2) is False
+    fig2 = nm.fig_red(n2, net.solve(n2), colorear="presion")
+    assert fig2 is not None
+    plt.close(fig2)
