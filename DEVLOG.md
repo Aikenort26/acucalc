@@ -47,6 +47,44 @@ Párrafo libre con contexto crítico que el otro agente necesita saber.
 
 ## Entradas
 
+## [2026-07-16 11:15] — v7: 16 ítems de feedback de uso real (bugs + features)
+
+**Agente:** Claude Code
+**Rama:** main (merge de `acucalc-v7`, worktree ya eliminado)
+**Sesión:** Usuario reportó 16 problemas/mejoras tras usar la app en un caso real (proyecto ACU-SAN JACINTO). Dos premisas del usuario resultaron falsas al explorar el código ("solo hay PE100" — ya había 5 materiales/186 DN; "quitaste el botón de borrar puntos" — nunca existió, `git log -S` lo confirmó) — se investigó antes de implementar en vez de tomar el reporte al pie de la letra.
+
+### Cambios realizados
+- `pages_common.py`, `core/formato.py` [NUEVO]: `f_num`/`i_num`/`fila_incompleta` (guardas NaN — `x or default` no protege contra NaN, `bool(float('nan')) is True`); `sel_state()` (selectbox con key estable, evita re-montaje al cambiar el modelo); convención única de decimales (`fmt_q/h/p/v/d/perdida/vol/coef`) compartida entre pantalla y reporte
+- `pages/7_Red.py`, `pages/5_Bombeo.py`: 3 causas raíz del bug "escribo y se pierde" (widgets sin key, `session_state` pisado en cada rerun, keys derivadas de nombres mutables)
+- `data/riesgo_incendio.json` [NUEVO], `core/project.py`: nivel de riesgo contra incendio (bajo 15%/medio 20%/alto 25%, valores del usuario) reemplaza el % libre
+- `core/pumping.py::ArieteResult`: factor de seguridad de golpe de ariete (FS y % de uso, separados sin ambigüedad)
+- `data/tuberias.json`: + PVC-O y PVC biaxial (referencial, marcado para verificar con fabricante)
+- `core/project.py::migrate_pump_cal_v7`: calibración de curvas con X compartido entre Q-H/Q-η (8→6 clicks)
+- `core/curves.py::suggest_n2`: sugerencia de N₂ objetivo (nunca auto-aplica)
+- `core/pump_catalog.py`: export de bombas ahora aplica la transformada N2/afinidad/arreglo (antes exportaba la curva nominal — bug real) + normalizado a 10 puntos + coeficientes
+- `components/digitizer/index.html`, `pages/6_Curvas_de_bomba.py`: `@st.fragment` + `scope="fragment"` en botones internos (rerun completo por cada click de ajuste), cache de decode, drag de la cruz en la lupa, altura fija de imagen (PDF vertical ya no empuja los controles fuera de pantalla)
+- `core/curves.py::detect_curve_by_color`: reescrito (distancia euclidiana + bbox del rectángulo calibrado + clustering por conectividad — la versión vieja mezclaba la curva con líneas de rejilla)
+- `core/network.py::write_inp_pipes`: el `.inp` exportado ahora sí lleva diámetros optimizados y rugosidad recalculada (antes solo la demanda se reescribía — bug real, dos botones servían el mismo payload)
+- `core/network_map.py` [NUEVO]: mapa de la red (nodos/tramos/fuentes) coloreado por presión/velocidad con el solver GGA propio — sin integrar EPANET real (decisión del usuario, sin wheels garantizados en Python 3.14)
+- `core/network.py::write_inp_pump_curves`: exporta `[CURVES]`/`[PUMPS]` al `.inp` con la curva transformada — solo exportación, el solver interno sigue asumiendo cabeza fija
+
+### Tests
+- `pytest -v` → 213 passed (152 baseline v6 + 61 nuevos), 0 failed
+
+### Decisiones tomadas
+- Nivel de riesgo bajo/medio/alto: valores 15/20/25% dictados por el usuario, no inventados (entregable de ingeniería real)
+- Mapa de red con solver propio, no EPANET real
+- Autodetección: pen/mask de automeris quedó explícitamente fuera de alcance (baja prioridad, "si no pesa mucho")
+- Ítem 16 (curvas→INP): solo exportación, el GGA interno no se modifica
+- `report_ctx.build()` sigue recalculando `optimize_diameters` en cada build del reporte (no reusa `session_state` de la página 7) — es el diseño intencional del módulo (recalcula siempre desde el `Project` persistido, nunca confía en estado vivo), no un bug pendiente
+
+### Pendientes (TODO)
+- [ ] Pen/mask de pintado para la autodetección (baja prioridad, explícitamente diferido)
+- [ ] Validar con catálogo real de fabricante los valores referenciales de PVC-O/biaxial marcados como estimados
+
+### Contexto para el siguiente agente
+Todo el trabajo se hizo en worktree `acucalc-v7` (ya eliminado tras el merge), con revisión independiente de spec-compliance y de calidad de código antes de mergear (2 gaps de spec detectados y corregidos: `st.rerun()` sin `scope="fragment"` en varios botones dentro del fragment del digitalizador, y la altura fija de imagen del ítem 8 que nunca se había implementado). `PumpData.cal` cambió de forma otra vez (v6→v7): ver `migrate_pump_cal_v7` en `core/project.py` para el historial completo de migraciones si tocas ese campo.
+
 ## [2026-07-16 10:29] — Integración de skills de terceros al flujo inter-agente
 
 **Agente:** Antigravity
