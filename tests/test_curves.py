@@ -213,3 +213,72 @@ def test_calibraciones_independientes_qh_qe_no_se_interfieren():
 def test_apply_pump_transform_n2_igual_a_n1_no_aplica_afinidad():
     qh, qe = cv.apply_pump_transform(_QH, _QE, 3500.0, 3500.0, 1, "paralelo")
     assert qh == _QH and qe == _QE
+
+
+# ---------- WP-3c: suggest_n2 ----------
+
+def _qh_parabola():
+    """H(Q) = 30 - 0.05·Q² exacto en estos 5 puntos (permite que fit_curve
+    grado 2 reconstruya la parábola sin error de ajuste)."""
+    return [(0.0, 30.0), (5.0, 28.75), (10.0, 25.0), (15.0, 18.75), (20.0, 10.0)]
+
+
+def _sys_parabola():
+    """H_sistema(Q) = 5 + 0.02·Q², suficientes puntos para cubrir Q hasta 60
+    (afinidad r hasta 3.0 sobre Q_max=20)."""
+    return [(q, 5.0 + 0.02 * q ** 2) for q in np.linspace(0.0, 60.0, 60)]
+
+
+def test_suggest_n2_recupera_r_desde_q_objetivo():
+    qh, qe = _qh_parabola(), []
+    n1 = 1450.0
+    sys_lps = _sys_parabola()
+    r_true = 1.3
+    qh_t, qe_t = cv.apply_pump_transform(qh, qe, n1, n1 * r_true, 1, "paralelo")
+    fit_t = cv.fit_curve(qh_t, 2)
+    op_true = cv.operating_point(fit_t, sys_lps)
+    assert op_true is not None
+    q_true, _h_true = op_true
+
+    n2 = cv.suggest_n2(qh, qe, n1, 1, "paralelo", sys_lps, q_objetivo=q_true)
+    assert n2 is not None
+    assert abs(n2 - n1 * r_true) / (n1 * r_true) < 1e-3
+
+
+def test_suggest_n2_recupera_r_desde_h_objetivo():
+    qh, qe = _qh_parabola(), []
+    n1 = 1450.0
+    sys_lps = _sys_parabola()
+    r_true = 0.8
+    qh_t, qe_t = cv.apply_pump_transform(qh, qe, n1, n1 * r_true, 1, "paralelo")
+    fit_t = cv.fit_curve(qh_t, 2)
+    op_true = cv.operating_point(fit_t, sys_lps)
+    assert op_true is not None
+    _q_true, h_true = op_true
+
+    n2 = cv.suggest_n2(qh, qe, n1, 1, "paralelo", sys_lps, h_objetivo=h_true)
+    assert n2 is not None
+    assert abs(n2 - n1 * r_true) / (n1 * r_true) < 1e-3
+
+
+def test_suggest_n2_exige_exactamente_un_objetivo():
+    qh, qe = _qh_parabola(), []
+    with pytest.raises(ValueError):
+        cv.suggest_n2(qh, qe, 1450.0, 1, "paralelo", _sys_parabola())
+    with pytest.raises(ValueError):
+        cv.suggest_n2(qh, qe, 1450.0, 1, "paralelo", _sys_parabola(),
+                      q_objetivo=10.0, h_objetivo=20.0)
+
+
+def test_suggest_n2_none_si_objetivo_inalcanzable():
+    qh, qe = _qh_parabola(), []
+    n2 = cv.suggest_n2(qh, qe, 1450.0, 1, "paralelo", _sys_parabola(),
+                       q_objetivo=1e6)
+    assert n2 is None
+
+
+def test_suggest_n2_none_sin_n1_o_pocos_puntos():
+    assert cv.suggest_n2([], [], 1450.0, 1, "paralelo", _sys_parabola(),
+                         q_objetivo=10.0) is None
+    assert cv.suggest_n2(_qh_parabola(), [], 0.0, 1, "paralelo", _sys_parabola(),
+                         q_objetivo=10.0) is None

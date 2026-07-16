@@ -526,6 +526,30 @@ for b in sys_d.bombas:
         b.arreglo = af4.selectbox("Arreglo", ["paralelo", "serie"],
                                   index=["paralelo", "serie"].index(b.arreglo),
                                   key=f"w_sel_arr_{BK}_{b.nombre}")
+        # WP-3c: sugerencia de N₂ objetivo — solo informativa, NO se aplica
+        # sola a b.n2_objetivo (el ingeniero revisa y decide).
+        st.caption("💡 Sugerir N₂ para un punto de operación objetivo (no se aplica sola):")
+        sg1, sg2, sg3 = st.columns(3)
+        modo_obj = sg1.radio("Objetivo", ["Q [L/s]", "H [m]"],
+                             key=f"w_sug_modo_{BK}_{b.nombre}", horizontal=True)
+        obj_val = num_input(f"Valor {modo_obj}", f"sug_val_{BK}_{b.nombre}", 0.0,
+                            decimals=2, container=sg2, min_value=0.0)
+        if sg3.button("💡 Sugerir N₂", key=f"w_sug_btn_{BK}_{b.nombre}"):
+            if b.n1_nominal <= 0:
+                st.warning("Fija N₁ nominal (> 0) arriba antes de pedir una sugerencia de N₂.")
+                n2_sug = None
+            else:
+                kw = ({"q_objetivo": obj_val} if modo_obj == "Q [L/s]"
+                     else {"h_objetivo": obj_val})
+                n2_sug = cv.suggest_n2(b.puntos_qh, b.puntos_qe, b.n1_nominal,
+                                       b.n_unidades, b.arreglo, sys_lps, **kw)
+                if n2_sug is None:
+                    st.warning("No se encontró un N₂ que alcance ese objetivo "
+                              "(fuera de rango con N₁ y afinidad razonable, r∈[0.3, 3.0]).")
+            if n2_sug is not None:
+                st.info(f"N₂ sugerido ≈ **{n2_sug:.0f}** (r = N₂/N₁ = "
+                       f"{n2_sug / b.n1_nominal:.3f}) — revísalo y, si te convence, "
+                       "cópialo en el campo 'N₂ objetivo' arriba.")
     qh_t, qe_t = _puntos_transformados(b)
     fit = cv.fit_curve(qh_t, 2)
     op = cv.operating_point(fit, sys_lps)

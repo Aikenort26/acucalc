@@ -168,6 +168,63 @@ def _cluster_y_dominante(ys_sorted, gap: int = 5) -> float:
     return float(np.mean(cluster))
 
 
+def suggest_n2(qh: list[tuple[float, float]], qe: list[tuple[float, float]],
+               n1_nominal: float, n_unidades: int, arreglo: str,
+               sys_lps: list[tuple[float, float]],
+               q_objetivo: float | None = None,
+               h_objetivo: float | None = None) -> float | None:
+    """Sugiere N₂ (rpm/Hz) tal que el punto de operación de la bomba
+    transformada (afinidad N1→N2, luego arreglo ×n_unidades) contra la curva
+    de sistema `sys_lps` caiga en `q_objetivo` O `h_objetivo` (exactamente
+    uno de los dos, no ambos). Es solo una sugerencia — el llamador decide si
+    aplicarla a `PumpData.n2_objetivo`; esta función NO modifica nada.
+
+    Busca la raíz por `brentq` sobre r = N2/N1 en el bracket [0.3, 3.0]
+    (afinidad físicamente razonable para el mismo rodete). Devuelve None si
+    no se puede evaluar (menos de 3 puntos, N1 <= 0) o si no hay raíz
+    acotada en el bracket (el objetivo está fuera de lo alcanzable variando
+    N2 solo)."""
+    if (q_objetivo is None) == (h_objetivo is None):
+        raise ValueError("Debes dar exactamente uno de q_objetivo o h_objetivo")
+    if n1_nominal <= 0 or len(qh) < 3:
+        return None
+
+    def _objetivo(r: float) -> float | None:
+        n2 = n1_nominal * r
+        qh_t, _ = apply_pump_transform(qh, qe, n1_nominal, n2, n_unidades, arreglo)
+        try:
+            fit = fit_curve(qh_t, 2)
+        except ValueError:
+            return None
+        op = operating_point(fit, sys_lps)
+        if op is None:
+            return None
+        return op[0] - q_objetivo if q_objetivo is not None else op[1] - h_objetivo
+
+    lo, hi = 0.3, 3.0
+    f_lo, f_hi = _objetivo(lo), _objetivo(hi)
+    if f_lo is None or f_hi is None:
+        # barrido fino para encontrar un sub-intervalo bracketable, en vez de
+        # rendirse ante un solo None en los extremos (ej. r bajo sin cruce)
+        rs = np.linspace(lo, hi, 40)
+        vals = [_objetivo(r) for r in rs]
+        for a, b, fa, fb in zip(rs, rs[1:], vals, vals[1:]):
+            if fa is None or fb is None:
+                continue
+            if fa == 0.0:
+                return float(n1_nominal * a)
+            if fa * fb < 0:
+                r_root = brentq(lambda r: _objetivo(r), a, b)
+                return float(n1_nominal * r_root)
+        return None
+    if f_lo == 0.0:
+        return float(n1_nominal * lo)
+    if f_lo * f_hi < 0:
+        r_root = brentq(lambda r: _objetivo(r), lo, hi)
+        return float(n1_nominal * r_root)
+    return None
+
+
 def scale_points(points: list[tuple[float, float]], r: float) -> list[tuple[float, float]]:
     """Leyes de afinidad para el mismo rodete (r = N2/N1): Q → Q·r, H → H·r²."""
     return [(q * r, h * r ** 2) for q, h in points]
