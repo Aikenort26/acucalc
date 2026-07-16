@@ -299,16 +299,13 @@ def build(p: Project) -> tuple[dict, dict]:
                             for jid, q in demandas.items()],
                 "optimizacion": None,
             }
-            if p.red_material and p.red_serie:
-                opt = network.optimize_diameters(
-                    red, p.red_material, p.red_serie, p.red_vmax, p.red_pmin, p.red_pmax)
-                red_ctx["optimizacion"] = {
-                    "material": latex_escape(p.red_material),
-                    "serie": latex_escape(p.red_serie),
-                    "avisos": [latex_escape(a) for a in opt.avisos],
-                    "tuberias": [{"id": latex_escape(pid), "dn0": f"{opt.dn_original[pid]:.0f}",
-                                 "dn1": f"{opt.dn_optimizado[pid]:.0f}"}
-                                for pid in opt.dn_original]}
+            # La optimización de diámetros (heurística iterativa, hasta 30
+            # resoluciones densas del sistema) queda deliberadamente fuera del
+            # reporte: para una red grande bloqueaba la generación del PDF sin
+            # dar señal de progreso (el botón de la página 8 no llegaba a
+            # aparecer). Se hace en la página 7 (Red), interactiva, con su
+            # propio botón; el reporte solo documenta la red y la asignación
+            # de demandas, que es O(nodos+tuberías) y siempre rápida.
         except ValueError:
             red_ctx = None
 

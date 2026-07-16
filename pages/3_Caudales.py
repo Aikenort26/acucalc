@@ -47,7 +47,7 @@ pob = st.session_state.get("pob_final", 0.0)
 
 c1, c2, c3 = st.columns(3)
 p.demanda.perdidas = num_input("Pérdidas técnicas [%] (máx 25, Art. 44)", "perdidas",
-                               p.demanda.perdidas * 100, decimals=1, container=c1,
+                               p.demanda.perdidas * 100, decimals=2, container=c1,
                                min_value=0.0, max_value=60.0) / 100
 if pob > 0:
     k1_max, k2_max = demand.k_factors(pob)

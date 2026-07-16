@@ -38,20 +38,35 @@ p.red_en_informe = st.checkbox("Incluir la sección de red en la memoria del rep
                                     "y no quieres que aparezca en el PDF final.")
 
 # ---------- WP-7: mapa de la red ----------
+# El contenido de un expander se ejecuta en CADA rerun de la página aunque
+# esté colapsado (Streamlit no sabe que está "cerrado" a nivel de script) —
+# antes esto corría net.solve() sobre TODA la red en cada click de cualquier
+# botón de la página, incluida "Asignar demandas", que es lo que hacía sentir
+# lenta a la página entera. "topología" no necesita resolver nada y es el
+# default; presión/velocidad quedan detrás de un botón explícito.
 with st.expander("🗺 Mapa de la red", expanded=False):
-    col_c, _ = st.columns([1, 2])
-    colorear = col_c.radio("Colorear por", ["presión", "velocidad", "topología"],
+    col_c, col_b = st.columns([2, 1])
+    colorear = col_c.radio("Colorear por", ["topología", "presión", "velocidad"],
                            horizontal=True, key="w_red_colorear")
     if colorear == "topología":
         fig_map = nm.fig_red(red, dark=True)
     else:
-        try:
-            res_map = net.solve(red)
+        calcular = col_b.button("🧮 Calcular y colorear", key="w_red_map_solve")
+        res_map = st.session_state.get("red_map_solve")
+        if calcular:
+            try:
+                res_map = net.solve(red)
+                st.session_state["red_map_solve"] = res_map
+            except Exception as e:
+                st.warning(f"No se pudo simular para colorear el mapa: {e}")
+                res_map = None
+        if res_map is not None:
             fig_map = nm.fig_red(red, res_map,
                                  colorear="presion" if colorear == "presión" else "velocidad",
                                  dark=True)
-        except Exception as e:
-            st.warning(f"No se pudo simular para colorear el mapa: {e}")
+        else:
+            st.caption("Pulsa \"Calcular y colorear\" para resolver la red y colorear "
+                       "el mapa (puede tardar unos segundos en redes grandes).")
             fig_map = nm.fig_red(red, dark=True)
     if not nm.tiene_coordenadas(red):
         st.caption("El INP no trae sección [COORDINATES]; se usa un layout "

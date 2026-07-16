@@ -83,7 +83,7 @@ sys_d.tipo_bomba = c0.selectbox("Tipo de bomba", ["superficie", "sumergible"],
 sys_d.horas = num_input("Horas de bombeo/día", f"horas_{K}", sys_d.horas,
                         decimals=1, container=c1, min_value=1.0, max_value=24.0)
 sys_d.he = num_input("Altura estática [m]", f"he_{K}", sys_d.he,
-                     decimals=1, container=c2, min_value=0.0, max_value=1000.0)
+                     decimals=2, container=c2, min_value=0.0, max_value=1000.0)
 sys_d.sumar_5m_ras = c3.checkbox("+5 m (RAS B 9.4.11)", sys_d.sumar_5m_ras,
                                  key=f"w_chk_5m_{K}")
 sys_d.eficiencia = num_input("Eficiencia η", f"efi_{K}", sys_d.eficiencia,
@@ -161,7 +161,7 @@ with st.expander("➕ Agregar / ✏ editar tramo", expanded=not sys_d.tramos):
                 cat_material=mat, cat_serie=ser, cat_dn=dn, e_mm=spec.e_mm)
     else:
         b1, b2, b3 = st.columns(3)
-        d_int = num_input("D interno [mm]", f"di_{K}", 79.5, decimals=1,
+        d_int = num_input("D interno [mm]", f"di_{K}", 79.5, decimals=2,
                           container=b1, min_value=5.0, max_value=2000.0)
         mat_ks = b2.selectbox("Material (rugosidad)", list(catalogs.roughness().keys()),
                               key=f"w_sel_ks_{K}")
