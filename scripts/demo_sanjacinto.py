@@ -16,7 +16,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core import dane, pipes, population as pop, project as pj, report, report_ctx
+import math
+
+from core import dane, demand, pipes, population as pop, project as pj, report, report_ctx, storage
 
 OUT = Path(__file__).resolve().parent.parent / "output"
 SAVES = Path(__file__).resolve().parent.parent / "saves"
@@ -102,20 +104,43 @@ p.bombeos = [s1, s2]
 
 # Tanques: semienterrado (suministro = pozo 5-14, salida = bombeo intermedio
 # 6-15) + elevado (suministro = bombeo 6-15, salida = consumo continuo de la
-# red). Volumen asignado = el requerido por el balance interno de cada tanque
-# (calculado con core.storage.tank_balance_check, redondeado a 5 m³ como el
-# resto de la app) — con la metodología v6 (norma->geometría->balance) el
-# usuario asigna el volumen; aquí se preasigna el mínimo que cumple balance.
+# red). Con la metodología v6 (norma->geometría->balance) el usuario asigna el
+# volumen; aquí se preasigna dinámicamente el mínimo que cumple el balance
+# interno de cada tanque (core.storage.tank_balance_check), redondeado a 5 m³
+# como el resto de la app — se recalcula si cambian población/dotación, nunca
+# queda como número mágico obsoleto.
+_rates = pop.growth_rates(p.censo)
+_proj = pop.project(cfg.p0, cfg.year0, cfg.horizon_year, _rates, cfg.tasa_res0844)
+_pob_final = _proj.series[cfg.metodo][-1][1]
+_flows = demand.flows(_pob_final, p.demanda.dneta, p.demanda.perdidas,
+                      p.demanda.k1, p.demanda.k2)
+_qmd_m3d = _flows.qmd_lps * 86.4
+
+
+def _volumen_minimo(nombre: str, entrada: list, salida: list) -> float:
+    chk = storage.tank_balance_check(nombre, _qmd_m3d, entrada, salida, v_asignado=0)
+    return math.ceil(chk.v_balance_req / 5) * 5
+
+
+_v_bajo = _volumen_minimo("Tanque semienterrado",
+                          [1 if 5 <= h <= 14 else 0 for h in range(24)],
+                          [1 if 6 <= h <= 15 else 0 for h in range(24)])
+_v_elevado = _volumen_minimo("Tanque elevado",
+                             [1 if 6 <= h <= 15 else 0 for h in range(24)],
+                             [1] * 24)
+
 alm.tanques = [
-    pj.TankSpec("Tanque semienterrado", "bajo", "rectangular", 430, 2.5, 1.5,
+    pj.TankSpec("Tanque semienterrado", "bajo", "rectangular", _v_bajo, 2.5, 1.5,
                entrada_ini=5, entrada_fin=14, salida_ini=6, salida_fin=15,
                tipo_constructivo="semienterrado"),
-    pj.TankSpec("Tanque elevado", "elevado", "circular", 2495, 2.5, 1.0,
+    pj.TankSpec("Tanque elevado", "elevado", "circular", _v_elevado, 2.5, 1.0,
                entrada_ini=6, entrada_fin=15, salida_ini=0, salida_fin=23,
                tipo_constructivo="elevado"),
 ]
 
 ctx, figuras = report_ctx.build(p)
+_fallan = [tb["nombre"] for tb in ctx["tanques_balance"] if tb["cumple"] != "Sí"]
+assert not _fallan, f"Tanques que no cumplen su balance interno: {_fallan}"
 SAVES.mkdir(exist_ok=True)
 pj.save(p, SAVES / "Acueducto_San_Jacinto.acucalc.json")
 
