@@ -160,9 +160,17 @@ frente a \VAR{v_final} m\textsuperscript{3} requeridos por norma.
 \begin{tabular}{lrrrrrc}\toprule
 Tanque & Sum. [h/d] & Sal. [h/d] & Fracción & $V$ asignado [m³] & $V$ req. balance [m³] & Cumple \\ \midrule
 \BLOCK{for tb in tanques_balance}
-\VAR{tb.nombre} & \VAR{tb.horas_suministro} & \VAR{tb.horas_salida} & \VAR{tb.frac} & \VAR{tb.v_asignado} & \VAR{tb.v_req} & \VAR{tb.cumple} \\
+\VAR{tb.nombre} & \VAR{tb.horas_suministro} & \VAR{tb.horas_salida} & \VAR{tb.frac} & \VAR{tb.v_asignado} & \VAR{tb.v_req} & \BLOCK{if tb.cumple == "No"}\textbf{\VAR{tb.cumple}}\BLOCK{else}\VAR{tb.cumple}\BLOCK{endif} \\
 \BLOCK{endfor}
 \bottomrule\end{tabular}\end{table}
+\BLOCK{for tb in tanques_balance}
+\BLOCK{if tb.cumple == "No"}
+\textbf{Aviso:} el tanque \VAR{tb.nombre} tiene un volumen asignado
+(\VAR{tb.v_asignado} m\textsuperscript{3}) menor al requerido por su balance
+interno (\VAR{tb.v_req} m\textsuperscript{3}) --- debe aumentarse el volumen
+asignado o ajustar sus ventanas de suministro/salida.\\
+\BLOCK{endif}
+\BLOCK{endfor}
 \BLOCK{endif}
 
 \BLOCK{if "balance" in figuras}
@@ -179,10 +187,10 @@ construido es igual o mayor al volumen requerido por el balance de regulación.
 \begin{table}[H]\centering
 \caption{Predimensionamiento de tanques (dimensiones por unidad; volumen útil de
 líquido --- añadir 0.30 m de borde libre adicional en la construcción).}
-\begin{tabular}{lllcllrr}\toprule
-Tanque & Tipo & Tipo constructivo & Cant. & Forma & Dim. (c/u) & $V$ requerido [m³] & $V$ real total [m³] \\ \midrule
+\begin{tabular}{llcllrr}\toprule
+Tanque & Tipo constructivo & Cant. & Forma & Dim. (c/u) & $V$ requerido [m³] & $V$ real total [m³] \\ \midrule
 \BLOCK{for t in tanques}
-\VAR{t.nombre} & \VAR{t.tipo} & \VAR{t.tipo_constructivo} & \VAR{t.cantidad} & \VAR{t.forma} & \VAR{t.dim} & \VAR{t.volumen} & \VAR{t.volumen_real} \\
+\VAR{t.nombre} & \VAR{t.tipo_constructivo} & \VAR{t.cantidad} & \VAR{t.forma} & \VAR{t.dim} & \VAR{t.volumen} & \VAR{t.volumen_real} \\
 \BLOCK{endfor}
 \bottomrule\end{tabular}\end{table}
 \BLOCK{endif}
