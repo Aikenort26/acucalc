@@ -47,6 +47,41 @@ Párrafo libre con contexto crítico que el otro agente necesita saber.
 
 ## Entradas
 
+## [2026-07-16 10:29] — Integración de skills de terceros al flujo inter-agente
+
+**Agente:** Antigravity
+**Rama:** main
+**Sesión:** Usuario pidió integrar las skills de `D:\CLAUDE CODE\04_SKILLS_TERCEROS` al flujo de desarrollo de ACUCALC.
+
+### Cambios realizados
+- `CLAUDE.md` [MOD]: agregada sección "Skills de terceros disponibles" con 12 skills referenciadas
+- `.agents/AGENTS.md` [MOD]: agregada sección equivalente para Antigravity con 10 skills referenciadas
+
+### Tests
+- No ejecutados (cambios de configuración de agentes, no de código)
+
+### Decisiones tomadas
+- Se clasificaron ~300 skills en 3 niveles: 🟢 altamente relevantes (12), 🟡 moderadamente (9), 🔴 no relevantes (resto)
+- Solo se referenciaron en CLAUDE.md/AGENTS.md las skills 🟢 (directamente aplicables al stack Python/Streamlit/pytest)
+- Las skills de `superpowers/` cubren flujo de desarrollo (TDD, plans, debugging, verification)
+- Las skills de `ECC/` cubren patrones de código (Python patterns, testing, error handling, git)
+- Skills de frontend JS/React, mobile, DevOps, crypto, etc. se descartaron por irrelevantes al stack
+- No se copiaron archivos de skills al repo — se referencian por ruta absoluta a `04_SKILLS_TERCEROS`
+
+### Pendientes (TODO)
+- [ ] Hacer `git push` para que IDX y Claude Code tengan los cambios
+- [ ] Continuar con el plan de desarrollo (siguiente WP del plan v5 o crear plan v7)
+- [ ] Verificar que Claude Code lee correctamente las skills al iniciar sesión
+
+### Contexto para el siguiente agente
+Se integraron 12 skills de terceros relevantes al proyecto. Las más importantes:
+- **superpowers:test-driven-development** — refuerza el TDD del proyecto
+- **superpowers:verification-before-completion** — obliga a correr pytest antes de declarar completado
+- **superpowers:systematic-debugging** — debugging estructurado con root cause analysis
+- **ECC:python-patterns** — patrones de Python idiomático (dataclasses, type hints, PEP 8)
+- **ECC:python-testing** — referencia completa de pytest (fixtures, mocking, parametrización)
+Las skills NO están dentro del repo, sino en `D:\CLAUDE CODE\04_SKILLS_TERCEROS\`. Ambos agentes las referencian por ruta absoluta.
+
 ## [2026-07-16 10:12] — Inicialización del DEVLOG + config IDX
 
 **Agente:** Antigravity

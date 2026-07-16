@@ -32,6 +32,26 @@
 - Diámetros en mm en dataclasses públicas.
 - `report_ctx.build()` es la única fuente de verdad del reporte.
 
+## Skills de terceros disponibles
+
+Ubicación base: `D:\CLAUDE CODE\04_SKILLS_TERCEROS\`
+
+Antes de implementar features, debugging o planes, **lee el SKILL.md** correspondiente:
+
+### Flujo de desarrollo (Superpowers)
+- **test-driven-development** → `superpowers/skills/test-driven-development/SKILL.md`
+- **executing-plans** → `superpowers/skills/executing-plans/SKILL.md`
+- **verification-before-completion** → `superpowers/skills/verification-before-completion/SKILL.md`
+- **systematic-debugging** → `superpowers/skills/systematic-debugging/SKILL.md`
+- **writing-plans** → `superpowers/skills/writing-plans/SKILL.md`
+
+### Patrones Python (ECC)
+- **python-patterns** → `ECC/skills/python-patterns/SKILL.md`
+- **python-testing** → `ECC/skills/python-testing/SKILL.md`
+- **coding-standards** → `ECC/skills/coding-standards/SKILL.md`
+- **error-handling** → `ECC/skills/error-handling/SKILL.md`
+- **git-workflow** → `ECC/skills/git-workflow/SKILL.md`
+
 ## Otros agentes
 
 - **Claude Code** también trabaja en este proyecto. Lee `CLAUDE.md` si necesitas entender sus instrucciones.
