@@ -134,7 +134,9 @@ with st.expander("➕ Agregar / ✏ editar tramo", expanded=not sys_d.tramos):
     if modo_t == "Catálogo normativo":
         b1, b2, b3 = st.columns(3)
         mat = b1.selectbox("Material", pipes.materials(), key=f"w_sel_mat_{K}")
-        ser = b2.selectbox("Serie / clase (RDE)", pipes.series(mat), key=f"w_sel_ser_{K}")
+        ser = b2.selectbox("Serie / clase (RDE)", pipes.series(mat),
+                           format_func=lambda s: pipes.serie_label(mat, s),
+                           key=f"w_sel_ser_{K}")
         dns = pipes.diameters(mat, ser)
         dn_prop = pipes.suggest_dn(mat, ser, qb_lps / 1000)
         if f"w_sel_dn_{K}" not in st.session_state:
@@ -284,9 +286,9 @@ with st.expander("Golpe de ariete (Joukowsky) — factor de seguridad por tramo"
                "del tramo — criterio conservador (sobreestima en tramos "
                "intermedios).")
     rows_ar, fallan = [], []
-    k_elast_manual = {"PVC": 18.0, "PEAD": 111.11, "HD": 1.0,
-                      "Acero comercial": 0.5, "GRP": 8.3, "Concreto": 5.0,
-                      "Hierro galvanizado": 1.0}
+    k_elast_manual = {"PVC": 18.0, "PVC-O": 13.5, "PVC biaxial": 15.5,
+                      "PEAD": 111.11, "HD": 1.0, "Acero comercial": 0.5,
+                      "GRP": 8.3, "Concreto": 5.0, "Hierro galvanizado": 1.0}
     for t, tr in zip(sys_d.tramos, r.tramos):
         if not t.e_mm:
             rows_ar.append({"Tramo": t.nombre, "e [mm]": None, "C [m/s]": None,

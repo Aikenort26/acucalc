@@ -13,8 +13,9 @@ from core.project import Project
 
 # k_elast por material de rugosidad para tramos manuales (los del catálogo traen
 # su k_elast en el PipeSpec). Mismo mapa que usa la página 5 de la app.
-K_ELAST_MANUAL = {"PVC": 18.0, "PEAD": 111.11, "HD": 1.0, "Acero comercial": 0.5,
-                  "GRP": 8.3, "Concreto": 5.0, "Hierro galvanizado": 1.0}
+K_ELAST_MANUAL = {"PVC": 18.0, "PVC-O": 13.5, "PVC biaxial": 15.5, "PEAD": 111.11,
+                  "HD": 1.0, "Acero comercial": 0.5, "GRP": 8.3, "Concreto": 5.0,
+                  "Hierro galvanizado": 1.0}
 
 REFERENCIAS = [
     {"cita": "Ministerio de Vivienda, Ciudad y Territorio. Resolución 0330 de 2017, "
