@@ -8,7 +8,9 @@
   #img { display: block; max-width: 100%; }
   #overlay { position: absolute; left: 0; top: 0; pointer-events: none; }
   #loupe { position: absolute; left: 8px; top: 8px; border: 2px solid #22C55E;
-           border-radius: 4px; background: #000; pointer-events: none; z-index: 10; }
+           border-radius: 4px; background: #000; pointer-events: auto; z-index: 10;
+           cursor: grab; }
+  #loupe.dragging { cursor: grabbing; }
 </style>
 </head>
 <body>
@@ -60,11 +62,10 @@ function drawMarkers() {
 
 img.addEventListener('load', () => { drawMarkers(); frameHeight(); });
 
-wrap.addEventListener('mousemove', e => {
-  if (!img.naturalWidth) return;
-  const r = img.getBoundingClientRect();
-  const s = img.naturalWidth / img.clientWidth;
-  const px = (e.clientX - r.left) * s, py = (e.clientY - r.top) * s;
+let curPx = 0, curPy = 0;   // última posición (px imagen) bajo el mouse en #wrap
+let dragging = false, dragPx = 0, dragPy = 0;
+
+function redrawLoupeAt(px, py) {
   const lc = loupe.getContext('2d');
   lc.imageSmoothingEnabled = false;
   lc.fillStyle = '#fff'; lc.fillRect(0, 0, L, L);
@@ -77,6 +78,14 @@ wrap.addEventListener('mousemove', e => {
   lc.stroke();
   lc.fillStyle = '#B45309'; lc.font = 'bold 11px monospace';
   lc.fillText('(' + Math.round(px) + ', ' + Math.round(py) + ')', 4, L - 6);
+}
+
+wrap.addEventListener('mousemove', e => {
+  if (!img.naturalWidth || dragging) return;   // arrastrando: la lupa la maneja el drag
+  const r = img.getBoundingClientRect();
+  const s = img.naturalWidth / img.clientWidth;
+  curPx = (e.clientX - r.left) * s; curPy = (e.clientY - r.top) * s;
+  redrawLoupeAt(curPx, curPy);
 });
 
 wrap.addEventListener('click', e => {
@@ -85,6 +94,38 @@ wrap.addEventListener('click', e => {
   const s = img.naturalWidth / img.clientWidth;
   setValue({x: Math.round((e.clientX - r.left) * s),
             y: Math.round((e.clientY - r.top) * s), n: Date.now(), enterPressed: false});
+});
+
+// Arrastre en la lupa (WP-5): además del click sobre la imagen, el usuario
+// puede afinar el punto arrastrando DENTRO de la lupa (vista ampliada
+// ZOOM=4x, mucho más preciso que mover el mouse sobre la imagen a tamaño
+// real). mousedown arranca el arrastre desde la última posición hover;
+// mousemove mueve el centro de la lupa en la escala reducida por el zoom
+// (1 px de pantalla arrastrado = 1/ZOOM px de imagen — precisión subpíxel
+// efectiva); mouseup emite la posición final con el mismo contrato
+// {x, y, n, enterPressed:false} que un click normal, así el lado Python la
+// trata igual (se vuelve el punto pendiente).
+loupe.addEventListener('mousedown', e => {
+  if (!img.naturalWidth) return;
+  dragging = true; dragPx = curPx; dragPy = curPy;
+  loupe.classList.add('dragging');
+  redrawLoupeAt(dragPx, dragPy);
+  e.preventDefault();
+});
+
+window.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  dragPx = Math.min(Math.max(dragPx + e.movementX / ZOOM, 0), img.naturalWidth - 1);
+  dragPy = Math.min(Math.max(dragPy + e.movementY / ZOOM, 0), img.naturalHeight - 1);
+  redrawLoupeAt(dragPx, dragPy);
+});
+
+window.addEventListener('mouseup', () => {
+  if (!dragging) return;
+  dragging = false;
+  loupe.classList.remove('dragging');
+  curPx = dragPx; curPy = dragPy;
+  setValue({x: Math.round(dragPx), y: Math.round(dragPy), n: Date.now(), enterPressed: false});
 });
 
 // WP-B2: Enter físico dentro del iframe del componente pasa de calibrar/

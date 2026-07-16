@@ -103,9 +103,18 @@ if up is not None:
         bomba.imagen_b64 = base64.b64encode(raw).decode()
 if not bomba.imagen_b64:
     st.info("Sube la imagen del catálogo, o ingresa los puntos Q-H / Q-η a mano abajo.")
+@st.cache_data(show_spinner=False)
+def _decode_imagen(imagen_b64: str) -> Image.Image:
+    """Decodifica base64→PIL RGB, cacheado por el hash del propio string b64
+    (WP-5: `st.cache_data` hashea sus args — decodificar y materializar todos
+    los pixeles con `.convert('RGB')` en cada rerun era el costo más caro y
+    completamente evitable, ya que la imagen no cambia entre clicks)."""
+    return Image.open(io.BytesIO(base64.b64decode(imagen_b64))).convert("RGB")
+
+
 img = None
 if bomba.imagen_b64:
-    img = Image.open(io.BytesIO(base64.b64decode(bomba.imagen_b64))).convert("RGB")
+    img = _decode_imagen(bomba.imagen_b64)
 
 FACTOR_Q = {"L/s": 1.0, "L/min": 1 / 60, "m³/h": 1 / 3.6, "GPM": 0.0630902}
 
@@ -188,7 +197,13 @@ def _estado_cal(c: dict) -> str:
            or "sin calibrar")
 
 
-if img is not None:
+# WP-5: todo el bloque de calibración/captura vive en un `st.fragment` — un
+# click de digitalización (o cualquier widget de este bloque) solo vuelve a
+# ejecutar ESTE bloque, no la página entera (evita rehacer fit_curve +
+# operating_point + best_efficiency_point + system_curve + el render
+# matplotlib de la comparación de bombas, más abajo, en cada click de punto).
+@st.fragment
+def _bloque_calibracion():
     st.subheader("Calibración y captura de puntos")
     st.caption("1) Elige el modo · 2) haz click en la imagen · 3) afina el punto en el "
                "panel de zoom (±1 px) · 4) confirma. Los puntos confirmados quedan "
@@ -245,6 +260,10 @@ if img is not None:
                        "qh": st.session_state.get(f"qh_px_{BK}", []),
                        "qe": st.session_state.get(f"qe_px_{BK}", []),
                        "pending": [pend["x"], pend["y"]] if pend else None}
+            # WP-5: sin st.rerun() explícito aquí — setValue() del componente
+            # (index.html) ya dispara un rerun de Streamlit al cambiar su
+            # valor; un segundo st.rerun() duplicaba el costo de cada click
+            # (doble ciclo de render completo por punto capturado).
             click = digitizer(bomba.imagen_b64, markers, key=f"dg_{BK}")
             if click:
                 n = click.get("n")
@@ -254,20 +273,19 @@ if img is not None:
                         siguiente = _ENTER_ADVANCE.get(modo)
                         if siguiente:
                             st.session_state[f"modo_next_{BK}"] = siguiente
-                        st.rerun()
                 elif n != st.session_state.get(f"last_click_{BK}"):
                     st.session_state[f"last_click_{BK}"] = n
                     st.session_state[pend_key] = {"x": int(click["x"]), "y": int(click["y"])}
-                    st.rerun()
         else:
             shown = _overlay(img, cal_merged, pend)
+            # WP-5: mismo motivo — streamlit_image_coordinates ya reruns al
+            # cambiar su valor devuelto, un st.rerun() extra era redundante.
             click = streamlit_image_coordinates(shown, key=f"img_{BK}")
             if click is not None:
                 nuevo_p = {"x": int(click["x"]), "y": int(click["y"])}
                 if nuevo_p != st.session_state.get(f"last_click_{BK}"):
                     st.session_state[f"last_click_{BK}"] = nuevo_p
                     st.session_state[pend_key] = dict(nuevo_p)
-                    st.rerun()
 
     with col_ctrl:
         st.markdown("**Zoom de precisión**")
@@ -381,6 +399,10 @@ if img is not None:
                           "es compartido)."):
             st.session_state[f"modo_next_{BK}"] = _siguiente_enter
             st.rerun()
+
+
+if img is not None:
+    _bloque_calibracion()
 
 # ---------- importar puntos desde CSV (de cualquier herramienta externa) ----------
 with st.expander("📥 Importar puntos desde CSV"):
