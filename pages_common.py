@@ -6,6 +6,13 @@ from pathlib import Path
 import streamlit as st
 from core import project as pj
 from core.project import Project
+# Re-exporta la convención de decimales (única fuente de verdad, WP-2a). Vive
+# en core/formato porque core/report_ctx también la usa y core/ no puede
+# depender de pages_common (invertiría las capas).
+from core.formato import (  # noqa: F401  (re-export para las páginas)
+    fmt_q, fmt_h, fmt_p, fmt_v, fmt_d, fmt_perdida, fmt_vol, fmt_coef, fmt_num,
+    SP_CAUDAL, SP_ALTURA, SP_POTENCIA, SP_PERDIDA, SP_VELOCIDAD, SP_DIAMETRO,
+    SP_VOLUMEN, SP_COEF)
 
 # Prefijo de todos los keys de widgets numéricos — permite limpiarlos al cargar proyecto
 WIDGET_PREFIX = "w_"

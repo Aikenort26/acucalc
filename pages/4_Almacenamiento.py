@@ -3,8 +3,8 @@ import pandas as pd
 import streamlit as st
 from core import report_figs as rf, storage
 from core.project import TankSpec
-from pages_common import (f_num, fila_incompleta, get_project, i_num, num_input,
-                          page_setup)
+from pages_common import (SP_ALTURA, SP_VOLUMEN, f_num, fila_incompleta,
+                          fmt_vol, get_project, i_num, num_input, page_setup)
 
 p = page_setup()
 st.header("4 · Almacenamiento")
@@ -78,7 +78,10 @@ st.dataframe(pd.DataFrame(
       "Redondeado [m³]": r0.v_total_redondeado,
       "Gobierna": "◄" if r0.v_total_redondeado == v_norma else ""}
      for n, r0 in (("Art. 81 (QMD/3)", a), ("Curva integral", b))])
-    .style.format(precision=2, na_rep="—"), hide_index=True, width="stretch")
+    .style.format({"Fracción": "{:.4f}", "Regulación [m³]": SP_VOLUMEN,
+                   "Incendio [m³]": SP_VOLUMEN, "Total [m³]": SP_VOLUMEN,
+                   "Redondeado [m³]": "{:.0f}"}, na_rep="—"),
+    hide_index=True, width="stretch")
 st.metric("Volumen total por norma (gobernante)", f"{v_norma:.0f} m³",
           help=f"Máximo entre los dos criterios. Gobierna: {gobierna}.")
 fig = rf.fig_balance_train([("Comunidad", cfg.suministro_hora, cfg.factores_hora)], dark=True)
@@ -163,8 +166,8 @@ for t in cfg.tanques:
                       "V real (c/u) [m³]": ct.volumen_real,
                       "V real total [m³]": v_real_fila})
 st.dataframe(pd.DataFrame(dims_rows).style.format(
-    {"Altura [m]": "{:.1f}", "V asignado [m³]": "{:.0f}",
-     "V real (c/u) [m³]": "{:.2f}", "V real total [m³]": "{:.2f}"}),
+    {"Altura [m]": SP_ALTURA, "V asignado [m³]": "{:.0f}",
+     "V real (c/u) [m³]": SP_VOLUMEN, "V real total [m³]": SP_VOLUMEN}),
     hide_index=True, width="stretch")
 st.caption("Añadir 0.30 m de borde libre adicional en la construcción "
            "(volúmenes = volumen útil de líquido).")
@@ -202,7 +205,7 @@ if checks:
           "Cumple": "✓" if c.cumple else "✗"} for c in checks])
         .style.format({"Suministro [h/día]": "{:.0f}", "Salida [h/día]": "{:.0f}",
                        "Fracción balance": "{:.4f}", "V asignado [m³]": "{:.0f}",
-                       "V requerido balance [m³]": "{:.2f}"}),
+                       "V requerido balance [m³]": SP_VOLUMEN}),
         hide_index=True, width="stretch")
     for c in checks:
         if not c.cumple:

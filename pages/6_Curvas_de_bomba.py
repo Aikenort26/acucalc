@@ -8,7 +8,8 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 from core import curves as cv, pumping as pu
 from core import project as pj
 from core.project import PumpData
-from pages_common import page_setup, num_input, int_input, f_num, fila_incompleta
+from pages_common import (page_setup, num_input, int_input, f_num, fila_incompleta,
+                          fmt_h, SP_CAUDAL, SP_ALTURA, SP_POTENCIA)
 
 try:
     from components.digitizer import digitizer
@@ -53,7 +54,7 @@ if resuelto is None:
     st.stop()
 qb_lps = resuelto["qb_lps"]
 hd = resuelto["solve"].hd
-st.caption(f"Punto de diseño del sistema: **Q = {qb_lps:.2f} L/s · Hd = {hd:.1f} m** "
+st.caption(f"Punto de diseño del sistema: **Q = {qb_lps:.2f} L/s · Hd = {fmt_h(hd)} m** "
            f"(caudal de bombeo por {sys_d.horas:.0f} h/día)")
 
 # ---------- selección / creación / eliminación de bomba ----------
@@ -456,7 +457,9 @@ with st.expander("📚 Catálogo de bombas (Excel) — evalúa y escoge la más 
                                 "η(Q_op)": eta_c, "_pump": b})
             df_rank = (pd.DataFrame(ranking).drop(columns="_pump")
                        .sort_values("η(Q_op)", ascending=False))
-            st.dataframe(df_rank.style.format(precision=3, na_rep="sin cruce"),
+            st.dataframe(df_rank.style.format(
+                {"Q_op [L/s]": SP_CAUDAL, "H_op [m]": SP_ALTURA,
+                 "η(Q_op)": "{:.3f}"}, na_rep="sin cruce"),
                          hide_index=True, width="stretch")
             validas_cat = [r for r in ranking if r["η(Q_op)"] == r["η(Q_op)"]]
             if validas_cat:
@@ -559,7 +562,11 @@ if ecuaciones:
 
 if rows:
     df_cmp = pd.DataFrame(rows)
-    st.dataframe(df_cmp.style.format(precision=3), hide_index=True, width="stretch")
+    st.dataframe(df_cmp.style.format(
+        {"Q_op [L/s]": SP_CAUDAL, "H_op [m]": SP_ALTURA, "η(Q_op)": "{:.3f}",
+         "BEP Q [L/s]": SP_CAUDAL, "Desv. BEP [%]": "{:.2f}",
+         "P absorbida [HP]": SP_POTENCIA}, na_rep="—"),
+        hide_index=True, width="stretch")
     validas = df_cmp.dropna(subset=["η(Q_op)"])
     if not validas.empty:
         mejor = validas.loc[validas["η(Q_op)"].idxmax(), "Bomba"]

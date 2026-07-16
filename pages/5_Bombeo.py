@@ -2,7 +2,9 @@ import pandas as pd
 import streamlit as st
 from core import catalogs, pipes, pumping as pu
 from core.project import PumpSystemData, SegmentData, AccessoryData
-from pages_common import page_setup, num_input, show_issues, i_num
+from pages_common import (page_setup, num_input, show_issues, i_num, fmt_q,
+                          fmt_h, fmt_v, fmt_d, fmt_perdida, fmt_p,
+                          SP_VELOCIDAD, SP_PERDIDA, SP_COEF, SP_DIAMETRO)
 
 p = page_setup()
 st.header("5 · Sistemas de bombeo")
@@ -87,10 +89,10 @@ sys_d.sumar_5m_ras = c3.checkbox("+5 m (RAS B 9.4.11)", sys_d.sumar_5m_ras,
 sys_d.eficiencia = num_input("Eficiencia η", f"efi_{K}", sys_d.eficiencia,
                              decimals=3, container=c4, min_value=0.05, max_value=1.0)
 qb_lps = pu.q_bombeo(flows.qmd_lps, sys_d.horas)
-st.metric("Caudal de bombeo", f"{qb_lps:.3f} L/s")
+st.metric("Caudal de bombeo", f"{fmt_q(qb_lps)} L/s")
 st.caption(f"Diámetro económico Bresse (referencia): continuo "
-           f"{pu.bresse_continuo(qb_lps/1000)*1000:.1f} mm · no continuo "
-           f"{pu.bresse_no_continuo(qb_lps/1000, sys_d.horas)*1000:.1f} mm")
+           f"{fmt_d(pu.bresse_continuo(qb_lps/1000)*1000)} mm · no continuo "
+           f"{fmt_d(pu.bresse_no_continuo(qb_lps/1000, sys_d.horas)*1000)} mm")
 
 # ---------- agregar / editar tramo (catálogo en cascada) ----------
 st.subheader("Tramos de tubería")
@@ -142,12 +144,12 @@ with st.expander("➕ Agregar / ✏ editar tramo", expanded=not sys_d.tramos):
         dn = b3.selectbox("Diámetro nominal", dns,
                           format_func=lambda d: pipes.dn_label(mat, d),
                           key=f"w_sel_dn_{K}")
-        st.caption(f"Propuesto para Qb={qb_lps:.1f} L/s: "
+        st.caption(f"Propuesto para Qb={fmt_q(qb_lps)} L/s: "
                    f"**{pipes.dn_label(mat, dn_prop)}** (≥ Bresse y V ≤ 6 m/s, Art. 56)")
         spec = pipes.pipe(mat, ser, dn)
         st.caption(
             f"DN **{spec.dn_mm:.0f} mm / {spec.dn_in:.2f}\"** · D interno "
-            f"**{spec.id_mm:.1f} mm** · espesor **{spec.e_mm:.1f} mm** · "
+            f"**{fmt_d(spec.id_mm)} mm** · espesor **{fmt_d(spec.e_mm)} mm** · "
             f"ks **{spec.ks_mm} mm** · PN **{spec.pn_mca:.0f} mca** · "
             f"largo de presentación **{spec.largo_m:.0f} m**"
             + (f" · {spec.nota}" if spec.nota else ""))
@@ -199,7 +201,10 @@ if sys_d.tramos:
                           "D interno [mm]": t.D_mm, "e [mm]": t.e_mm or None,
                           "ks [mm]": round(ks, 4), "PN [mca]": None,
                           "Largo present. [m]": None})
-    st.dataframe(pd.DataFrame(filas).style.format(precision=2, na_rep="—"),
+    st.dataframe(pd.DataFrame(filas).style.format(
+        {"L [m]": SP_DIAMETRO, "DN [mm]": "{:.0f}", "DN [in]": "{:.2f}",
+         "D interno [mm]": SP_DIAMETRO, "e [mm]": SP_DIAMETRO, "ks [mm]": "{:.4f}",
+         "PN [mca]": "{:.0f}", "Largo present. [m]": "{:.0f}"}, na_rep="—"),
                  hide_index=True, width="stretch")
     cdel1, cdel2, cdel3 = st.columns([3, 1, 1])
     t_sel = cdel1.selectbox("Tramo a editar/eliminar",
@@ -256,16 +261,16 @@ st.subheader("Pérdidas por tramo (acumuladas)")
 st.dataframe(pd.DataFrame(
     [{"Tramo": t.segment.nombre, "V [m/s]": t.V, "Re": t.Re, "f": t.f,
       "hf [m]": t.hf, "ΣKm": t.sum_km, "hl [m]": t.hl} for t in r.tramos])
-    .style.format({"V [m/s]": "{:.3f}", "Re": "{:,.0f}", "f": "{:.5f}",
-                   "hf [m]": "{:.3f}", "ΣKm": "{:.1f}", "hl [m]": "{:.3f}"}),
+    .style.format({"V [m/s]": SP_VELOCIDAD, "Re": "{:,.0f}", "f": SP_COEF,
+                   "hf [m]": SP_PERDIDA, "ΣKm": "{:.1f}", "hl [m]": SP_PERDIDA}),
     hide_index=True, width="stretch")
 m1, m2, m3, m4 = st.columns(4)
 m1.metric("Σ pérdidas", f"{r.hf_total + r.hl_total:.2f} m")
 m2.metric("Altura dinámica Hd", f"{r.hd:.2f} m")
 m3.metric("Potencia", f"{r.potencia_kw:.2f} kW")
 m4.metric("Potencia", f"{r.potencia_hp:.2f} HP")
-st.info(f"Bomba mínima requerida: **Q = {qb_lps:.1f} L/s · H = {r.hd:.0f} m · "
-        f"P = {r.potencia_hp:.1f} HP** → compárala en la página 6 con las curvas "
+st.info(f"Bomba mínima requerida: **Q = {fmt_q(qb_lps)} L/s · H = {fmt_h(r.hd)} m · "
+        f"P = {fmt_p(r.potencia_hp)} HP** → compárala en la página 6 con las curvas "
         f"de las bombas candidatas de este sistema.")
 
 sistemas = st.session_state.setdefault("sistemas", {})

@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 from core import curves as cvs, demand, network, population as pop, pumping as pu
-from core import report_figs as rf, storage
+from core import formato as fm, report_figs as rf, storage
 from core.project import Project
 
 REFERENCIAS = [
@@ -117,7 +117,7 @@ def build(p: Project) -> tuple[dict, dict]:
             "horas_salida": f"{chk.horas_salida:.0f}",
             "frac": f"{chk.frac_balance:.4f}",
             "v_asignado": f"{chk.v_asignado:.0f}",
-            "v_req": f"{chk.v_balance_req:.1f}",
+            "v_req": fm.fmt_vol(chk.v_balance_req),
             "cumple": "Sí" if chk.cumple else "No"})
     v_asignado_total = sum(t.volumen for t in alm.tanques)
 
@@ -202,23 +202,24 @@ def build(p: Project) -> tuple[dict, dict]:
                 "e_eq": (f"$\\eta = {e_fit.coeffs[0]:+.6f}Q^2 "
                          f"{e_fit.coeffs[1]:+.5f}Q {e_fit.coeffs[2]:+.4f}$"
                          if e_fit else "---"),
-                "q_op": f"{op[0]:.2f}" if op else "—",
-                "h_op": f"{op[1]:.2f}" if op else "—",
-                "eta_op": f"{eta:.3f}" if eta == eta else "—",
-                "bep_q": f"{bep.q:.2f}" if bep else "—",
+                "q_op": fm.fmt_q(op[0]) if op else "—",
+                "h_op": fm.fmt_h(op[1]) if op else "—",
+                "eta_op": f"{eta:.3f}" if eta == eta else "—",   # η: fracción 0-1, .3f a propósito
+                "bep_q": fm.fmt_q(bep.q) if bep else "—",
                 "desv_bep": f"{(op[0] - bep.q) / bep.q * 100:.1f}" if (op and bep) else "—",
-                "p_hp": f"{pot:.2f}" if pot == pot else "—"})
+                "p_hp": fm.fmt_p(pot) if pot == pot else "—"})
         fig_name = f"sistema_{i + 1}"
         _save(rf.fig_sistema(sys_lps, bombas_fig, qb_lps, r.hd, s.nombre), fig_name)
         sistemas_ctx.append({
             "nombre": latex_escape(s.nombre), "tipo_bomba": s.tipo_bomba,
             "horas": f"{s.horas:.0f}",
-            "qb": f"{qb_lps:.2f}", "hd": f"{r.hd:.2f}", "eficiencia": s.eficiencia,
-            "potencia_kw": f"{r.potencia_kw:.2f}", "potencia_hp": f"{r.potencia_hp:.2f}",
-            "tramos": [{"nombre": latex_escape(t.segment.nombre), "L": f"{t.segment.L:.1f}",
-                        "D_mm": f"{t.segment.D * 1000:.1f}",
+            "qb": fm.fmt_q(qb_lps), "hd": fm.fmt_h(r.hd), "eficiencia": s.eficiencia,
+            "potencia_kw": fm.fmt_p(r.potencia_kw), "potencia_hp": fm.fmt_p(r.potencia_hp),
+            "tramos": [{"nombre": latex_escape(t.segment.nombre), "L": fm.fmt_h(t.segment.L),
+                        "D_mm": fm.fmt_d(t.segment.D * 1000),
                         "material": t.segment.material,
-                        "V": f"{t.V:.2f}", "hf": f"{t.hf:.3f}", "hl": f"{t.hl:.3f}"}
+                        "V": fm.fmt_v(t.V), "hf": fm.fmt_perdida(t.hf),
+                        "hl": fm.fmt_perdida(t.hl)}
                        for t in r.tramos],
             "bombas": bombas_tab,
             "bomba_seleccionada": latex_escape(s.bomba_seleccionada or "—"),
@@ -245,15 +246,15 @@ def build(p: Project) -> tuple[dict, dict]:
     for t in alm.tanques:
         v_unitario_obj = (t.volumen or 1.0) / max(t.cantidad, 1)
         ct = storage.dimensioned_tank(v_unitario_obj, t.altura, t.forma, t.ratio)
-        dim = (f"Ø {ct.diametro:.1f} m" if ct.forma == "circular"
-               else f"lado {ct.lado:.1f} m" if ct.forma == "cuadrado"
-               else f"{ct.ancho:.1f} × {ct.largo:.1f} m")
+        dim = (f"Ø {fm.fmt_d(ct.diametro)} m" if ct.forma == "circular"
+               else f"lado {fm.fmt_d(ct.lado)} m" if ct.forma == "cuadrado"
+               else f"{fm.fmt_d(ct.ancho)} × {fm.fmt_d(ct.largo)} m")
         tanques_ctx.append({
             "nombre": latex_escape(t.nombre), "tipo": t.tipo,
             "tipo_constructivo": t.tipo_constructivo,
             "forma": t.forma, "cantidad": t.cantidad, "dim": dim,
-            "altura": f"{ct.altura:.1f}", "volumen": f"{t.volumen:.0f}",
-            "volumen_real": f"{ct.volumen_real * t.cantidad:.1f}"})
+            "altura": fm.fmt_h(ct.altura), "volumen": f"{t.volumen:.0f}",
+            "volumen_real": fm.fmt_vol(ct.volumen_real * t.cantidad)})
 
     # ---------- red de distribución (opcional) ----------
     red_ctx = None
@@ -265,7 +266,7 @@ def build(p: Project) -> tuple[dict, dict]:
                 red.junctions[jid].demand = q
             red_ctx = {
                 "n_nodos": len(red.junctions), "n_tuberias": len(red.pipes),
-                "demandas": [{"nodo": latex_escape(jid), "q": f"{q:.3f}"}
+                "demandas": [{"nodo": latex_escape(jid), "q": fm.fmt_q(q)}
                             for jid, q in demandas.items()],
                 "optimizacion": None,
             }
@@ -303,12 +304,12 @@ def build(p: Project) -> tuple[dict, dict]:
         "dneta_justificacion": latex_escape(p.demanda.justificacion),
         "dbruta": f"{flows.dbruta:.1f}", "perdidas": f"{flows.perdidas * 100:.0f}",
         "k1": flows.k1, "k2": flows.k2,
-        "qmed": f"{flows.qmed_lps:.3f}", "qmd": f"{flows.qmd_lps:.3f}",
-        "qmh": f"{flows.qmh_lps:.3f}",
-        "componentes": [(k, f"{v:.3f}") for k, v in comp.items()],
+        "qmed": fm.fmt_q(flows.qmed_lps), "qmd": fm.fmt_q(flows.qmd_lps),
+        "qmh": fm.fmt_q(flows.qmh_lps),
+        "componentes": [(k, fm.fmt_q(v)) for k, v in comp.items()],
         "caudales_anuales": [
-            {"ano": t, "pob": f"{pob_t:,.0f}", "qmed": f"{fr.qmed_lps:.3f}",
-             "qmd": f"{fr.qmd_lps:.3f}", "qmh": f"{fr.qmh_lps:.3f}"}
+            {"ano": t, "pob": f"{pob_t:,.0f}", "qmed": fm.fmt_q(fr.qmed_lps),
+             "qmd": fm.fmt_q(fr.qmd_lps), "qmh": fm.fmt_q(fr.qmh_lps)}
             for (t, fr), (_, pob_t) in list(zip(serie_q, serie_total))[::paso]],
         "tanques_balance": tanques_balance,
         "v_art81": a.v_total_redondeado,
