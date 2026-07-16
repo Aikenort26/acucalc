@@ -157,6 +157,7 @@ class Project:
     red_vmax: float = 6.0
     red_pmin: float = 15.0
     red_pmax: float = 70.0
+    ruta_guardado: str = ""       # carpeta o archivo .acucalc.json del usuario (vacío = saves/ interno)
 
 
 def save(p: Project, path: str | Path) -> None:
@@ -223,4 +224,5 @@ def load(path: str | Path) -> Project:
     p.red_vmax = d.get("red_vmax", 6.0)
     p.red_pmin = d.get("red_pmin", 15.0)
     p.red_pmax = d.get("red_pmax", 70.0)
+    p.ruta_guardado = d.get("ruta_guardado", "")
     return p

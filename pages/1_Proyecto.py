@@ -78,6 +78,18 @@ with st.expander("Logos de portada del informe", expanded=False):
             st.rerun()
 
 st.divider()
+p.ruta_guardado = st.text_input(
+    "📁 Ruta de guardado del proyecto (carpeta o archivo .acucalc.json en tu computador)",
+    p.ruta_guardado, key="w_txt_ruta_guardado",
+    placeholder=r"ej. C:\Users\aiken\Proyectos\San_Jacinto   —   o un archivo .acucalc.json",
+    help="El botón '💾 Guardar estado del proyecto' de la barra lateral y el autosave "
+         "escribirán AQUÍ (tu carpeta), no en la carpeta interna de la app. Si dejas "
+         "esto vacío, se guarda en saves/ del programa como antes. Como la app corre "
+         "local, puede escribir a cualquier ruta absoluta que teclees o pegues.")
+if p.ruta_guardado.strip():
+    from pages_common import resolve_save_path
+    st.caption(f"Se guardará en: `{resolve_save_path(p)}`")
+
 c3, c4 = st.columns(2)
 with c3:
     st.download_button(

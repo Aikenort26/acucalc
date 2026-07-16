@@ -125,3 +125,18 @@ def test_red_inp_persiste_en_json(tmp_path):
     p2 = pj.load(f)
     assert p2.red_inp == "[JUNCTIONS]\nJ1 10 5\n"
     assert p2.red_material == "PEAD PE100" and p2.red_vmax == 2.5
+
+
+def test_ruta_guardado_persiste_en_json(tmp_path):
+    p = _proyecto()
+    p.ruta_guardado = r"C:\Users\aiken\Proyectos\San_Jacinto"
+    f = tmp_path / "ruta.acucalc.json"
+    pj.save(p, f)
+    assert pj.load(f).ruta_guardado == r"C:\Users\aiken\Proyectos\San_Jacinto"
+
+
+def test_ruta_guardado_default_vacio(tmp_path):
+    p = _proyecto()               # sin fijar ruta
+    f = tmp_path / "sin_ruta.acucalc.json"
+    pj.save(p, f)
+    assert pj.load(f).ruta_guardado == ""
