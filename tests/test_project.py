@@ -140,3 +140,23 @@ def test_ruta_guardado_default_vacio(tmp_path):
     f = tmp_path / "sin_ruta.acucalc.json"
     pj.save(p, f)
     assert pj.load(f).ruta_guardado == ""
+
+
+def test_save_atomico_no_deja_tmp(tmp_path):
+    p = _proyecto()
+    f = tmp_path / "atomic.acucalc.json"
+    pj.save(p, f)
+    assert f.exists()
+    assert not (tmp_path / "atomic.acucalc.json.tmp").exists()  # tmp renombrado, no residual
+    assert pj.load(f).nombre == p.nombre
+
+
+def test_save_atomico_sobrescribe_sin_corromper(tmp_path):
+    p = _proyecto()
+    f = tmp_path / "over.acucalc.json"
+    pj.save(p, f)
+    original = f.read_text(encoding="utf-8")
+    p.nombre = "Nombre Nuevo"
+    pj.save(p, f)                 # sobrescritura vía os.replace
+    assert pj.load(f).nombre == "Nombre Nuevo"
+    assert f.read_text(encoding="utf-8") != original

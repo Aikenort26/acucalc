@@ -85,7 +85,10 @@ p.ruta_guardado = st.text_input(
     help="El botón '💾 Guardar estado del proyecto' de la barra lateral y el autosave "
          "escribirán AQUÍ (tu carpeta), no en la carpeta interna de la app. Si dejas "
          "esto vacío, se guarda en saves/ del programa como antes. Como la app corre "
-         "local, puede escribir a cualquier ruta absoluta que teclees o pegues.")
+         "local, puede escribir a cualquier ruta absoluta que teclees o pegues. "
+         "Consejo: apunta al ARCHIVO exacto (…\\proyecto.acucalc.json) — si pones solo "
+         "la carpeta, el nombre del archivo sigue al nombre del proyecto y renombrarlo "
+         "crearía un archivo nuevo.")
 if p.ruta_guardado.strip():
     from pages_common import resolve_save_path
     st.caption(f"Se guardará en: `{resolve_save_path(p)}`")

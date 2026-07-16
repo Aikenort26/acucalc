@@ -4,6 +4,7 @@ v2: el bombeo son N sistemas nombrados (`Project.bombeos`), cada uno un paquete
 completo (tramos, accesorios, parámetros, bombas candidatas). Los proyectos
 schema 1 se migran automáticamente al cargar (un sistema "Bombeo 1")."""
 import json
+import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
@@ -161,9 +162,15 @@ class Project:
 
 
 def save(p: Project, path: str | Path) -> None:
+    """Guardado atómico: escribe a un `.tmp` y hace `os.replace` (atómico en el
+    mismo volumen). Evita que un corte/kill a mitad de la escritura deje el
+    único archivo del usuario truncado/corrupto — crítico ahora que el autosave
+    escribe sobre el archivo canónico del proyecto cada ~30 s."""
+    path = Path(path)
     data = {"schema_version": SCHEMA_VERSION, "project": asdict(p)}
-    Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=1),
-                          encoding="utf-8")
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def _pump_system_from_dict(s: dict) -> PumpSystemData:

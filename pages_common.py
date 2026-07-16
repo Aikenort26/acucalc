@@ -68,7 +68,7 @@ def _autosave(p: Project) -> None:
             pj.save(p, AUTOSAVE_FILE)      # fallback interno si no hay ruta
         st.session_state["_autosave_ts"] = now
         st.session_state.pop("_autosave_error", None)
-    except OSError as e:                    # ruta inválida/permiso: no romper la app
+    except Exception as e:                  # ruta inválida/permiso/etc: no romper la app
         st.session_state["_autosave_error"] = str(e)
 
 
