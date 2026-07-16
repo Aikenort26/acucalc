@@ -167,6 +167,7 @@ class Project:
     red_vmax: float = 6.0
     red_pmin: float = 15.0
     red_pmax: float = 70.0
+    red_en_informe: bool = True   # incluir la sección de red en el reporte (si hay red cargada)
     ruta_guardado: str = ""       # carpeta o archivo .acucalc.json del usuario (vacío = saves/ interno)
 
 
@@ -275,5 +276,6 @@ def load(path: str | Path) -> Project:
     p.red_vmax = d.get("red_vmax", 6.0)
     p.red_pmin = d.get("red_pmin", 15.0)
     p.red_pmax = d.get("red_pmax", 70.0)
+    p.red_en_informe = d.get("red_en_informe", True)
     p.ruta_guardado = d.get("ruta_guardado", "")
     return p

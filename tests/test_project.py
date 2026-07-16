@@ -164,6 +164,28 @@ def test_ruta_guardado_default_vacio(tmp_path):
     assert pj.load(f).ruta_guardado == ""
 
 
+def test_red_en_informe_default_true_y_persiste_false(tmp_path):
+    p = _proyecto()
+    assert p.red_en_informe is True
+    p.red_en_informe = False
+    f = tmp_path / "red_off.acucalc.json"
+    pj.save(p, f)
+    assert pj.load(f).red_en_informe is False
+
+
+def test_red_en_informe_backward_compat_json_viejo(tmp_path):
+    """Un proyecto guardado ANTES de que existiera red_en_informe (sin la
+    clave) debe cargar con el default True, no reventar."""
+    import json
+    f = tmp_path / "viejo.acucalc.json"
+    data = {"schema_version": pj.SCHEMA_VERSION,
+            "project": {"nombre": "Viejo", "red_inp": "algo"}}
+    f.write_text(json.dumps(data), encoding="utf-8")
+    p = pj.load(f)
+    assert p.red_en_informe is True
+    assert p.red_inp == "algo"
+
+
 def test_save_atomico_no_deja_tmp(tmp_path):
     p = _proyecto()
     f = tmp_path / "atomic.acucalc.json"

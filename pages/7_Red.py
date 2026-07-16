@@ -32,6 +32,10 @@ except ValueError as e:
 st.caption(f"Red cargada: {len(red.junctions)} nodos de consumo, "
            f"{len(red.sources)} fuente(s), {len(red.pipes)} tuberías "
            f"(pérdidas: {red.headloss}).")
+p.red_en_informe = st.checkbox("Incluir la sección de red en la memoria del reporte",
+                               value=p.red_en_informe, key="w_chk_red_informe",
+                               help="Desmárcalo si esta red es solo para explorar/optimizar "
+                                    "y no quieres que aparezca en el PDF final.")
 
 # ---------- WP-7: mapa de la red ----------
 with st.expander("🗺 Mapa de la red", expanded=False):

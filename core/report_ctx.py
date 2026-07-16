@@ -287,7 +287,7 @@ def build(p: Project) -> tuple[dict, dict]:
 
     # ---------- red de distribución (opcional) ----------
     red_ctx = None
-    if p.red_inp:
+    if p.red_inp and p.red_en_informe:
         try:
             red = network.parse_inp(p.red_inp)
             demandas = network.assign_demands_by_length(red, flows.qmd_lps)
