@@ -7,9 +7,11 @@ import io
 import numpy as np
 import pandas as pd
 
+from core import curves as cv
 from core.project import PumpData
 
 COLS = {"bomba", "q [l/s]", "h [m]"}
+N_EXPORT = 10   # nº de puntos de la grilla normalizada de exportación (WP-3d)
 
 
 def template_xlsx() -> bytes:
@@ -27,28 +29,57 @@ def template_xlsx() -> bytes:
 
 def export_xlsx(bombeos: list) -> bytes:
     """Exporta todas las bombas de todos los sistemas de bombeo en formato
-    largo compatible con `parse()` (la columna extra 'Sistema' se ignora al
-    reimportar; sirve como referencia de origen). El eta se interpola sobre
-    la grilla de Q de puntos_qh (no se cruza por Q exacto): puntos_qh y
-    puntos_qe se digitalizan por separado en la app y casi nunca comparten
-    los mismos valores de Q — un cruce exacto perdía casi toda la eficiencia
-    al reexportar/reimportar. Fuera del rango medido de puntos_qe no se
-    interpola (queda en blanco), para no inventar valores extrapolados."""
+    largo compatible con `parse()` (columnas extra se ignoran al reimportar;
+    sirven como referencia).
+
+    WP-3d — corrige un bug real: la versión anterior exportaba la grilla
+    digitalizada NOMINAL (`puntos_qh` crudos), ignorando la afinidad
+    (N1→N2) y el arreglo (paralelo/serie ×n_unidades) configurados para la
+    bomba — es decir, exportaba una curva que la app nunca usó para el punto
+    de operación del sistema. Ahora se aplica `cv.apply_pump_transform`
+    primero (misma fuente única que usa la comparación interactiva de la
+    página 6 y `core/report_ctx.build`) y LUEGO se resamplea a `N_EXPORT`
+    puntos equiespaciados en Q sobre el rango de la curva transformada,
+    evaluando H y η con los polinomios ajustados (no por interpolación
+    lineal de los puntos digitalizados crudos).
+
+    Solo se incluyen bombas con ≥3 puntos Q-H (mismo criterio que
+    `core/report_ctx.build` usa para decidir qué bombas entran al reporte —
+    fuente de la elección: <3 puntos no alcanza para un ajuste de grado 2).
+
+    Cada fila lleva, además de Q/H/eta, las columnas de los coeficientes del
+    polinomio H(Q)=A·Q²+B·Q+C y η(Q)=D·Q²+E·Q+F (con su R²) — repetidas en
+    las N_EXPORT filas de la misma bomba en vez de una hoja de resumen
+    aparte: mantiene el archivo de una sola hoja/tabla, más simple de leer
+    con `pandas.read_excel` sin tener que unir dos hojas."""
     rows = []
     for s in bombeos:
         for b in s.bombas:
-            eta_en_qh = {}
-            if len(b.puntos_qe) >= 2:
-                qe_ordenado = sorted(b.puntos_qe)
-                qs_e = [q for q, _ in qe_ordenado]
-                es = [e for _, e in qe_ordenado]
-                for q, _ in b.puntos_qh:
-                    if qs_e[0] <= q <= qs_e[-1]:
-                        eta_en_qh[q] = float(np.interp(q, qs_e, es))
-            for q, h in b.puntos_qh:
-                rows.append({"Sistema": s.nombre, "Bomba": b.nombre,
-                            "Q [L/s]": q, "H [m]": h, "eta": eta_en_qh.get(q)})
-    df = pd.DataFrame(rows, columns=["Sistema", "Bomba", "Q [L/s]", "H [m]", "eta"])
+            if len(b.puntos_qh) < 3:
+                continue
+            qh_t, qe_t = cv.apply_pump_transform(
+                b.puntos_qh, b.puntos_qe, b.n1_nominal, b.n2_objetivo,
+                b.n_unidades, b.arreglo)
+            fit_h = cv.fit_curve(qh_t, 2)
+            fit_e = cv.fit_curve(qe_t, 2) if len(qe_t) >= 3 else None
+            A, B, C = fit_h.coeffs
+            if fit_e is not None:
+                D, E, F, r2_e = (*fit_e.coeffs, fit_e.r2)
+            else:
+                D = E = F = r2_e = None
+            q_grid = (np.linspace(fit_h.q_min, fit_h.q_max, N_EXPORT)
+                     if fit_h.q_max > fit_h.q_min else np.full(N_EXPORT, fit_h.q_min))
+            for q in q_grid:
+                rows.append({
+                    "Sistema": s.nombre, "Bomba": b.nombre,
+                    "Q [L/s]": float(q), "H [m]": fit_h(float(q)),
+                    "eta": fit_e(float(q)) if fit_e is not None else None,
+                    "H: A": A, "H: B": B, "H: C": C, "H: R2": fit_h.r2,
+                    "eta: D": D, "eta: E": E, "eta: F": F, "eta: R2": r2_e,
+                })
+    df = pd.DataFrame(rows, columns=[
+        "Sistema", "Bomba", "Q [L/s]", "H [m]", "eta",
+        "H: A", "H: B", "H: C", "H: R2", "eta: D", "eta: E", "eta: F", "eta: R2"])
     buf = io.BytesIO()
     df.to_excel(buf, index=False)
     return buf.getvalue()
