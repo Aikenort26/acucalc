@@ -8,7 +8,7 @@ from streamlit_image_coordinates import streamlit_image_coordinates
 from core import curves as cv, pumping as pu
 from core import project as pj
 from core.project import PumpData
-from pages_common import page_setup, num_input, int_input
+from pages_common import page_setup, num_input, int_input, f_num, fila_incompleta
 
 try:
     from components.digitizer import digitizer
@@ -391,16 +391,34 @@ with st.expander("📥 Importar puntos desde CSV"):
 # ---------- tablas de puntos (siempre editables) ----------
 st.subheader("Puntos de la bomba (editables)")
 c1, c2 = st.columns(2)
-qh_df = c1.data_editor(pd.DataFrame(bomba.puntos_qh or [(0.0, 0.0)],
-                                    columns=["Q [L/s]", "H [m]"]),
-                       num_rows="dynamic", key=f"w_qh_{BK}")
-bomba.puntos_qh = [(float(r["Q [L/s]"]), float(r["H [m]"]))
-                   for _, r in qh_df.iterrows() if r["Q [L/s]"] or r["H [m]"]]
-qe_df = c2.data_editor(pd.DataFrame(bomba.puntos_qe or [(0.0, 0.0)],
-                                    columns=["Q [L/s]", "η [-]"]),
-                       num_rows="dynamic", key=f"w_qe_{BK}")
-bomba.puntos_qe = [(float(r["Q [L/s]"]), float(r["η [-]"]))
-                   for _, r in qe_df.iterrows() if r["Q [L/s]"] or r["η [-]"]]
+def _tabla_puntos(container, puntos, cols, key):
+    """Tabla editable de puntos. Sin el viejo fallback `or [(0.0,0.0)]` (impedía
+    vaciar la tabla: al borrar la última fila se resembraba sola) y filtrando por
+    presencia de dato, no por truthiness — `if q or h` descartaba un punto legítimo
+    en Q=0 y además dejaba pasar NaN (que es truthy) hacia `fit_curve`."""
+    df = pd.DataFrame(puntos, columns=cols) if puntos else pd.DataFrame(
+        {c: pd.Series(dtype="float64") for c in cols})
+    ed = container.data_editor(df, num_rows="dynamic", key=key, width="stretch")
+    return [(f_num(r[cols[0]]), f_num(r[cols[1]]))
+            for _, r in ed.iterrows() if not fila_incompleta(r, cols)]
+
+
+bomba.puntos_qh = _tabla_puntos(c1, bomba.puntos_qh, ["Q [L/s]", "H [m]"], f"w_qh_{BK}")
+bomba.puntos_qe = _tabla_puntos(c2, bomba.puntos_qe, ["Q [L/s]", "η [-]"], f"w_qe_{BK}")
+
+d1, d2 = st.columns(2)
+if d1.button("↩ Deshacer último punto Q-H", key=f"w_undo_qh_{BK}",
+             disabled=not bomba.puntos_qh):
+    bomba.puntos_qh.pop()
+    st.session_state.pop(f"w_qh_{BK}", None)   # el editor se resiembra del modelo
+    st.rerun()
+if d2.button("↩ Deshacer último punto Q-η", key=f"w_undo_qe_{BK}",
+             disabled=not bomba.puntos_qe):
+    bomba.puntos_qe.pop()
+    st.session_state.pop(f"w_qe_{BK}", None)
+    st.rerun()
+st.caption("Para borrar filas sueltas: selecciona la fila en la tabla y usa el "
+           "ícono 🗑 de la barra del editor.")
 
 # ---------- catálogo de bombas desde Excel ----------
 st.divider()

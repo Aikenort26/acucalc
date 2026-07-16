@@ -2,7 +2,7 @@ import pandas as pd
 import streamlit as st
 from core import catalogs, pipes, pumping as pu
 from core.project import PumpSystemData, SegmentData, AccessoryData
-from pages_common import page_setup, num_input, show_issues
+from pages_common import page_setup, num_input, show_issues, i_num
 
 p = page_setup()
 st.header("5 · Sistemas de bombeo")
@@ -47,6 +47,12 @@ with st.popover("✏ Renombrar sistema"):
             sistemas_dict = st.session_state.get("sistemas", {})
             if viejo in sistemas_dict:
                 sistemas_dict[nuevo_nombre] = sistemas_dict.pop(viejo)
+            # Los keys de los widgets llevan el nombre del sistema, así que hay
+            # que moverlos con él: si no, quedan huérfanos y renombrar de vuelta
+            # al nombre anterior resucita valores viejos ya descartados.
+            k_viejo, k_nuevo = viejo.replace(" ", "_"), nuevo_nombre.replace(" ", "_")
+            for wk in [k for k in st.session_state if k.endswith(f"_{k_viejo}")]:
+                st.session_state[wk[: -len(k_viejo)] + k_nuevo] = st.session_state.pop(wk)
             st.session_state["sel_sys_next"] = nuevo_nombre
             st.rerun()
 
@@ -57,10 +63,15 @@ if tanques_tren:
                            for t in tanques_tren]
     sel_tk = st.selectbox("Sincronizar horas de bombeo con la ventana de suministro del tanque…",
                           opciones_tk, key=f"w_sel_synctk_{K}")
-    if sel_tk != "—":
-        horas_tk = float(sum(tanques_tren[opciones_tk.index(sel_tk) - 1]
-                             .entrada_flags()))
-        st.session_state["w_horas_" + K] = horas_tk
+    # Sincroniza SOLO cuando la selección cambia. Antes se escribía en cada
+    # rerun mientras hubiera un tanque elegido, lo que pisaba las horas recién
+    # tecleadas (el widget se dibuja más abajo) y obligaba a teclear dos veces.
+    if sel_tk != "—" and st.session_state.get(f"last_synctk_{K}") != sel_tk:
+        st.session_state[f"last_synctk_{K}"] = sel_tk
+        st.session_state["w_horas_" + K] = float(
+            sum(tanques_tren[opciones_tk.index(sel_tk) - 1].entrada_flags()))
+    elif sel_tk == "—":
+        st.session_state.pop(f"last_synctk_{K}", None)
 
 # ---------- parámetros del sistema ----------
 c0, c1, c2, c3, c4 = st.columns(5)
@@ -218,11 +229,12 @@ acc_df = st.data_editor(pd.DataFrame(
         "Tramo": st.column_config.SelectboxColumn(options=nombres_tramos)})
 sys_d.accesorios = []
 for _, r in acc_df.iterrows():
-    if not r["Cantidad"]:
+    cant = i_num(r["Cantidad"], 0)     # `not NaN` es False: la guarda vieja no servía
+    if cant <= 0:
         continue
     tipo_acc = str(r["Accesorio"]).split("  (Km=")[0]
     if tipo_acc in km_cat and str(r["Tramo"]) in nombres_tramos:
-        sys_d.accesorios.append(AccessoryData(tipo_acc, int(r["Cantidad"]), str(r["Tramo"])))
+        sys_d.accesorios.append(AccessoryData(tipo_acc, cant, str(r["Tramo"])))
 if sys_d.accesorios:
     km_total = sum(km_cat[a.tipo] * a.cantidad for a in sys_d.accesorios)
     st.caption(f"ΣKm del sistema = **{km_total:.1f}**")

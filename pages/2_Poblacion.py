@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 from core import dane, population as pop
-from pages_common import page_setup, num_input, int_input
+from pages_common import page_setup, num_input, int_input, i_num
 
 p = page_setup()
 st.header("2 · Proyección de población")
@@ -59,8 +59,9 @@ else:
     censo_df = pd.DataFrame(p.censo or [(2018, 0)], columns=["Año", "Población"])
     censo_df = st.data_editor(censo_df, num_rows="dynamic", width="stretch",
                               key="w_ed_censo")
-    p.censo = [(int(r["Año"]), int(r["Población"]))
-               for _, r in censo_df.iterrows() if r["Población"] > 0]
+    p.censo = [(i_num(r["Año"], 0), i_num(r["Población"], 0))
+               for _, r in censo_df.iterrows()
+               if i_num(r["Población"], 0) > 0 and i_num(r["Año"], 0) > 0]
 
 if len(p.censo) < 2:
     st.info("Se requieren al menos 2 registros censales.")

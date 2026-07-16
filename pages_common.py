@@ -1,5 +1,6 @@
 """Helpers compartidos por las páginas."""
 import datetime as dt
+import math
 from pathlib import Path
 
 import streamlit as st
@@ -269,6 +270,55 @@ def int_input(label: str, key: str, default: int, container=None, **kw) -> int:
         st.session_state[k] = int(default)
     target = container if container is not None else st
     return int(target.number_input(label, key=k, step=1, **kw))
+
+
+def f_num(valor, default: float = 0.0) -> float:
+    """Float de una celda de `data_editor`, tolerante a celdas vacías.
+
+    `valor or default` NO sirve: `bool(float('nan')) is True`, así que un NaN
+    (lo que pandas pone en una celda numérica vacía — nunca None) se cuela y
+    envenena el cálculo o revienta más abajo. Esta es la guarda real.
+    """
+    try:
+        if valor is None or (isinstance(valor, float) and math.isnan(valor)):
+            return float(default)
+        if isinstance(valor, str) and not valor.strip():
+            return float(default)
+        v = float(valor)
+        return float(default) if math.isnan(v) else v
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def i_num(valor, default: int = 0) -> int:
+    """Int de una celda de `data_editor`, tolerante a celdas vacías.
+    Mismo motivo que `f_num`: `int(float('nan'))` lanza ValueError."""
+    return int(round(f_num(valor, float(default))))
+
+
+def fila_incompleta(fila, columnas: list[str]) -> bool:
+    """True si alguna de `columnas` está vacía en la fila — para avisar al
+    usuario en vez de calcular con valores por defecto silenciosos."""
+    return any(fila.get(c) is None
+               or (isinstance(fila.get(c), float) and math.isnan(fila.get(c)))
+               for c in columnas)
+
+
+def sel_state(options: list, key: str, default) -> str:
+    """Siembra y valida el key de un `selectbox`, y devuelve ese key.
+
+    Un `selectbox(index=<calculado del modelo>)` sin key deriva su identidad de
+    los parámetros: si el modelo cambia, Streamlit re-monta el widget y reaplica
+    el default — el mismo bug de "escribo y se borra" que `num_input` evita.
+    Con key estable el session_state manda, pero hay que resembrar cuando el
+    valor guardado deja de estar en `options` (p. ej. cambia el material y la
+    serie vieja ya no aplica); si no, Streamlit revienta.
+    """
+    k = WIDGET_PREFIX + key
+    if k not in st.session_state or st.session_state[k] not in options:
+        st.session_state[k] = (default if default in options
+                               else (options[0] if options else None))
+    return k
 
 
 def clear_widget_state() -> None:

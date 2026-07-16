@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 from core import network as net, pipes
-from pages_common import page_setup
+from pages_common import page_setup, num_input, sel_state
 
 p = page_setup()
 st.header("7 · Red de distribución")
@@ -54,17 +54,19 @@ else:
 st.divider()
 st.subheader("Optimización de diámetros")
 o1, o2, o3 = st.columns(3)
-p.red_material = o1.selectbox("Material", pipes.materials(),
-                              index=pipes.materials().index(p.red_material)
-                              if p.red_material in pipes.materials() else 0)
+mats = pipes.materials()
+p.red_material = o1.selectbox("Material", mats,
+                              key=sel_state(mats, "sel_red_mat", p.red_material))
 series_mat = pipes.series(p.red_material)
 p.red_serie = o2.selectbox("Serie / clase", series_mat,
-                           index=series_mat.index(p.red_serie)
-                           if p.red_serie in series_mat else 0)
-p.red_vmax = o3.number_input("V máxima [m/s]", value=p.red_vmax, min_value=0.5, max_value=10.0)
+                           key=sel_state(series_mat, "sel_red_ser", p.red_serie))
+p.red_vmax = num_input("V máxima [m/s]", "red_vmax", p.red_vmax, decimals=2,
+                       container=o3, min_value=0.5, max_value=10.0)
 o4, o5 = st.columns(2)
-p.red_pmin = o4.number_input("Presión mínima [m]", value=p.red_pmin, min_value=0.0, max_value=100.0)
-p.red_pmax = o5.number_input("Presión máxima [m]", value=p.red_pmax, min_value=0.0, max_value=200.0)
+p.red_pmin = num_input("Presión mínima [m]", "red_pmin", p.red_pmin, decimals=2,
+                       container=o4, min_value=0.0, max_value=100.0)
+p.red_pmax = num_input("Presión máxima [m]", "red_pmax", p.red_pmax, decimals=2,
+                       container=o5, min_value=0.0, max_value=200.0)
 
 if st.button("🧮 Optimizar diámetros", type="primary"):
     resultado = net.optimize_diameters(red, p.red_material, p.red_serie,

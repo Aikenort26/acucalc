@@ -3,7 +3,8 @@ import pandas as pd
 import streamlit as st
 from core import report_figs as rf, storage
 from core.project import TankSpec
-from pages_common import get_project, num_input, page_setup
+from pages_common import (f_num, fila_incompleta, get_project, i_num, num_input,
+                          page_setup)
 
 p = page_setup()
 st.header("4 · Almacenamiento")
@@ -38,7 +39,7 @@ with st.expander("Cargar patrón desde Excel/CSV"):
             elif len(df_up) != 24:
                 st.error(f"Se requieren exactamente 24 filas (hay {len(df_up)})")
             else:
-                cfg.factores_hora = [float(x) for x in
+                cfg.factores_hora = [f_num(x, 1.0) for x in
                                      df_up.sort_values("hora")["factor consumo"]]
                 st.success("Patrón cargado.")
         except Exception as e:
@@ -46,7 +47,7 @@ with st.expander("Cargar patrón desde Excel/CSV"):
 df_pat = st.data_editor(pd.DataFrame({"Hora": list(range(24)),
                                       "Factor consumo": cfg.factores_hora}),
                         hide_index=True, width="stretch", key="w_ed_patron")
-cfg.factores_hora = [float(x) for x in df_pat["Factor consumo"]]
+cfg.factores_hora = [f_num(x, 1.0) for x in df_pat["Factor consumo"]]
 
 # ========== Sección 1 · Volumen total por norma ==========
 st.subheader("1 · Volumen total por norma")
@@ -57,7 +58,7 @@ st.caption("Ventana de suministro de la comunidad (horas de entrada al sistema, 
 df_su = st.data_editor(pd.DataFrame({"Hora": list(range(24)),
                                      "Suministro (1/0)": cfg.suministro_hora}),
                        hide_index=True, width="stretch", key="w_ed_sum")
-cfg.suministro_hora = [int(x) for x in df_su["Suministro (1/0)"]]
+cfg.suministro_hora = [1 if i_num(x, 0) else 0 for x in df_su["Suministro (1/0)"]]
 cfg.frac_regulacion = num_input("Fracción de regulación (criterio QMD/3, Art. 81)",
                                 "fracreg", cfg.frac_regulacion, decimals=3,
                                 min_value=0.1, max_value=1.0)
@@ -115,23 +116,33 @@ df_tk = st.data_editor(pd.DataFrame(
         "Salida desde [h]": st.column_config.NumberColumn(min_value=0, max_value=23),
         "Salida hasta [h]": st.column_config.NumberColumn(min_value=0, max_value=23)})
 tipos_previos = {t.nombre: t.tipo for t in cfg.tanques}
+NUM_TK = ["Cantidad", "Altura útil [m]", "Largo/ancho", "Volumen asignado [m³]",
+          "Suministro desde [h]", "Suministro hasta [h]",
+          "Salida desde [h]", "Salida hasta [h]"]
+filas_tk = [r for _, r in df_tk.iterrows() if str(r["Nombre"] or "").strip()]
+incompletos = [str(r["Nombre"]) for r in filas_tk if fila_incompleta(r, NUM_TK)]
 cfg.tanques = [TankSpec(nombre=str(r["Nombre"]),
                         tipo=tipos_previos.get(str(r["Nombre"]), "elevado"),
                         forma=str(r["Forma"] or "circular"),
-                        volumen=float(r["Volumen asignado [m³]"] or 0.0),
-                        altura=float(r["Altura útil [m]"] or 2.5),
-                        ratio=float(r["Largo/ancho"] or 1.0),
-                        entrada_ini=int(r["Suministro desde [h]"] or 0),
-                        entrada_fin=int(r["Suministro hasta [h]"] or 23),
-                        cantidad=int(r["Cantidad"] or 1),
+                        volumen=f_num(r["Volumen asignado [m³]"], 0.0),
+                        altura=f_num(r["Altura útil [m]"], 2.5),
+                        ratio=f_num(r["Largo/ancho"], 1.0),
+                        entrada_ini=i_num(r["Suministro desde [h]"], 0),
+                        entrada_fin=i_num(r["Suministro hasta [h]"], 23),
+                        cantidad=i_num(r["Cantidad"], 1),
                         tipo_constructivo=str(r["Tipo constructivo"] or "superficial"),
-                        salida_ini=int(r["Salida desde [h]"] or 0),
-                        salida_fin=int(r["Salida hasta [h]"] or 23))
-               for _, r in df_tk.iterrows() if r["Nombre"]]
+                        salida_ini=i_num(r["Salida desde [h]"], 0),
+                        salida_fin=i_num(r["Salida hasta [h]"], 23))
+               for r in filas_tk]
 
 if not cfg.tanques:
     st.info("Agrega al menos un tanque.")
     st.stop()
+if incompletos:
+    st.info("📝 Completa la tabla del tanque que agregaste: "
+            f"faltan datos en **{', '.join(incompletos)}**. "
+            "Mientras tanto se usan valores por defecto y la verificación de "
+            "abajo no es válida para ese tanque.")
 
 # ---------- predimensionado por tanque ----------
 st.markdown("**Predimensionado (dimensiones a 10 cm, siempre ≥ el volumen asignado)**")
