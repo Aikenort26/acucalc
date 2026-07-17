@@ -153,3 +153,65 @@ def test_bomba_seleccionada_sin_imagen_no_hay_anexo():
     p.bombeos[0].bomba_seleccionada = "Bomba X"   # sin imagen_b64
     ctx, figuras = report_ctx.build(p)
     assert ctx["anexos_curvas"] == []
+
+
+# ---------- v8: patrón horario, autoría y cita del DANE ----------
+
+def test_patron_horario_llega_al_contexto():
+    """Antes `factores_hora` se usaba para calcular el volumen del tanque pero
+    nunca se documentaba: no aparecía ni una vez en la plantilla, así que el
+    lector no podía reproducir el dimensionamiento."""
+    p = _proyecto_minimo()
+    p.almacenamiento.factores_hora = [0.6, 1.6] + [1.0] * 22
+    p.almacenamiento.suministro_hora = [1] * 10 + [0] * 14
+    ctx, _ = report_ctx.build(p)
+    assert len(ctx["patron_horas"]) == 24
+    assert ctx["patron_pico"] == "1.60"
+    assert ctx["patron_valle"] == "0.60"
+    assert ctx["patron_suma"] == "24.20"
+    assert ctx["patron_horas"][0] == {"hora": "00", "factor": "0.60", "suministro": "sí"}
+    assert ctx["patron_horas"][23]["suministro"] == "no"
+
+
+def test_sin_patron_el_contexto_no_lo_inventa():
+    p = _proyecto_minimo()
+    p.almacenamiento.factores_hora = []
+    ctx, _ = report_ctx.build(p)
+    assert ctx["patron_horas"] == []
+    assert ctx["patron_pico"] is None
+
+
+def test_patron_sin_ventana_de_suministro_marca_guion():
+    p = _proyecto_minimo()
+    p.almacenamiento.factores_hora = [1.0] * 24
+    p.almacenamiento.suministro_hora = []
+    ctx, _ = report_ctx.build(p)
+    assert {h["suministro"] for h in ctx["patron_horas"]} == {"—"}
+
+
+def test_referencia_dane_tiene_key_titulo_oficial_y_url():
+    """La serie del DANE es el insumo de toda la proyección: debe citarse con su
+    título oficial y su URL, y tener `key` para la referencia cruzada."""
+    dane = next(r for r in report_ctx.REFERENCIAS if r["key"] == "dane")
+    assert ("Proyecciones y retroproyecciones de población municipal para el "
+            "periodo 1985-2017 y 2018-2042 con base en el CNPV 2018") in dane["cita"]
+    assert dane["url"].startswith("https://www.dane.gov.co/")
+
+
+def test_todas_las_referencias_tienen_key_unica():
+    keys = [r["key"] for r in report_ctx.REFERENCIAS]
+    assert all(keys), "una referencia sin key rompe su \label{ref:}"
+    assert len(keys) == len(set(keys)), "keys duplicadas colisionan en \label"
+
+
+def test_pob_es_dane_distingue_la_fuente():
+    p = _proyecto_minimo()
+    p.poblacion.fuente = "dane"
+    assert report_ctx.build(p)[0]["pob_es_dane"] is True
+    p.poblacion.fuente = "manual"
+    assert report_ctx.build(p)[0]["pob_es_dane"] is False
+
+
+def test_autor_de_la_app_va_al_contexto():
+    ctx, _ = report_ctx.build(_proyecto_minimo())
+    assert ctx["autor"] == "Aiken H. Ortega-Heredia"

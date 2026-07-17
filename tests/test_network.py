@@ -310,3 +310,36 @@ def test_mapa_con_y_sin_coordenadas():
     fig2 = nm.fig_red(n2, net.solve(n2), colorear="presion")
     assert fig2 is not None
     plt.close(fig2)
+
+
+def test_mapa_escala_de_iconos():
+    """La escala controla el tamaño de nodos/fuentes y el grosor de tramos: en
+    una red densa los marcadores por defecto se enciman y tapan la topología."""
+    import matplotlib.pyplot as plt
+    from core import network_map as nm
+    n = net.parse_inp(INP_COORDS)
+
+    def _areas(escala):
+        fig = nm.fig_red(n, dark=False, escala=escala)
+        ax = fig.axes[0]
+        areas = [float(c.get_sizes()[0]) for c in ax.collections
+                 if hasattr(c, "get_sizes") and len(c.get_sizes())]
+        plt.close(fig)
+        return areas
+
+    base, doble = _areas(1.0), _areas(2.0)
+    assert base and len(base) == len(doble)
+    # el área va con escala²: al doblar la escala, el área se cuadruplica
+    for a, b in zip(base, doble):
+        assert b == pytest.approx(a * 4.0)
+
+
+def test_mapa_escala_no_admite_cero_ni_negativa():
+    """Una escala <= 0 haría desaparecer los marcadores; se acota por abajo."""
+    import matplotlib.pyplot as plt
+    from core import network_map as nm
+    n = net.parse_inp(INP_COORDS)
+    for mala in (0.0, -3.0):
+        fig = nm.fig_red(n, dark=False, escala=mala)
+        assert fig is not None
+        plt.close(fig)

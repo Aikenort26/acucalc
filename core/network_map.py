@@ -69,11 +69,20 @@ def _posiciones(net_) -> dict:
     return _pos_auto(net_)
 
 
-def fig_red(net_, resultado=None, colorear: str = "presion", dark: bool = True):
+def fig_red(net_, resultado=None, colorear: str = "presion", dark: bool = True,
+            escala: float = 1.0):
     """Dibuja la red. Si `resultado` (NetworkResult) viene dado, colorea los
     tramos por velocidad o los nodos por presión (`colorear` in
     {"presion", "velocidad"}). Logos minimalistas: triángulo=reservorio,
-    cuadrado=tanque, círculo=nodo de consumo."""
+    cuadrado=tanque, círculo=nodo de consumo.
+
+    `escala` multiplica el tamaño de nodos, fuentes y grosor de tramos: en una
+    red densa (cientos de nodos) los marcadores por defecto se enciman y tapan
+    la topología; en una red pequeña se ven diminutos. El área del marcador va
+    con `escala²` (matplotlib usa área en `s`) para que el cambio de tamaño se
+    perciba lineal."""
+    escala = max(float(escala), 0.1)
+    area = escala ** 2
     pos = _posiciones(net_)
     fondo = "#0B1416" if dark else "white"
     tinta = "#EAF6F2" if dark else "#0B1416"
@@ -91,7 +100,7 @@ def fig_red(net_, resultado=None, colorear: str = "presion", dark: bool = True):
     if segmentos and valores:
         norm = colors.Normalize(vmin=min(valores), vmax=max(max(valores), 0.1))
         lc = LineCollection(segmentos, cmap=plt.get_cmap("cool"),
-                            norm=norm, linewidths=2.6)
+                            norm=norm, linewidths=2.6 * escala)
         lc.set_array(_np_array(valores))
         ax.add_collection(lc)
         cb = fig.colorbar(lc, ax=ax, fraction=0.04, pad=0.02)
@@ -100,7 +109,7 @@ def fig_red(net_, resultado=None, colorear: str = "presion", dark: bool = True):
     else:
         for seg in segmentos:
             (x1, y1), (x2, y2) = seg
-            ax.plot([x1, x2], [y1, y2], color=_AZUL_HONDO, lw=2.2, zorder=1)
+            ax.plot([x1, x2], [y1, y2], color=_AZUL_HONDO, lw=2.2 * escala, zorder=1)
 
     # ---- nodos de consumo ----
     if resultado is not None and colorear == "presion":
@@ -112,8 +121,8 @@ def fig_red(net_, resultado=None, colorear: str = "presion", dark: bool = True):
         for jid, j in net_.junctions.items():
             if jid in pos:
                 x, y = pos[jid]
-                ax.scatter([x], [y], s=90, c=[cmap(norm(presiones[jid]))],
-                           edgecolors=tinta, linewidths=0.8, zorder=3)
+                ax.scatter([x], [y], s=90 * area, c=[cmap(norm(presiones[jid]))],
+                           edgecolors=tinta, linewidths=0.8 * escala, zorder=3)
         sm = cm.ScalarMappable(norm=norm, cmap=cmap)
         sm.set_array([])
         cb = fig.colorbar(sm, ax=ax, fraction=0.04, pad=0.02)
@@ -123,18 +132,18 @@ def fig_red(net_, resultado=None, colorear: str = "presion", dark: bool = True):
         for jid in net_.junctions:
             if jid in pos:
                 x, y = pos[jid]
-                ax.scatter([x], [y], s=70, c=_VERDE, edgecolors=tinta,
-                           linewidths=0.8, zorder=3)
+                ax.scatter([x], [y], s=70 * area, c=_VERDE, edgecolors=tinta,
+                           linewidths=0.8 * escala, zorder=3)
 
     # ---- fuentes: triángulo=reservorio, cuadrado=tanque ----
     for sid, s in net_.sources.items():
         if sid in pos:
             x, y = pos[sid]
             marcador = "^" if s.tipo == "reservorio" else "s"
-            ax.scatter([x], [y], s=220, marker=marcador, c=_AZUL,
-                       edgecolors=tinta, linewidths=1.4, zorder=4)
+            ax.scatter([x], [y], s=220 * area, marker=marcador, c=_AZUL,
+                       edgecolors=tinta, linewidths=1.4 * escala, zorder=4)
             ax.annotate(sid, (x, y), textcoords="offset points", xytext=(8, 8),
-                        color=tinta, fontsize=8, fontweight="bold")
+                        color=tinta, fontsize=8 * min(escala, 1.6), fontweight="bold")
 
     ax.set_title("Red de distribución", color=tinta, fontsize=13, fontweight="bold")
     ax.set_aspect("equal", adjustable="datalim")
