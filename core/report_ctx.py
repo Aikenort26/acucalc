@@ -21,6 +21,11 @@ K_ELAST_MANUAL = {"PVC": 18.0, "PVC-O": 13.5, "PVC biaxial": 15.5, "PEAD": 111.1
 # quien firma cada memoria). Va a la sección "Acerca de ACUCALC" del informe.
 AUTOR_APP = "Aiken H. Ortega-Heredia"
 
+# Un patrón horario de consumo (y su ventana de suministro) debe traer las 24
+# horas del día: `core/storage.volume_curva_integral` lo exige y las figuras lo
+# asumen.
+HORAS_DIA = 24
+
 # Referencias del informe. `key` alimenta el \label{ref:<key>} de la lista, de
 # modo que el texto puede citarlas con referencia cruzada real (ver la macro
 # \citaref en la plantilla) en vez de nombrarlas en prosa suelta.
@@ -120,8 +125,19 @@ def build(p: Project) -> tuple[dict, dict]:
     alm = p.almacenamiento
     a = storage.volume_art81(qmd_m3d, alm.frac_regulacion, alm.frac_incendio,
                              alm.dias_reserva)
+
+    # Un patrón horario solo es utilizable si trae las 24 horas: `storage` lo
+    # exige y las figuras lo asumen. Se valida UNA vez y "patrón inválido" pasa
+    # a ser equivalente a "sin patrón" en todo el reporte — volumen, figura y
+    # tabla. Antes solo se atrapaba el ValueError del volumen, y un patrón de
+    # otra longitud (un JSON viejo o editado a mano) reventaba más adelante en
+    # `fig_balance_train` con un error de matplotlib incomprensible
+    # ("x and y must have same first dimension").
+    patron_ok = len(alm.factores_hora) == HORAS_DIA
+    suministro_ok = len(alm.suministro_hora) == HORAS_DIA
+
     b = None
-    if alm.factores_hora and alm.suministro_hora:
+    if patron_ok and suministro_ok:
         try:
             b = storage.volume_curva_integral(qmd_m3d, alm.factores_hora,
                                               alm.suministro_hora, alm.frac_incendio,
@@ -135,19 +151,18 @@ def build(p: Project) -> tuple[dict, dict]:
     # ---------- patrón horario de consumo (documentación en el informe) ----------
     patron_horas: list = []
     patron_pico = patron_valle = patron_suma = None
-    if alm.factores_hora:
-        suministro = alm.suministro_hora or []
+    if patron_ok:
         patron_horas = [
             {"hora": f"{h:02d}",
              "factor": f"{f:.2f}",
              # 1/0 de la ventana de suministro de la comunidad, si está definida
-             "suministro": ("sí" if (h < len(suministro) and suministro[h]) else "no")
-                           if suministro else "—"}
+             "suministro": ("sí" if alm.suministro_hora[h] else "no")
+                           if suministro_ok else "—"}
             for h, f in enumerate(alm.factores_hora)]
         patron_pico = f"{max(alm.factores_hora):.2f}"
         patron_valle = f"{min(alm.factores_hora):.2f}"
-        # La suma de los 24 factores debe rondar 24 (media = 1.0 = QMD); se
-        # reporta para que el lector verifique que el patrón está normalizado.
+        # La media de los 24 factores debe rondar 1.0 (= QMD), así que su suma
+        # ronda 24; se reporta para que el lector verifique la normalización.
         patron_suma = f"{sum(alm.factores_hora):.2f}"
 
     # verificación de balance interno por tanque (suministro=entrada, salida=salida)
@@ -182,7 +197,10 @@ def build(p: Project) -> tuple[dict, dict]:
     _save(rf.fig_metodos(proj.deviations, pop.suggest_method(proj)), "metodos")
     _save(rf.fig_caudales([(t, fr.qmed_lps, fr.qmd_lps, fr.qmh_lps)
                            for t, fr in serie_q]), "caudales")
-    if alm.factores_hora and alm.suministro_hora:
+    # Mismo guard de 24 horas que el volumen y la tabla del patrón: la figura
+    # grafica los factores contra un eje de 24 horas y con otra longitud
+    # reventaba el build entero.
+    if patron_ok and suministro_ok:
         _save(rf.fig_balance_train([("Comunidad", alm.suministro_hora, alm.factores_hora)]),
               "balance")
     sistemas_bomba_ctx = ([{"tipo_bomba": s.tipo_bomba} for s in p.bombeos]
@@ -335,6 +353,14 @@ def build(p: Project) -> tuple[dict, dict]:
             demandas = network.assign_demands_by_length(red, flows.qmd_lps)
             for jid, q in demandas.items():
                 red.junctions[jid].demand = q
+            # `assign_demands_by_length` divide por la longitud TOTAL de la red
+            # pero solo acumula aferencia en los nodos de consumo, así que la
+            # semi-longitud adyacente a cada fuente no se reparte y la suma de
+            # demandas queda por debajo del QMD. Se reporta explícitamente en la
+            # memoria en vez de afirmar que el reparto conserva el caudal.
+            q_asignado = sum(demandas.values())
+            no_asignado_pct = ((flows.qmd_lps - q_asignado) / flows.qmd_lps * 100
+                               if flows.qmd_lps else 0.0)
             red_ctx = {
                 "n_nodos": len(red.junctions), "n_tuberias": len(red.pipes),
                 # La plantilla la agrupa de a 3 por fila con el filtro `batch`
@@ -342,6 +368,8 @@ def build(p: Project) -> tuple[dict, dict]:
                 # generaba una tabla de cientos de filas en una red real.
                 "demandas": [{"nodo": latex_escape(jid), "q": fm.fmt_q(q)}
                              for jid, q in demandas.items()],
+                "q_asignado": fm.fmt_q(q_asignado),
+                "q_no_asignado_pct": f"{no_asignado_pct:.2f}",
                 "optimizacion": None,
             }
             # La optimización de diámetros (heurística iterativa, hasta 30

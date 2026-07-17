@@ -15,6 +15,10 @@
 % hyperref solo parte en unos pocos puntos, y la URL del DANE se salía 154 pt
 % del margen (medido en el log de LaTeX).
 \usepackage{xurl}
+% Margen de maniobra para el justificado: sin esto, un párrafo con una palabra
+% larga e impartible se sale unos pocos pt del margen. Es la vía estándar para
+% que LaTeX afloje el espaciado antes que desbordar.
+\setlength{\emergencystretch}{3em}
 
 \title{Memoria de Cálculo Hidráulico \\ Sistema de Acueducto de \VAR{corregimiento}}
 \author{\VAR{consultor}}
@@ -203,8 +207,9 @@ Este mismo patrón es el que gobierna la variación de la demanda en una eventua
 simulación de periodo extendido de la red, por lo que se documenta aquí de forma
 explícita para que el cálculo sea reproducible.
 
-\begin{center}
-\small
+\#{ `longtable` ya se centra solo; envolverlo en `center` solo agregaría espacio
+    vertical espurio. El grupo {} acota el \small a esta tabla. }
+{\small
 \begin{longtable}{crc@{\hskip 2.5em}crc}
 \caption{Patrón horario de consumo y ventana de suministro adoptados.}
 \label{tab:patron}\\
@@ -216,15 +221,20 @@ Hora & Factor & Sum. & Hora & Factor & Sum. \\ \midrule
 \endhead
 \bottomrule
 \endlastfoot
-\BLOCK{for i in range(12)}
+\#{ La mitad se deriva de la lista, no se hardcodea a 12: con `range(12)` fijo,
+    un patrón más corto reventaba el render por índice fuera de rango y uno más
+    largo perdía horas EN SILENCIO. `report_ctx` ya solo emite patrones de 24 h,
+    pero la plantilla no depende de ello. }
+\BLOCK{set mitad = (patron_horas|length + 1) // 2}
+\BLOCK{for i in range(mitad)}
 \VAR{patron_horas[i].hora} & \VAR{patron_horas[i].factor} & \VAR{patron_horas[i].suministro}
-\BLOCK{if patron_horas|length > i + 12}
- & \VAR{patron_horas[i + 12].hora} & \VAR{patron_horas[i + 12].factor} & \VAR{patron_horas[i + 12].suministro}
+\BLOCK{if patron_horas|length > i + mitad}
+ & \VAR{patron_horas[i + mitad].hora} & \VAR{patron_horas[i + mitad].factor} & \VAR{patron_horas[i + mitad].suministro}
 \BLOCK{else} & & & \BLOCK{endif}
 \\
 \BLOCK{endfor}
 \end{longtable}
-\end{center}
+}
 \BLOCK{endif}
 
 \BLOCK{if tanques_balance}
@@ -388,10 +398,22 @@ repartiendo el caudal máximo diario en proporción a esa longitud:
 \[
 q_i \;=\; Q_{MD} \cdot \frac{L_i}{\sum_k L_k}
 \]
-con $\sum_k L_k$ igual a la longitud total de la red. Por construcción
-$\sum_i q_i = Q_{MD}$: el reparto conserva el caudal total. La fracción aferente
-que corresponde a un nodo fuente (reservorio o tanque) no se reparte como
-demanda, porque ese caudal lo entrega la propia fuente.
+con $\sum_k L_k$ igual a la longitud total de la red.
+
+La longitud aferente que recae sobre un nodo fuente (reservorio o tanque) no se
+reparte como demanda, porque en la fuente no hay consumo. Como el denominador es
+la longitud total de la red, el caudal repartido entre los nodos de consumo es
+entonces ligeramente inferior al $Q_{MD}$, en la proporción que representan las
+semi-longitudes adyacentes a las fuentes:
+\[
+\sum_i q_i \;=\; Q_{MD}\,\frac{\sum_i L_i}{\sum_k L_k} \;\leq\; Q_{MD}
+\]
+\BLOCK{if red.q_asignado}
+En esta red se asignan \VAR{red.q_asignado} L/s de los \VAR{qmd} L/s del
+$Q_{MD}$ (\VAR{red.q_no_asignado_pct}\,\% corresponde a los tramos adyacentes a
+las fuentes). El proyectista debe verificar que ese remanente sea despreciable
+para el caso; si no lo es, conviene revisar la topología cerca de las fuentes.
+\BLOCK{endif}
 
 El caudal repartido es el máximo diario, $Q_{MD} = \VAR{qmd}$~L/s
 (Art. 47, Res. 0330 de 2017), que es la condición de diseño de la red.
@@ -401,8 +423,8 @@ La Tabla~\ref{tab:demandas} lista la demanda asignada a cada uno de los
 \VAR{red.n_nodos} nodos. Se presenta en tres columnas por página para reducir la
 extensión; el encabezado se repite en cada página.
 
-\begin{center}
-\small
+\#{ `longtable` ya se centra solo; `center` solo agregaría espacio espurio. }
+{\small
 \begin{longtable}{lr@{\hskip 2em}lr@{\hskip 2em}lr}
 \caption{Demandas asignadas por nodo (método de longitud aferente).}
 \label{tab:demandas}\\
@@ -428,7 +450,7 @@ Nodo & $q$ [L/s] & Nodo & $q$ [L/s] & Nodo & $q$ [L/s] \\ \midrule
 \\
 \BLOCK{endfor}
 \end{longtable}
-\end{center}
+}
 \BLOCK{if red.optimizacion}
 Optimización de diámetros con catálogo \VAR{red.optimizacion.material}
 \VAR{red.optimizacion.serie}:

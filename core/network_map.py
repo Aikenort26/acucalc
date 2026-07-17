@@ -143,7 +143,7 @@ def fig_red(net_, resultado=None, colorear: str = "presion", dark: bool = True,
             ax.scatter([x], [y], s=220 * area, marker=marcador, c=_AZUL,
                        edgecolors=tinta, linewidths=1.4 * escala, zorder=4)
             ax.annotate(sid, (x, y), textcoords="offset points", xytext=(8, 8),
-                        color=tinta, fontsize=8 * min(escala, 1.6), fontweight="bold")
+                        color=tinta, fontsize=8 * escala, fontweight="bold")
 
     ax.set_title("Red de distribución", color=tinta, fontsize=13, fontweight="bold")
     ax.set_aspect("equal", adjustable="datalim")
