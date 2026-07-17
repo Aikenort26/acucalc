@@ -303,6 +303,19 @@ def i_num(valor, default: int = 0) -> int:
     return int(round(f_num(valor, float(default))))
 
 
+def s_txt(valor, default: str = "") -> str:
+    """Texto de una celda de `data_editor`, tolerante a celdas vacías.
+
+    Mismo motivo que `f_num`/`i_num`, pero para columnas de texto: `NaN` es
+    truthy, así que `valor or default` devuelve el NaN y `str(NaN)` produce
+    el literal `"nan"` — que luego se guarda como forma/tipo del tanque y
+    aparece en las tablas y en el reporte."""
+    if valor is None or (isinstance(valor, float) and math.isnan(valor)):
+        return default
+    texto = str(valor).strip()
+    return default if not texto or texto.lower() == "nan" else texto
+
+
 def fila_incompleta(fila, columnas: list[str]) -> bool:
     """True si alguna de `columnas` está vacía en la fila — para avisar al
     usuario en vez de calcular con valores por defecto silenciosos."""

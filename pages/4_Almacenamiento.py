@@ -5,7 +5,7 @@ from core import catalogs, report_figs as rf, storage
 from core.project import TankSpec
 from pages_common import (SP_ALTURA, SP_VOLUMEN, f_num, fila_incompleta,
                           fmt_vol, get_project, i_num, num_input, page_setup,
-                          sel_state)
+                          s_txt, sel_state)
 
 p = page_setup()
 st.header("4 · Almacenamiento")
@@ -143,18 +143,20 @@ tipos_previos = {t.nombre: t.tipo for t in cfg.tanques}
 NUM_TK = ["Cantidad", "Altura útil [m]", "Largo/ancho", "Volumen asignado [m³]",
           "Suministro desde [h]", "Suministro hasta [h]",
           "Salida desde [h]", "Salida hasta [h]"]
-filas_tk = [r for _, r in df_tk.iterrows() if str(r["Nombre"] or "").strip()]
-incompletos = [str(r["Nombre"]) for r in filas_tk if fila_incompleta(r, NUM_TK)]
-cfg.tanques = [TankSpec(nombre=str(r["Nombre"]),
-                        tipo=tipos_previos.get(str(r["Nombre"]), "elevado"),
-                        forma=str(r["Forma"] or "circular"),
+filas_tk = [r for _, r in df_tk.iterrows() if s_txt(r["Nombre"])]
+incompletos = [s_txt(r["Nombre"]) for r in filas_tk
+               if fila_incompleta(r, NUM_TK) or not s_txt(r["Forma"])
+               or not s_txt(r["Tipo constructivo"])]
+cfg.tanques = [TankSpec(nombre=s_txt(r["Nombre"]),
+                        tipo=tipos_previos.get(s_txt(r["Nombre"]), "elevado"),
+                        forma=s_txt(r["Forma"], "circular"),
                         volumen=f_num(r["Volumen asignado [m³]"], 0.0),
                         altura=f_num(r["Altura útil [m]"], 2.5),
                         ratio=f_num(r["Largo/ancho"], 1.0),
                         entrada_ini=i_num(r["Suministro desde [h]"], 0),
                         entrada_fin=i_num(r["Suministro hasta [h]"], 23),
                         cantidad=i_num(r["Cantidad"], 1),
-                        tipo_constructivo=str(r["Tipo constructivo"] or "superficial"),
+                        tipo_constructivo=s_txt(r["Tipo constructivo"], "superficial"),
                         salida_ini=i_num(r["Salida desde [h]"], 0),
                         salida_fin=i_num(r["Salida hasta [h]"], 23))
                for r in filas_tk]

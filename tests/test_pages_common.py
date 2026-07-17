@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 from core.project import Project
-from pages_common import f_num, fila_incompleta, i_num, resolve_save_path
+from pages_common import f_num, fila_incompleta, i_num, resolve_save_path, s_txt
 
 
 def test_resolve_vacio_devuelve_none():
@@ -71,3 +71,18 @@ def test_fila_incompleta_detecta_celdas_vacias():
                        {"Nombre": "T2", "Cantidad": None, "Altura": None}])
     assert fila_incompleta(df.iloc[1], ["Cantidad", "Altura"]) is True
     assert fila_incompleta(df.iloc[0], ["Cantidad", "Altura"]) is False
+
+
+def test_s_txt_nan_no_produce_literal_nan():
+    """El bug visto en pantalla: `NaN or "circular"` devuelve NaN (NaN es
+    truthy) y `str(NaN)` produce el literal "nan", que terminaba como forma
+    y tipo constructivo del tanque, en la tabla y en el reporte."""
+    nan = float("nan")
+    assert str(nan or "circular") == "nan"      # el bug viejo
+    assert s_txt(nan, "circular") == "circular"  # la guarda nueva
+    assert s_txt(None, "superficial") == "superficial"
+    assert s_txt("", "circular") == "circular"
+    assert s_txt("   ", "circular") == "circular"
+    assert s_txt("nan", "circular") == "circular"   # pandas ya lo stringificó
+    assert s_txt("rectangular", "circular") == "rectangular"
+    assert s_txt("  T1  ") == "T1"
