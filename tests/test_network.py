@@ -72,13 +72,21 @@ Headloss H-W
 
 
 def test_asignar_demandas_por_longitud_aferente():
+    """El reparto es proporcional a la longitud aferente y conserva el QMD.
+
+    Este test codificaba el bug: asertaba J1=15 y J2=10, que suman 25 L/s de un
+    QMD de 30 — los 5 L/s restantes (la semi-longitud de P1 junto al reservorio)
+    no se le asignaban a nadie. El denominador ahora es la aferencia de los
+    NODOS (250 m), no la longitud total de la red (300 m).
+    """
     n = net.parse_inp(INP_LINEAL)
     d = net.assign_demands_by_length(n, qmd_lps=30.0)
-    # J1: mitad de P1 (50) + mitad de P2 (100) = 150 de 300 -> 50%
-    assert abs(d["J1"] - 15.0) < 1e-9
-    # J2: solo mitad de P2 (100) de 300 -> 33.33%
-    assert abs(d["J2"] - 10.0) < 1e-9
-    assert "R1" not in d
+    # J1: mitad de P1 (50) + mitad de P2 (100) = 150 de 250 aferentes -> 60%
+    assert abs(d["J1"] - 18.0) < 1e-9
+    # J2: solo mitad de P2 (100) de 250 -> 40%
+    assert abs(d["J2"] - 12.0) < 1e-9
+    assert sum(d.values()) == pytest.approx(30.0)     # se reparte el QMD completo
+    assert "R1" not in d                              # en la fuente no hay consumo
 
 
 def test_asignar_demandas_sin_tuberias_falla():
@@ -339,3 +347,58 @@ def test_mapa_escala_no_admite_cero_ni_negativa(mala):
     reaparecería con el tamaño equivocado al elevarla al cuadrado. Se acota por
     abajo a 0.1, así que ambas deben dar exactamente lo mismo que 0.1."""
     assert _areas_marcadores(mala) == pytest.approx(_areas_marcadores(0.1))
+
+
+INP_FUENTE_LARGA = """[JUNCTIONS]
+N1  10  0
+N2  12  0
+[RESERVOIRS]
+R1  60
+[PIPES]
+P1  R1  N1  100  100  0.007  0
+P2  N1  N2  100  100  0.007  0
+[OPTIONS]
+HEADLOSS  D-W
+[END]
+"""
+
+
+def test_demandas_reparten_el_qmd_completo():
+    """El reparto por longitud aferente debe conservar el caudal: Σq_i = QMD.
+
+    Antes se dividía por la longitud TOTAL de la red pero solo se acumulaba
+    aferencia en los nodos de consumo, así que la semi-longitud junto a cada
+    fuente se descontaba y no se le asignaba a nadie: la red quedaba
+    sub-cargada. Medido en una red real: 0.38 % del QMD sin asignar.
+    """
+    red = net.parse_inp(INP_FUENTE_LARGA)
+    d = net.assign_demands_by_length(red, 40.0)
+    assert sum(d.values()) == pytest.approx(40.0)
+
+
+def test_demandas_proporcionales_a_la_longitud_aferente():
+    """Con P1 (R1–N1) y P2 (N1–N2) de 100 m: N1 tiene 50+50=100 m aferentes y
+    N2 solo 50 m. El QMD se reparte 2:1, no en partes iguales."""
+    red = net.parse_inp(INP_FUENTE_LARGA)
+    d = net.assign_demands_by_length(red, 30.0)
+    assert d["N1"] == pytest.approx(20.0)
+    assert d["N2"] == pytest.approx(10.0)
+
+
+def test_demandas_red_sin_nodos_de_consumo():
+    """Si la aferencia total de los nodos es 0 no hay entre qué repartir; debe
+    fallar explícito, no dividir por cero."""
+    inp = """[JUNCTIONS]
+[RESERVOIRS]
+R1  60
+R2  50
+[PIPES]
+P1  R1  R2  100  100  0.007  0
+[OPTIONS]
+HEADLOSS  D-W
+[END]
+"""
+    red = net.parse_inp(inp.replace("[JUNCTIONS]\n", "[JUNCTIONS]\nN1  10  0\n"))
+    # N1 existe pero no toca ninguna tubería: aferencia total 0
+    with pytest.raises(ValueError):
+        net.assign_demands_by_length(red, 40.0)

@@ -353,14 +353,9 @@ def build(p: Project) -> tuple[dict, dict]:
             demandas = network.assign_demands_by_length(red, flows.qmd_lps)
             for jid, q in demandas.items():
                 red.junctions[jid].demand = q
-            # `assign_demands_by_length` divide por la longitud TOTAL de la red
-            # pero solo acumula aferencia en los nodos de consumo, así que la
-            # semi-longitud adyacente a cada fuente no se reparte y la suma de
-            # demandas queda por debajo del QMD. Se reporta explícitamente en la
-            # memoria en vez de afirmar que el reparto conserva el caudal.
+            # El reparto conserva el QMD (Σ q_i = QMD); se reporta el total
+            # asignado para que el lector lo verifique contra el QMD del informe.
             q_asignado = sum(demandas.values())
-            no_asignado_pct = ((flows.qmd_lps - q_asignado) / flows.qmd_lps * 100
-                               if flows.qmd_lps else 0.0)
             red_ctx = {
                 "n_nodos": len(red.junctions), "n_tuberias": len(red.pipes),
                 # La plantilla la agrupa de a 3 por fila con el filtro `batch`
@@ -369,7 +364,6 @@ def build(p: Project) -> tuple[dict, dict]:
                 "demandas": [{"nodo": latex_escape(jid), "q": fm.fmt_q(q)}
                              for jid, q in demandas.items()],
                 "q_asignado": fm.fmt_q(q_asignado),
-                "q_no_asignado_pct": f"{no_asignado_pct:.2f}",
                 "optimizacion": None,
             }
             # La optimización de diámetros (heurística iterativa, hasta 30

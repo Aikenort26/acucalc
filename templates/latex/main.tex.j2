@@ -398,21 +398,18 @@ repartiendo el caudal máximo diario en proporción a esa longitud:
 \[
 q_i \;=\; Q_{MD} \cdot \frac{L_i}{\sum_k L_k}
 \]
-con $\sum_k L_k$ igual a la longitud total de la red.
-
-La longitud aferente que recae sobre un nodo fuente (reservorio o tanque) no se
-reparte como demanda, porque en la fuente no hay consumo. Como el denominador es
-la longitud total de la red, el caudal repartido entre los nodos de consumo es
-entonces ligeramente inferior al $Q_{MD}$, en la proporción que representan las
-semi-longitudes adyacentes a las fuentes:
+donde el denominador $\sum_k L_k$ es la suma de las longitudes aferentes de los
+nodos de consumo. En un nodo fuente (reservorio o tanque) no hay consumo, así
+que su longitud aferente no entra en el reparto: la semi-longitud del tramo que
+sale de la fuente se distribuye entre los nodos de consumo aguas abajo. De este
+modo el reparto conserva el caudal de diseño,
 \[
-\sum_i q_i \;=\; Q_{MD}\,\frac{\sum_i L_i}{\sum_k L_k} \;\leq\; Q_{MD}
+\sum_i q_i \;=\; Q_{MD}
 \]
+y la red queda cargada con la totalidad del caudal máximo diario.
 \BLOCK{if red.q_asignado}
-En esta red se asignan \VAR{red.q_asignado} L/s de los \VAR{qmd} L/s del
-$Q_{MD}$ (\VAR{red.q_no_asignado_pct}\,\% corresponde a los tramos adyacentes a
-las fuentes). El proyectista debe verificar que ese remanente sea despreciable
-para el caso; si no lo es, conviene revisar la topología cerca de las fuentes.
+En esta red se reparten \VAR{red.q_asignado} L/s entre \VAR{red.n_nodos} nodos
+de consumo.
 \BLOCK{endif}
 
 El caudal repartido es el máximo diario, $Q_{MD} = \VAR{qmd}$~L/s

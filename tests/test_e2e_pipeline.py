@@ -132,17 +132,13 @@ def test_e2e_red_build_render_la_tabla_de_demandas_llega_al_tex(tmp_path):
     # de consumo, así que la semi-longitud junto a la fuente (aquí P1: 100/2 =
     # 50 m de 570 m) no se reparte a nadie. La memoria debe declararlo, no
     # afirmar lo contrario.
+    # El reparto conserva el caudal de diseño: Σ q_i = QMD. `q` viene formateado
+    # a 2 decimales, así que la suma arrastra el redondeo de los 4 nodos y se
+    # compara con tolerancia absoluta.
     qmd = float(ctx["qmd"])
-    # `q` viene ya formateado a 2 decimales, así que la suma arrastra el
-    # redondeo de los 4 nodos: se compara con tolerancia absoluta, no relativa.
     total = sum(float(d["q"]) for d in ctx["red"]["demandas"])
-    assert total < qmd
-    assert total == pytest.approx(qmd * (1 - 50 / 570), abs=0.02)
-    # el porcentaje sí se calcula sobre los valores crudos, sin redondear
-    assert float(ctx["red"]["q_no_asignado_pct"]) == pytest.approx(50 / 570 * 100,
-                                                                   abs=0.01)
-    # la memoria declara el remanente en vez de afirmar que conserva el caudal
-    assert "ligeramente inferior al $Q_{MD}$" in tex
+    assert total == pytest.approx(qmd, abs=0.02)
+    assert float(ctx["red"]["q_asignado"]) == pytest.approx(qmd, abs=0.01)
     assert ctx["red"]["q_asignado"] in tex
 
 
