@@ -47,6 +47,36 @@ Párrafo libre con contexto crítico que el otro agente necesita saber.
 
 ## Entradas
 
+## [2026-07-17] — v8 bloques A+B: informe dentro de márgenes + bug de reparto de demandas
+
+**Agente:** Claude Code
+**Rama:** main (merge de acucalc-v8, worktree eliminado tras merge)
+**Sesión:** Usuario reportó 11 pendientes tras usar el informe LaTeX real (tablas fuera de margen, mapa sin zoom, patrón de consumo no documentado, faltaba cita DANE, sin sección de autoría). Se ejecutaron los bloques A (trivial: índices, portada, escala de iconos) y B (informe: márgenes, patrón, citas, aviso de no-convergencia).
+
+### Cambios realizados
+- `templates/latex/main.tex.j2`: `longtable`+`tabularx`+`xurl`+`emergencystretch`; tabla de demandas por nodo (antes 1 fila/nodo desbordaba el flotante) ahora se parte en 3 columnas con encabezado repetido; tablas de 8 columnas (ariete, bombas) a `\small`/`\footnotesize`; índices en páginas separadas; sección nueva "Acerca de ACUCALC" (autoría, límites, no-convergencia del solver); fórmula de longitud aferente derivada; patrón horario de 24 factores documentado; referencias con `\label`/`\ref` reales + cita DANE oficial
+- `core/network.py::assign_demands_by_length`: **bug de cálculo corregido** — dividía por la longitud TOTAL de la red pero solo acumulaba aferencia en nodos de consumo, dejando ~0.38% del QMD sin asignar (medido en red real de 478 nodos). Ahora Σq_i = QMD exacto
+- `core/report_ctx.py`: patrón ≠24h ya no revienta el build (bug preexistente, más grave de lo reportado); `HORAS_DIA` como guarda única
+- `core/network_map.py`: parámetro `escala` en `fig_red` (área ∝ escala²)
+- `pages/7_Red.py`: `st.error` visible cuando el solver no converge (antes decía "Convergió" incondicionalmente)
+
+### Tests
+- `pytest -v` → 235 passed, 0 failed (era 214 antes del bloque)
+- Nuevos: guardas de patrón horario, escala de iconos, reparto de demandas (incl. test e2e build→render con red que casi no existía y habría dejado desaparecer la tabla en silencio)
+
+### Decisiones tomadas
+- Reparto por longitud aferente normalizado a 100% del QMD (confirmado con el usuario, no es cosmético — cambia resultados de proyectos ya entregados)
+- Zoom/pan real del mapa (Plotly) diferido al bloque D — solo se hizo escala de iconos en A
+- Verificación exigida: compilar el PDF real del proyecto ACU-SAN JACINTO y leer el log de LaTeX (0 Overfull, 0 Float too large, 0 refs sin resolver), no solo inspección visual
+
+### Pendientes (TODO)
+- [ ] Bloque C: mapa de red al informe, marca ACUCALC + portada hidráulica (SVG ya creado en `assets/`, sin commitear), calibración de curvas en una sola pantalla, LICENSE GPL-3.0
+- [ ] Bloque D: mapa Plotly con zoom/pan/hover, UI general
+- [ ] Bloque E (bloqueado): solver de red no converge en redes grandes — precondición de periodo extendido
+
+### Contexto para el siguiente agente
+`assign_demands_by_length` cambió de contrato (ya no divide por longitud total de la red, sino por la aferencia de los nodos) — si tocas ese módulo, el test viejo que codificaba el bug fue corregido, no lo reviertas. La sección "Acerca de ACUCALC" en la plantilla es el lugar correcto para documentar nuevas limitaciones conocidas.
+
 ## [2026-07-16 11:15] — v7: 16 ítems de feedback de uso real (bugs + features)
 
 **Agente:** Claude Code
