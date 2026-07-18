@@ -45,29 +45,49 @@ p.red_en_informe = st.checkbox("Incluir la sección de red en la memoria del rep
 # lenta a la página entera. "topología" no necesita resolver nada y es el
 # default; presión/velocidad quedan detrás de un botón explícito.
 with st.expander("🗺 Mapa de la red", expanded=False):
-    col_c, col_b = st.columns([2, 1])
+    col_c, col_e = st.columns([2, 1])
     colorear = col_c.radio("Colorear por", ["topología", "presión", "velocidad"],
                            horizontal=True, key="w_red_colorear")
+    escala_map = num_input("Escala de los iconos", "red_map_escala", 1.0, decimals=2,
+                           container=col_e, min_value=0.2, max_value=4.0,
+                           help="Tamaño de nodos, fuentes y grosor de tramos. En una "
+                                "red densa baja la escala para que no se encimen; en "
+                                "una red pequeña súbela.")
     if colorear == "topología":
-        fig_map = nm.fig_red(red, dark=True)
+        fig_map = nm.fig_red(red, dark=True, escala=escala_map)
     else:
-        calcular = col_b.button("🧮 Calcular y colorear", key="w_red_map_solve")
+        calcular = st.button("🧮 Calcular y colorear", key="w_red_map_solve")
         res_map = st.session_state.get("red_map_solve")
         if calcular:
-            try:
-                res_map = net.solve(red)
-                st.session_state["red_map_solve"] = res_map
-            except Exception as e:
-                st.warning(f"No se pudo simular para colorear el mapa: {e}")
-                res_map = None
+            with st.spinner("Resolviendo la red… en redes grandes puede tardar minutos."):
+                try:
+                    res_map = net.solve(red)
+                    st.session_state["red_map_solve"] = res_map
+                except Exception as e:
+                    st.warning(f"No se pudo simular para colorear el mapa: {e}")
+                    res_map = None
         if res_map is not None:
+            # El solver puede agotar sus iteraciones sin converger (pasa en redes
+            # grandes). Antes el mapa pintaba esos resultados sin decir nada: el
+            # usuario veía un mapa creíble con presiones que no resuelven la
+            # continuidad. Se avisa, y el aviso es de error, no cosmético.
+            if not res_map.converged:
+                st.error(
+                    f"⚠️ **El solver NO convergió** ({res_map.iterations} iteraciones). "
+                    "Las presiones y velocidades de este mapa **no son confiables** y "
+                    "no deben usarse para diseño ni llevarse al informe. Es una "
+                    "limitación conocida del solver en redes grandes — ver "
+                    "Recomendaciones y limitaciones en la memoria.")
+            else:
+                st.success(f"Solver convergido en {res_map.iterations} iteración(es).")
             fig_map = nm.fig_red(red, res_map,
                                  colorear="presion" if colorear == "presión" else "velocidad",
-                                 dark=True)
+                                 dark=True, escala=escala_map)
         else:
             st.caption("Pulsa \"Calcular y colorear\" para resolver la red y colorear "
-                       "el mapa (puede tardar unos segundos en redes grandes).")
-            fig_map = nm.fig_red(red, dark=True)
+                       "el mapa. En redes grandes puede tardar varios minutos y no "
+                       "siempre converge.")
+            fig_map = nm.fig_red(red, dark=True, escala=escala_map)
     if not nm.tiene_coordenadas(red):
         st.caption("El INP no trae sección [COORDINATES]; se usa un layout "
                    "automático (la topología es correcta, las posiciones son "
@@ -113,9 +133,14 @@ p.red_pmin = num_input("Presión mínima [m]", "red_pmin", p.red_pmin, decimals=
 p.red_pmax = num_input("Presión máxima [m]", "red_pmax", p.red_pmax, decimals=2,
                        container=o5, min_value=0.0, max_value=200.0)
 
+st.caption("La optimización resuelve la red en cada iteración (hasta 30 veces). "
+           "En redes grandes puede tardar mucho y el solver no siempre converge — "
+           "revisa el aviso de convergencia del resultado antes de usar los diámetros.")
 if st.button("🧮 Optimizar diámetros", type="primary"):
-    resultado = net.optimize_diameters(red, p.red_material, p.red_serie,
-                                       p.red_vmax, p.red_pmin, p.red_pmax)
+    with st.spinner("Optimizando… resuelve la red en cada iteración; en redes "
+                    "grandes puede tardar varios minutos."):
+        resultado = net.optimize_diameters(red, p.red_material, p.red_serie,
+                                           p.red_vmax, p.red_pmin, p.red_pmax)
     st.session_state["red_optim"] = resultado
     st.session_state["red_optim_inp"] = red
 
@@ -133,7 +158,20 @@ if opt:
         hide_index=True, width="stretch")
     for a in opt.avisos:
         st.warning(a)
-    st.caption(f"Convergió en {opt.iteraciones} iteración(es).")
+    # `iteraciones` es el conteo del bucle de optimización, NO una prueba de que
+    # el solver hidráulico resolvió: el texto viejo decía "Convergió en N
+    # iteración(es)" incondicionalmente, incluso cuando el Newton-Raphson agotó
+    # sus iteraciones sin converger. Se reporta cada cosa por separado.
+    if not opt.result.converged:
+        st.error(
+            "⚠️ **El solver hidráulico NO convergió** en la última resolución "
+            f"({opt.result.iterations} iteraciones internas). Los diámetros, "
+            "presiones y velocidades de estas tablas **no son confiables** y no "
+            "deben usarse para diseño. Limitación conocida del solver en redes "
+            "grandes.")
+    else:
+        st.caption(f"Optimización: {opt.iteraciones} iteración(es) de diámetros · "
+                   f"solver convergido en {opt.result.iterations} iteración(es).")
 
     # INP exportado CON los cambios aplicados: diámetros optimizados + la
     # rugosidad del material elegido (el writer viejo solo reescribía demandas,

@@ -3,7 +3,22 @@
 \usepackage[spanish]{babel}
 \usepackage[margin=3cm]{geometry}
 \usepackage{graphicx,booktabs,amsmath,siunitx,float}
+% longtable: tablas que se parten entre páginas repitiendo el encabezado. La de
+% demandas por nodo tiene una fila por nodo (cientos en una red real) y como
+% `tabular` dentro de `table[H]` no se partía: LaTeX la trataba como un flotante
+% indivisible más alto que la página y la desbordaba.
+% tabularx: columnas de ancho elástico para las tablas de 8 columnas (ariete,
+% bombas), que se salían del margen.
+\usepackage{longtable,tabularx}
 \usepackage[hidelinks]{hyperref}
+% xurl: permite que una URL larga parta en cualquier carácter. El \url de
+% hyperref solo parte en unos pocos puntos, y la URL del DANE se salía 154 pt
+% del margen (medido en el log de LaTeX).
+\usepackage{xurl}
+% Margen de maniobra para el justificado: sin esto, un párrafo con una palabra
+% larga e impartible se sale unos pocos pt del margen. Es la vía estándar para
+% que LaTeX afloje el espaciado antes que desbordar.
+\setlength{\emergencystretch}{3em}
 
 \title{Memoria de Cálculo Hidráulico \\ Sistema de Acueducto de \VAR{corregimiento}}
 \author{\VAR{consultor}}
@@ -23,8 +38,10 @@
 \includegraphics[height=2.2cm]{figures/\VAR{logo_consultor}}
 \BLOCK{endif}
 \end{minipage}
-\vspace{1.5cm}
 \BLOCK{endif}
+% El \vspace va FUERA del condicional de logos: antes vivía dentro, así que un
+% proyecto sin logos arrancaba con el título pegado al margen superior.
+\vspace{3cm}
 {\LARGE\bfseries Memoria de Cálculo Hidráulico\par}
 \vspace{0.4cm}
 {\Large Sistema de Acueducto de \VAR{corregimiento}\par}
@@ -37,9 +54,11 @@
 \end{titlepage}
 
 \tableofcontents
+\clearpage
 \listoffigures
+\clearpage
 \listoftables
-\newpage
+\clearpage
 
 \section{Introducción}
 El presente documento contiene la memoria de cálculo hidráulico del sistema de
@@ -61,9 +80,20 @@ características.
 \end{itemize}
 
 \section{Proyección de población}
-Periodo de diseño: 25 años (Art. 40, Res. 0330 de 2017), horizonte \VAR{horizonte}.
-Zona de estudio: \VAR{pob_tipo}. Serie censal de referencia: \VAR{pob_fuente}.
-Año base de la proyección: \VAR{year0}.
+\label{sec:poblacion}
+Periodo de diseño: 25 años (Art. 40, Res. 0330 de 2017, Ref.~\ref{ref:res0330}),
+horizonte \VAR{horizonte}. Zona de estudio: \VAR{pob_tipo}. Año base de la
+proyección: \VAR{year0}.
+
+\BLOCK{if pob_es_dane}
+La serie de población empleada corresponde a las \emph{Proyecciones y
+retroproyecciones de población municipal para el periodo 1985-2017 y 2018-2042
+con base en el CNPV 2018}, publicadas por el Departamento Administrativo Nacional
+de Estadística (DANE) --- Ref.~\ref{ref:dane}. Serie de referencia:
+\VAR{pob_fuente}.
+\BLOCK{else}
+Serie censal de referencia: \VAR{pob_fuente}.
+\BLOCK{endif}
 
 Con la serie censal del municipio se calcularon las tasas de crecimiento por los
 métodos aritmético, geométrico, exponencial y de Wappaus, y se proyectó la
@@ -82,12 +112,14 @@ Población de diseño: \textbf{\VAR{pob_final} habitantes}.
 \begin{figure}[H]\centering
 \includegraphics[width=0.9\textwidth]{figures/poblacion.png}
 \caption{Proyección de población por método de cálculo.}
+\label{fig:poblacion}
 \end{figure}
 \BLOCK{endif}
 \BLOCK{if "metodos" in figuras}
 \begin{figure}[H]\centering
 \includegraphics[width=0.75\textwidth]{figures/metodos.png}
 \caption{Desviación de cada método respecto al promedio en el año horizonte.}
+\label{fig:metodos}
 \end{figure}
 \BLOCK{endif}
 
@@ -107,6 +139,7 @@ La proyección de caudales a lo largo del periodo de diseño, con la población 
 cada año, es la siguiente:
 \begin{table}[H]\centering
 \caption{Proyección de caudales de diseño en el periodo.}
+\label{tab:caudales}
 \begin{tabular}{rrrrr}\toprule
 Año & Población [hab] & $Q_{med}$ [L/s] & QMD [L/s] & QMH [L/s] \\ \midrule
 \BLOCK{for c in caudales_anuales}
@@ -118,11 +151,13 @@ Año & Población [hab] & $Q_{med}$ [L/s] & QMD [L/s] & QMH [L/s] \\ \midrule
 \begin{figure}[H]\centering
 \includegraphics[width=0.9\textwidth]{figures/caudales.png}
 \caption{Evolución de los caudales de diseño en el periodo.}
+\label{fig:caudales}
 \end{figure}
 \BLOCK{endif}
 
 \begin{table}[H]\centering
 \caption{Caudales de diseño por componente (Art. 47, Res. 0330 de 2017).}
+\label{tab:componentes}
 \begin{tabular}{lr}\toprule
 Componente & $Q$ diseño [L/s] \\ \midrule
 \BLOCK{for c, q in componentes}
@@ -138,6 +173,7 @@ fracción del QMD (QMD/3), y la curva integral de la comunidad, que compara la
 ventana horaria de suministro contra el patrón horario de consumo.
 \begin{table}[H]\centering
 \caption{Volumen total por norma (gobierna el máximo).}
+\label{tab:volnorma}
 \begin{tabular}{lr}\toprule
 Criterio & $V$ [m³] \\ \midrule
 Art. 81 (QMD/3) & \VAR{v_art81} \\
@@ -151,6 +187,56 @@ criterio orientado por NSR-10 Título J y el Art. 81 de la Res. 0330 de 2017.
 Volumen total adoptado (incluye incendio NSR-10 Título J):
 \textbf{\VAR{v_final} m\textsuperscript{3}}.
 
+\BLOCK{if patron_horas}
+\subsection{Patrón horario de consumo adoptado}
+\label{sec:patron}
+El criterio de la curva integral depende del patrón horario de consumo de la
+comunidad: el factor de cada hora multiplica el caudal medio, de modo que un
+factor de 1.00 corresponde al consumo medio y el factor pico marca la hora de
+mayor demanda. El patrón adoptado se lista en la Tabla~\ref{tab:patron}: factor
+pico \textbf{\VAR{patron_pico}}, factor valle \textbf{\VAR{patron_valle}}, suma
+de los 24 factores \textbf{\VAR{patron_suma}} (una suma cercana a 24 indica que
+el patrón está normalizado alrededor del consumo medio).
+
+La columna \emph{Suministro} indica la ventana horaria en que la comunidad recibe
+agua al sistema; el desfase entre esa ventana y el patrón de consumo es lo que
+genera el volumen de regulación calculado por la curva integral
+(Figura~\ref{fig:balance}).
+
+Este mismo patrón es el que gobierna la variación de la demanda en una eventual
+simulación de periodo extendido de la red, por lo que se documenta aquí de forma
+explícita para que el cálculo sea reproducible.
+
+\#{ `longtable` ya se centra solo; envolverlo en `center` solo agregaría espacio
+    vertical espurio. El grupo {} acota el \small a esta tabla. }
+{\small
+\begin{longtable}{crc@{\hskip 2.5em}crc}
+\caption{Patrón horario de consumo y ventana de suministro adoptados.}
+\label{tab:patron}\\
+\toprule
+Hora & Factor & Sum. & Hora & Factor & Sum. \\ \midrule
+\endfirsthead
+\toprule
+Hora & Factor & Sum. & Hora & Factor & Sum. \\ \midrule
+\endhead
+\bottomrule
+\endlastfoot
+\#{ La mitad se deriva de la lista, no se hardcodea a 12: con `range(12)` fijo,
+    un patrón más corto reventaba el render por índice fuera de rango y uno más
+    largo perdía horas EN SILENCIO. `report_ctx` ya solo emite patrones de 24 h,
+    pero la plantilla no depende de ello. }
+\BLOCK{set mitad = (patron_horas|length + 1) // 2}
+\BLOCK{for i in range(mitad)}
+\VAR{patron_horas[i].hora} & \VAR{patron_horas[i].factor} & \VAR{patron_horas[i].suministro}
+\BLOCK{if patron_horas|length > i + mitad}
+ & \VAR{patron_horas[i + mitad].hora} & \VAR{patron_horas[i + mitad].factor} & \VAR{patron_horas[i + mitad].suministro}
+\BLOCK{else} & & & \BLOCK{endif}
+\\
+\BLOCK{endfor}
+\end{longtable}
+}
+\BLOCK{endif}
+
 \BLOCK{if tanques_balance}
 Los tanques y sus volúmenes los define el proyectista; la app verifica. Cada
 tanque se comprueba con su balance interno: su ventana de suministro (entrada)
@@ -160,8 +246,13 @@ Suma de volúmenes asignados: \textbf{\VAR{v_asignado_total} m\textsuperscript{3
 frente a \VAR{v_final} m\textsuperscript{3} requeridos por norma.
 \begin{table}[H]\centering
 \caption{Verificación del balance interno por tanque.}
+\label{tab:balance}
+% 7 columnas con encabezados largos: \small + encabezado a dos filas para no
+% salirse del margen de 3 cm.
+\small
 \begin{tabular}{lrrrrrc}\toprule
-Tanque & Sum. [h/d] & Sal. [h/d] & Fracción & $V$ asignado [m³] & $V$ req. balance [m³] & Cumple \\ \midrule
+Tanque & Sum. & Sal. & Fracción & $V$ asignado & $V$ req. balance & Cumple \\
+       & [h/d] & [h/d] & & [m³] & [m³] & \\ \midrule
 \BLOCK{for tb in tanques_balance}
 \VAR{tb.nombre} & \VAR{tb.horas_suministro} & \VAR{tb.horas_salida} & \VAR{tb.frac} & \VAR{tb.v_asignado} & \VAR{tb.v_req} & \BLOCK{if tb.cumple == "No"}\textbf{\VAR{tb.cumple}}\BLOCK{else}\VAR{tb.cumple}\BLOCK{endif} \\
 \BLOCK{endfor}
@@ -180,6 +271,7 @@ asignado o ajustar sus ventanas de suministro/salida.\\
 \begin{figure}[H]\centering
 \includegraphics[width=0.95\textwidth]{figures/balance.png}
 \caption{Curvas acumuladas de suministro y consumo por tanque.}
+\label{fig:balance}
 \end{figure}
 \BLOCK{endif}
 
@@ -190,8 +282,13 @@ construido es igual o mayor al volumen requerido por el balance de regulación.
 \begin{table}[H]\centering
 \caption{Predimensionamiento de tanques (dimensiones por unidad; volumen útil de
 líquido --- añadir 0.30 m de borde libre adicional en la construcción).}
+% 7 columnas, dos de texto libre (tipo constructivo, dimensiones): \footnotesize
+% + encabezado a dos filas. Con \small seguía saliéndose 20 pt del margen
+% (medido en el log), porque "rectangular"/"superficial" son celdas anchas.
+\footnotesize
 \begin{tabular}{llcllrr}\toprule
-Tanque & Tipo constructivo & Cant. & Forma & Dim. (c/u) & $V$ requerido [m³] & $V$ real total [m³] \\ \midrule
+Tanque & Tipo & Cant. & Forma & Dim. (c/u) & $V$ requerido & $V$ real total \\
+       & constructivo & & & & [m³] & [m³] \\ \midrule
 \BLOCK{for t in tanques}
 \VAR{t.nombre} & \VAR{t.tipo_constructivo} & \VAR{t.cantidad} & \VAR{t.forma} & \VAR{t.dim} & \VAR{t.volumen} & \VAR{t.volumen_real} \\
 \BLOCK{endfor}
@@ -202,6 +299,7 @@ Tanque & Tipo constructivo & Cant. & Forma & Dim. (c/u) & $V$ requerido [m³] & 
 \begin{figure}[H]\centering
 \includegraphics[width=0.95\textwidth]{figures/esquema.png}
 \caption{Esquema general del sistema.}
+\label{fig:esquema}
 \end{figure}
 \BLOCK{endif}
 
@@ -231,8 +329,11 @@ la potencia requerida es \textbf{\VAR{s.potencia_kw} kW (\VAR{s.potencia_hp} HP)
 \BLOCK{if s.ariete}
 \begin{table}[H]\centering
 \caption{Golpe de ariete (Joukowsky) y factor de seguridad --- \VAR{s.nombre}. FS $=PN/(H_d+\Delta H)$, cumple si $\geq 1$; el uso se calcula con la $H_d$ del sistema completo (conservador).}
+% 8 columnas: \small y encabezados cortos para no salirse del margen de 3 cm.
+\small
 \begin{tabular}{lrrrrrrl}\toprule
-Tramo & $C$ [m/s] & $\Delta H$ [mca] & $H_d+\Delta H$ & $PN$ [mca] & FS & Uso [\%] & Cumple \\ \midrule
+Tramo & $C$ & $\Delta H$ & $H_d+\Delta H$ & $PN$ & FS & Uso & Cumple \\
+      & [m/s] & [mca] & [mca] & [mca] & & [\%] & \\ \midrule
 \BLOCK{for a in s.ariete}
 \VAR{a.nombre} & \VAR{a.c} & \VAR{a.dh} & \VAR{a.h_total} & \VAR{a.pn} & \VAR{a.fs} & \VAR{a.uso} & \BLOCK{if a.cumple == "No"}\textbf{\VAR{a.cumple}}\BLOCK{else}\VAR{a.cumple}\BLOCK{endif} \\
 \BLOCK{endfor}
@@ -242,8 +343,13 @@ Tramo & $C$ [m/s] & $\Delta H$ [mca] & $H_d+\Delta H$ & $PN$ [mca] & FS & Uso [\
 \BLOCK{if s.bombas}
 \begin{table}[H]\centering
 \caption{Bombas evaluadas para \VAR{s.nombre} (punto de operación contra la curva del sistema).}
-\begin{tabular}{lrrrrrrl}\toprule
-Bomba & $Q_{op}$ [L/s] & $H_{op}$ [m] & $\eta(Q_{op})$ & $Q_{BEP}$ [L/s] & Desv. BEP [\%] & $P$ [HP] & Arreglo \\ \midrule
+% 8 columnas: \small, encabezados a dos filas, y la última columna en `p{}` para
+% que el texto del arreglo ("8x paralelo @ N2=2996") se envuelva en vez de
+% empujar la tabla fuera del margen.
+\small
+\begin{tabular}{lrrrrrrp{2.2cm}}\toprule
+Bomba & $Q_{op}$ & $H_{op}$ & $\eta(Q_{op})$ & $Q_{BEP}$ & Desv. BEP & $P$ & Arreglo \\
+      & [L/s] & [m] & & [L/s] & [\%] & [HP] & \\ \midrule
 \BLOCK{for b in s.bombas}
 \VAR{b.nombre} & \VAR{b.q_op} & \VAR{b.h_op} & \VAR{b.eta_op} & \VAR{b.bep_q} & \VAR{b.desv_bep} & \VAR{b.p_hp} & \VAR{b.arreglo} \\
 \BLOCK{endfor}
@@ -267,17 +373,81 @@ eficiencia en el punto de operación).
 
 \BLOCK{if red}
 \section{Red de distribución}
+\label{sec:red}
 La red cargada tiene \VAR{red.n_nodos} nodos de consumo y \VAR{red.n_tuberias}
-tuberías. Las demandas se asignaron por el método de longitud aferente
-(fracción de tubería incidente en cada nodo sobre la longitud total de la red).
-\begin{table}[H]\centering
-\caption{Demandas asignadas por nodo (longitud aferente).}
-\begin{tabular}{lr}\toprule
-Nodo & Demanda [L/s] \\ \midrule
-\BLOCK{for d in red.demandas}
-\VAR{d.nodo} & \VAR{d.q} \\
+tuberías.
+
+\subsection{Asignación de demandas por longitud aferente}
+\label{sec:aferente}
+El caudal de diseño no se reparte por igual entre los nodos: se distribuye en
+proporción a la longitud de tubería que cada nodo abastece. El criterio es que
+el consumo de una red de distribución está repartido a lo largo de las tuberías
+(las acometidas domiciliarias se conectan a lo largo del tramo, no en el nodo),
+de modo que un nodo rodeado de tramos largos sirve a más usuarios que uno
+rodeado de tramos cortos.
+
+A cada tubería se le asigna la mitad de su longitud a cada uno de sus dos nodos
+extremos. La \emph{longitud aferente} del nodo $i$ es entonces la suma de las
+semi-longitudes de las tuberías que llegan a él:
+\[
+L_i \;=\; \frac{1}{2} \sum_{j \in \Omega_i} L_{ij}
+\]
+donde $\Omega_i$ es el conjunto de tuberías incidentes al nodo $i$ y $L_{ij}$ la
+longitud de la tubería que une los nodos $i$ y $j$. La demanda del nodo se obtiene
+repartiendo el caudal máximo diario en proporción a esa longitud:
+\[
+q_i \;=\; Q_{MD} \cdot \frac{L_i}{\sum_k L_k}
+\]
+donde el denominador $\sum_k L_k$ es la suma de las longitudes aferentes de los
+nodos de consumo. En un nodo fuente (reservorio o tanque) no hay consumo, así
+que su longitud aferente no entra en el reparto: la semi-longitud del tramo que
+sale de la fuente se distribuye entre los nodos de consumo aguas abajo. De este
+modo el reparto conserva el caudal de diseño,
+\[
+\sum_i q_i \;=\; Q_{MD}
+\]
+y la red queda cargada con la totalidad del caudal máximo diario.
+\BLOCK{if red.q_asignado}
+En esta red se reparten \VAR{red.q_asignado} L/s entre \VAR{red.n_nodos} nodos
+de consumo.
+\BLOCK{endif}
+
+El caudal repartido es el máximo diario, $Q_{MD} = \VAR{qmd}$~L/s
+(Art. 47, Res. 0330 de 2017), que es la condición de diseño de la red.
+
+\subsection{Demandas resultantes por nodo}
+La Tabla~\ref{tab:demandas} lista la demanda asignada a cada uno de los
+\VAR{red.n_nodos} nodos. Se presenta en tres columnas por página para reducir la
+extensión; el encabezado se repite en cada página.
+
+\#{ `longtable` ya se centra solo; `center` solo agregaría espacio espurio. }
+{\small
+\begin{longtable}{lr@{\hskip 2em}lr@{\hskip 2em}lr}
+\caption{Demandas asignadas por nodo (método de longitud aferente).}
+\label{tab:demandas}\\
+\toprule
+Nodo & $q$ [L/s] & Nodo & $q$ [L/s] & Nodo & $q$ [L/s] \\ \midrule
+\endfirsthead
+\multicolumn{6}{c}{\tablename\ \thetable{} — continuación de la página anterior}\\
+\toprule
+Nodo & $q$ [L/s] & Nodo & $q$ [L/s] & Nodo & $q$ [L/s] \\ \midrule
+\endhead
+\midrule \multicolumn{6}{r}{\footnotesize continúa en la página siguiente}\\
+\endfoot
+\bottomrule
+\endlastfoot
+\#{ batch(3) agrupa la lista de demandas de a 3 por fila. Se hace aquí y no en
+    report_ctx para no añadir una clave más al contexto: si esa clave faltara,
+    Jinja saltaría el bucle EN SILENCIO y la tabla desaparecería del informe sin
+    aviso — verificado. }
+\BLOCK{for fila in red.demandas|batch(3)}
+\VAR{fila[0].nodo} & \VAR{fila[0].q}
+\BLOCK{if fila|length > 1} & \VAR{fila[1].nodo} & \VAR{fila[1].q}\BLOCK{else} & & \BLOCK{endif}
+\BLOCK{if fila|length > 2} & \VAR{fila[2].nodo} & \VAR{fila[2].q}\BLOCK{else} & & \BLOCK{endif}
+\\
 \BLOCK{endfor}
-\bottomrule\end{tabular}\end{table}
+\end{longtable}
+}
 \BLOCK{if red.optimizacion}
 Optimización de diámetros con catálogo \VAR{red.optimizacion.material}
 \VAR{red.optimizacion.serie}:
@@ -304,10 +474,51 @@ El sistema de bombeo \VAR{s.nombre} requiere un equipo de \VAR{s.potencia_hp} HP
 para \VAR{s.qb} L/s con altura dinámica de \VAR{s.hd} m.
 \BLOCK{endfor}
 
+\section{Acerca de ACUCALC}
+\label{sec:acerca}
+Esta memoria fue generada con \textbf{ACUCALC}, una aplicación de
+predimensionamiento hidráulico de sistemas de acueducto desarrollada por
+\textbf{\VAR{autor}} conforme a la metodología de la Resolución 0330 de 2017
+(Ref.~\ref{ref:res0330}).
+
+\subsection{Qué hace la aplicación}
+\begin{itemize}
+  \item Proyecta la población de diseño a partir de la serie del DANE
+    (Ref.~\ref{ref:dane}) por los métodos aritmético, geométrico, exponencial y
+    de Wappaus, y compara sus desviaciones.
+  \item Determina dotación neta y bruta, y los caudales de diseño
+    $Q_{med}$, $QMD$ y $QMH$ con los coeficientes de mayoración del Art.~47.
+  \item Calcula el volumen de almacenamiento por el criterio del Art.~81 y por
+    curva integral, incluyendo la afectación por incendio, y predimensiona la
+    geometría de cada tanque.
+  \item Dimensiona sistemas de bombeo (pérdidas por tramo, altura dinámica,
+    potencia), verifica el golpe de ariete por Joukowsky y digitaliza curvas de
+    bomba de catálogo para hallar el punto de operación.
+  \item Asigna demandas a una red de EPANET por longitud aferente
+    (Sección~\ref{sec:aferente}) y exporta el archivo \texttt{.inp}.
+\end{itemize}
+
+\subsection{Qué NO hace, y limitaciones conocidas}
+\begin{itemize}
+  \item \textbf{El solver hidráulico de red propio no converge de forma
+    confiable en redes grandes} (del orden de cientos de nodos): agota sus
+    iteraciones sin resolver la continuidad. Por eso \textbf{esta memoria no
+    reporta presiones ni velocidades de la red}, y la optimización de diámetros
+    queda fuera del informe: se ofrece solo como herramienta exploratoria dentro
+    de la aplicación. \textbf{La verificación hidráulica de la red debe hacerse
+    en EPANET} con el archivo \texttt{.inp} exportado.
+  \item No realiza simulación de periodo extendido: el reparto de caudales de
+    esta memoria corresponde a la condición estática de caudal máximo diario.
+  \item No hace análisis de calidad del agua, ni diseño estructural o
+    geotécnico, ni análisis de transitorios más allá de la estimación de
+    Joukowsky.
+\end{itemize}
+
 \section{Recomendaciones y limitaciones}
 Este documento es una memoria de predimensionamiento generada de forma
-automatizada a partir de la metodología de la Resolución 0330 de 2017 y de los
-datos suministrados por el usuario. En consecuencia:
+automatizada a partir de la metodología de la Resolución 0330 de 2017
+(Ref.~\ref{ref:res0330}) y de los datos suministrados por el usuario. En
+consecuencia:
 \begin{itemize}
   \item \textbf{Toda la información contenida en este informe, así como en la
     aplicación ACUCALC y su código fuente, debe ser revisada, verificada y
@@ -350,9 +561,14 @@ Sistemas de bombeo.
 \BLOCK{endif}
 
 \section{Referencias}
+% Cada entrada lleva \label{ref:<key>}, así el texto la cita con \ref{} y queda
+% un hipervínculo real (hyperref) en vez de una mención en prosa suelta.
 \begin{enumerate}
 \BLOCK{for ref in referencias}
-  \item \VAR{ref.cita}
+  \item \label{ref:\VAR{ref.key}} \VAR{ref.cita}
+\BLOCK{if ref.url}
+  Disponible en: \url{\VAR{ref.url}}
+\BLOCK{endif}
 \BLOCK{endfor}
 \end{enumerate}
 

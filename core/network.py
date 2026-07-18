@@ -232,19 +232,30 @@ def write_inp_pump_curves(text: str, curvas: dict) -> str:
 
 
 def assign_demands_by_length(net_: Network, qmd_lps: float) -> dict:
-    """Demanda por nodo = QMD · (Σ semi-longitudes de tuberías incidentes al
-    nodo / Σ longitudes totales) — método de longitud aferente. Solo se
-    asigna a nodos [JUNCTIONS]; la fracción aferente de un nodo fuente
-    (reservorio/tanque) no se reparte, la sirve la fuente directamente."""
-    total = sum(p.length for p in net_.pipes)
-    if total <= 0:
+    """Demanda por nodo = QMD · (L_i / Σ L_k), con L_i la longitud aferente del
+    nodo (Σ semi-longitudes de las tuberías incidentes) — método de longitud
+    aferente. Solo se asigna a nodos [JUNCTIONS]: en una fuente
+    (reservorio/tanque) no hay consumo.
+
+    El denominador es la suma de las longitudes aferentes de los NODOS, no la
+    longitud total de la red, de modo que Σ q_i = QMD exacto. Antes se dividía
+    por la longitud total: como la semi-longitud adyacente a cada fuente no se
+    le asigna a nadie, esa fracción del caudal de diseño se perdía y la red
+    quedaba sub-cargada (medido en una red real de 478 nodos y 6 fuentes: 0.38 %
+    del QMD sin asignar). Repartir el 100 % del QMD entre los nodos de consumo
+    es el criterio adoptado."""
+    if sum(p.length for p in net_.pipes) <= 0:
         raise ValueError("La red no tiene tuberías con longitud")
     aferente = {jid: 0.0 for jid in net_.junctions}
     for p in net_.pipes:
         for nid in (p.node1, p.node2):
             if nid in aferente:
                 aferente[nid] += p.length / 2.0
-    return {jid: qmd_lps * a / total for jid, a in aferente.items()}
+    total_aferente = sum(aferente.values())
+    if total_aferente <= 0:
+        raise ValueError("Ningún nodo de consumo toca una tubería: no hay "
+                         "longitud aferente entre la cual repartir el caudal")
+    return {jid: qmd_lps * a / total_aferente for jid, a in aferente.items()}
 
 
 @dataclass

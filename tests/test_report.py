@@ -97,6 +97,84 @@ def test_render_tex_con_red(tmp_path):
     assert "Red de distribución" in tex and "J1" in tex and "63" in tex
 
 
+def test_demandas_van_en_longtable_de_3_columnas(tmp_path):
+    """La tabla de demandas tiene una fila por nodo (cientos en una red real).
+    Como `tabular` dentro de `table[H]` no se partía entre páginas y LaTeX la
+    desbordaba ("Float too large"). Debe ser `longtable` (se parte, repite
+    encabezado) y agruparse de a 3 nodos por fila."""
+    ctx_con_red = dict(CTX)
+    ctx_con_red["red"] = {
+        "n_nodos": 7, "n_tuberias": 6,
+        "demandas": [{"nodo": f"N{i}", "q": f"{i}.00"} for i in range(7)],
+        "optimizacion": None,
+    }
+    tex = (report.render(ctx_con_red, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    assert r"\begin{longtable}" in tex
+    assert r"\endhead" in tex                    # encabezado repetido por página
+    assert r"\begin{table}[H]" not in tex.split("Demandas asignadas")[1][:200]
+    # 7 nodos agrupados de a 3 → 3 filas (la última con un solo nodo)
+    cuerpo = tex.split(r"\endlastfoot")[1].split(r"\end{longtable}")[0]
+    assert cuerpo.count(r"\\") == 3
+    for i in range(7):                            # ningún nodo se pierde al agrupar
+        assert f"N{i}" in cuerpo
+
+
+def test_seccion_red_explica_la_longitud_aferente(tmp_path):
+    """El informe debe explicar CÓMO se reparte el caudal, no solo volcar la
+    tabla: es lo que el lector necesita para entender qué se hizo."""
+    ctx_con_red = dict(CTX)
+    ctx_con_red["red"] = {"n_nodos": 1, "n_tuberias": 1,
+                          "demandas": [{"nodo": "N1", "q": "1.00"}],
+                          "optimizacion": None}
+    tex = (report.render(ctx_con_red, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    assert r"L_i \;=\; \frac{1}{2} \sum_{j \in \Omega_i} L_{ij}" in tex
+    assert "longitud aferente" in tex
+
+
+def test_referencias_llevan_label_y_url_va_en_url_macro(tmp_path):
+    """Las referencias necesitan \\label para que el texto las cite con \\ref.
+    La URL va en \\url{} aparte: dentro del texto corrido no parte y se salía
+    del margen (medido: 154 pt de Overfull)."""
+    ctx = dict(CTX)
+    ctx["referencias"] = [
+        {"key": "res0330", "cita": "Resolución 0330 de 2017, MVCT."},
+        {"key": "dane", "cita": "DANE. Proyecciones de población.",
+         "url": "https://www.dane.gov.co/index.php/estadisticas-por-tema"},
+    ]
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    assert r"\label{ref:res0330}" in tex
+    assert r"\label{ref:dane}" in tex
+    assert r"\url{https://www.dane.gov.co/index.php/estadisticas-por-tema}" in tex
+    # sin `url`, no debe emitirse un \url{} vacío
+    assert r"\url{}" not in tex
+
+
+def test_patron_horario_se_documenta_en_el_informe(tmp_path):
+    """El patrón gobierna el volumen del tanque; si no se documenta, el lector
+    no puede reproducir el cálculo."""
+    ctx = dict(CTX)
+    ctx["patron_horas"] = [{"hora": f"{h:02d}", "factor": "1.00", "suministro": "sí"}
+                           for h in range(24)]
+    ctx["patron_pico"], ctx["patron_valle"], ctx["patron_suma"] = "1.60", "0.60", "24.00"
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    assert "Patrón horario de consumo adoptado" in tex
+    assert r"\label{tab:patron}" in tex
+    assert "1.60" in tex and "24.00" in tex
+
+
+def test_sin_patron_no_aparece_la_seccion(tmp_path):
+    """CTX base no trae patron_horas: la sección no debe emitirse vacía."""
+    tex = (report.render(dict(CTX), tmp_path) / "main.tex").read_text(encoding="utf-8")
+    assert "Patrón horario de consumo adoptado" not in tex
+
+
+def test_indices_en_paginas_separadas(tmp_path):
+    tex = (report.render(dict(CTX), tmp_path) / "main.tex").read_text(encoding="utf-8")
+    orden = tex.split(r"\tableofcontents")[1].split(r"\section{")[0]
+    assert orden.count(r"\clearpage") == 3      # tras TOC, tras LOF y tras LOT
+    assert orden.index(r"\listoffigures") < orden.index(r"\listoftables")
+
+
 def test_render_tex_sin_anexos_curvas_omite_seccion(tmp_path):
     """CTX no trae 'anexos_curvas' (ctx.get / Undefined jinja) — la sección
     de anexo de curvas no debe aparecer."""

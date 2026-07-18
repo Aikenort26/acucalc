@@ -17,23 +17,52 @@ K_ELAST_MANUAL = {"PVC": 18.0, "PVC-O": 13.5, "PVC biaxial": 15.5, "PEAD": 111.1
                   "HD": 1.0, "Acero comercial": 0.5, "GRP": 8.3, "Concreto": 5.0,
                   "Hierro galvanizado": 1.0}
 
+# Autor de la aplicación ACUCALC (distinto del `consultor` del proyecto, que es
+# quien firma cada memoria). Va a la sección "Acerca de ACUCALC" del informe.
+AUTOR_APP = "Aiken H. Ortega-Heredia"
+
+# Un patrón horario de consumo (y su ventana de suministro) debe traer las 24
+# horas del día: `core/storage.volume_curva_integral` lo exige y las figuras lo
+# asumen.
+HORAS_DIA = 24
+
+# Referencias del informe. `key` alimenta el \label{ref:<key>} de la lista, de
+# modo que el texto puede citarlas con referencia cruzada real (ver la macro
+# \citaref en la plantilla) en vez de nombrarlas en prosa suelta.
 REFERENCIAS = [
-    {"cita": "Ministerio de Vivienda, Ciudad y Territorio. Resolución 0330 de 2017, "
+    {"key": "res0330",
+     "cita": "Ministerio de Vivienda, Ciudad y Territorio. Resolución 0330 de 2017, "
              "\"Por la cual se adopta el Reglamento Técnico para el Sector de Agua "
-             "Potable y Saneamiento Básico — RAS\"."},
-    {"cita": "Ministerio de Vivienda, Ciudad y Territorio. Resolución 0844 de 2018, "
+             "Potable y Saneamiento Básico — RAS\". Bogotá, Colombia."},
+    {"key": "res0844",
+     "cita": "Ministerio de Vivienda, Ciudad y Territorio. Resolución 0844 de 2018, "
              "por la cual se establecen esquemas diferenciales de dotación para "
-             "zonas rurales."},
-    {"cita": "Presidencia de la República. Decreto 1575 de 2007, por el cual se "
+             "zonas rurales. Bogotá, Colombia."},
+    {"key": "dec1575",
+     "cita": "Presidencia de la República. Decreto 1575 de 2007, por el cual se "
              "establece el Sistema para la Protección y Control de la Calidad del "
-             "Agua para Consumo Humano."},
-    {"cita": "Asociación Colombiana de Ingeniería Sísmica. Reglamento Colombiano de "
+             "Agua para Consumo Humano. Bogotá, Colombia."},
+    {"key": "nsr10j",
+     "cita": "Asociación Colombiana de Ingeniería Sísmica. Reglamento Colombiano de "
              "Construcción Sismo Resistente NSR-10, Título J — Requisitos de "
-             "Protección contra Incendios en Edificaciones."},
-    {"cita": "Corte Constitucional de Colombia. Sentencia T-740 de 2011 (mínimo "
+             "Protección contra Incendios en Edificaciones. Bogotá, Colombia, 2010."},
+    {"key": "t740",
+     "cita": "Corte Constitucional de Colombia. Sentencia T-740 de 2011 (mínimo "
              "vital de agua potable)."},
-    {"cita": "Comisión de Regulación de Agua Potable y Saneamiento Básico (CRA). "
+    {"key": "cra750",
+     "cita": "Comisión de Regulación de Agua Potable y Saneamiento Básico (CRA). "
              "Resolución CRA 750 de 2016, metodología tarifaria — consumo básico."},
+    # Fuente de la serie de población. Es el insumo del que sale toda la
+    # proyección, así que se cita explícitamente con su título oficial.
+    # `url` va aparte de `cita` porque la plantilla lo envuelve en \url{}: una
+    # URL larga dentro del texto corrido no parte y se sale del margen.
+    {"key": "dane",
+     "cita": "Departamento Administrativo Nacional de Estadística (DANE). "
+             "\"Proyecciones y retroproyecciones de población municipal para el "
+             "periodo 1985-2017 y 2018-2042 con base en el CNPV 2018\". Bogotá, "
+             "Colombia.",
+     "url": "https://www.dane.gov.co/index.php/estadisticas-por-tema/"
+            "demografia-y-poblacion/proyecciones-de-poblacion"},
 ]
 
 _LATEX_MAP = [
@@ -96,8 +125,19 @@ def build(p: Project) -> tuple[dict, dict]:
     alm = p.almacenamiento
     a = storage.volume_art81(qmd_m3d, alm.frac_regulacion, alm.frac_incendio,
                              alm.dias_reserva)
+
+    # Un patrón horario solo es utilizable si trae las 24 horas: `storage` lo
+    # exige y las figuras lo asumen. Se valida UNA vez y "patrón inválido" pasa
+    # a ser equivalente a "sin patrón" en todo el reporte — volumen, figura y
+    # tabla. Antes solo se atrapaba el ValueError del volumen, y un patrón de
+    # otra longitud (un JSON viejo o editado a mano) reventaba más adelante en
+    # `fig_balance_train` con un error de matplotlib incomprensible
+    # ("x and y must have same first dimension").
+    patron_ok = len(alm.factores_hora) == HORAS_DIA
+    suministro_ok = len(alm.suministro_hora) == HORAS_DIA
+
     b = None
-    if alm.factores_hora and alm.suministro_hora:
+    if patron_ok and suministro_ok:
         try:
             b = storage.volume_curva_integral(qmd_m3d, alm.factores_hora,
                                               alm.suministro_hora, alm.frac_incendio,
@@ -107,6 +147,23 @@ def build(p: Project) -> tuple[dict, dict]:
     v_final = storage.final_volume(a, b) if b else a.v_total_redondeado
     gobierna = ("Art. 81 (QMD/3)" if not b or a.v_total_redondeado >= b.v_total_redondeado
                 else "Curva integral")
+
+    # ---------- patrón horario de consumo (documentación en el informe) ----------
+    patron_horas: list = []
+    patron_pico = patron_valle = patron_suma = None
+    if patron_ok:
+        patron_horas = [
+            {"hora": f"{h:02d}",
+             "factor": f"{f:.2f}",
+             # 1/0 de la ventana de suministro de la comunidad, si está definida
+             "suministro": ("sí" if alm.suministro_hora[h] else "no")
+                           if suministro_ok else "—"}
+            for h, f in enumerate(alm.factores_hora)]
+        patron_pico = f"{max(alm.factores_hora):.2f}"
+        patron_valle = f"{min(alm.factores_hora):.2f}"
+        # La media de los 24 factores debe rondar 1.0 (= QMD), así que su suma
+        # ronda 24; se reporta para que el lector verifique la normalización.
+        patron_suma = f"{sum(alm.factores_hora):.2f}"
 
     # verificación de balance interno por tanque (suministro=entrada, salida=salida)
     tanques_balance = []
@@ -140,7 +197,10 @@ def build(p: Project) -> tuple[dict, dict]:
     _save(rf.fig_metodos(proj.deviations, pop.suggest_method(proj)), "metodos")
     _save(rf.fig_caudales([(t, fr.qmed_lps, fr.qmd_lps, fr.qmh_lps)
                            for t, fr in serie_q]), "caudales")
-    if alm.factores_hora and alm.suministro_hora:
+    # Mismo guard de 24 horas que el volumen y la tabla del patrón: la figura
+    # grafica los factores contra un eje de 24 horas y con otra longitud
+    # reventaba el build entero.
+    if patron_ok and suministro_ok:
         _save(rf.fig_balance_train([("Comunidad", alm.suministro_hora, alm.factores_hora)]),
               "balance")
     sistemas_bomba_ctx = ([{"tipo_bomba": s.tipo_bomba} for s in p.bombeos]
@@ -293,10 +353,17 @@ def build(p: Project) -> tuple[dict, dict]:
             demandas = network.assign_demands_by_length(red, flows.qmd_lps)
             for jid, q in demandas.items():
                 red.junctions[jid].demand = q
+            # El reparto conserva el QMD (Σ q_i = QMD); se reporta el total
+            # asignado para que el lector lo verifique contra el QMD del informe.
+            q_asignado = sum(demandas.values())
             red_ctx = {
                 "n_nodos": len(red.junctions), "n_tuberias": len(red.pipes),
+                # La plantilla la agrupa de a 3 por fila con el filtro `batch`
+                # de Jinja y la imprime en un `longtable`: una fila por nodo
+                # generaba una tabla de cientos de filas en una red real.
                 "demandas": [{"nodo": latex_escape(jid), "q": fm.fmt_q(q)}
-                            for jid, q in demandas.items()],
+                             for jid, q in demandas.items()],
+                "q_asignado": fm.fmt_q(q_asignado),
                 "optimizacion": None,
             }
             # La optimización de diámetros (heurística iterativa, hasta 30
@@ -321,9 +388,14 @@ def build(p: Project) -> tuple[dict, dict]:
         "pob_final": f"{pob_final:,.0f}", "horizonte": cfg.horizon_year,
         "pob_tipo": ("cabecera municipal" if cfg.tipo == "municipio"
                      else "corregimiento/vereda"),
-        "pob_fuente": (f"proyecciones oficiales DANE — {cfg.mpio} ({cfg.dpto}), "
-                       f"área {cfg.area}, serie {p.censo[0][0]}–{p.censo[-1][0]}"
+        "pob_fuente": (f"{latex_escape(cfg.mpio)} ({latex_escape(cfg.dpto)}), "
+                       f"área {latex_escape(cfg.area)}, "
+                       f"serie {p.censo[0][0]}–{p.censo[-1][0]}"
                        if cfg.fuente == "dane" else "censo ingresado manualmente"),
+        # Distingue la fuente para que la plantilla cite el título oficial del
+        # DANE (con su referencia cruzada) solo cuando la serie sea realmente
+        # del DANE, y no cuando el censo se haya tecleado a mano.
+        "pob_es_dane": cfg.fuente == "dane",
         "year0": cfg.year0,
         "flotante_pct": f"{cfg.flotante_pct * 100:.0f}" if cfg.flotante_pct else "",
         "dneta": f"{p.demanda.dneta:.0f}", "dneta_modo": p.demanda.modo,
@@ -345,12 +417,23 @@ def build(p: Project) -> tuple[dict, dict]:
         "v_final": v_final,
         "riesgo_nivel": latex_escape((alm.nivel_riesgo or "personalizado").capitalize()),
         "riesgo_pct": f"{alm.frac_incendio * 100:.0f}",
+        # Patrón horario de consumo y ventana de suministro: gobiernan el volumen
+        # de regulación por curva integral y, más adelante, la demanda en
+        # simulación de periodo extendido. Antes se usaban para calcular pero
+        # nunca se documentaban, así que el lector no podía reproducir el
+        # dimensionamiento del tanque.
+        "patron_horas": patron_horas,
+        "patron_pico": patron_pico,
+        "patron_valle": patron_valle,
+        "patron_suma": patron_suma,
         "tanques": tanques_ctx,
         "sistemas": sistemas_ctx,
         "figuras": figuras,
         "logo_cliente": logo_cliente,
         "logo_consultor": logo_consultor,
         "referencias": REFERENCIAS,
+        # Autoría de la aplicación (no del proyecto: eso es `consultor`).
+        "autor": AUTOR_APP,
         "red": red_ctx,
         "anexos_curvas": anexos_curvas,
     }
