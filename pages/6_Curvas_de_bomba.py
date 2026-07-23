@@ -213,6 +213,24 @@ def _estado_cal(c: dict) -> str:
            or "sin calibrar")
 
 
+def _reset_tabla_puntos(key: str) -> None:
+    """Invalida la semilla de un `data_editor` de puntos (`editor_seed`,
+    `pages_common.py`) para que en el próximo rerun se resiembre desde el
+    modelo (`bomba.puntos_qh`/`puntos_qe`).
+
+    `editor_seed` siembra UNA sola vez y nunca se resincroniza sola —
+    correcto para lo que edita el propio usuario en la tabla (WP-A), pero
+    esta página escribe `bomba.puntos_qh`/`puntos_qe` desde VARIOS sitios
+    además de la tabla (click de calibración, autodetección por color,
+    importar CSV): sin invalidar la semilla tras cada uno de esos escritos,
+    la tabla en el siguiente rerun devuelve su copia vieja sin los puntos
+    nuevos y esa copia vieja SOBREESCRIBE lo que se acababa de agregar —
+    "los puntos no se acumulan". Llamar esto después de cualquier escritura
+    a `bomba.puntos_qh`/`puntos_qe` que no venga del propio editor."""
+    st.session_state.pop(key, None)
+    st.session_state.pop(f"{WIDGET_PREFIX}seed_{key}", None)
+
+
 # WP-5: todo el bloque de calibración/captura vive en un `st.fragment` — un
 # click de digitalización (o cualquier widget de este bloque) solo vuelve a
 # ejecutar ESTE bloque, no la página entera (evita rehacer fit_curve +
@@ -221,34 +239,16 @@ def _estado_cal(c: dict) -> str:
 @st.fragment
 def _bloque_calibracion():
     st.subheader("Calibración y captura de puntos")
-    st.caption("1) Elige el modo · 2) haz click en la imagen · 3) afina el punto en el "
-               "panel de zoom (±1 px) · 4) se confirma solo tras ~1s sin tocarlo (o pulsa "
-               "✔ para confirmar de inmediato). Los puntos confirmados quedan "
-               "marcados sobre la imagen. El eje X (Q) se calibra una sola vez y se "
-               "comparte entre Q-H y Q-η; Y se calibra por separado en cada curva "
-               "(escalas distintas). Enter físico avanza de Q-H a Q-η en modo 'lupa "
-               "en tiempo real'; en modo clásico usa el botón ⏎ equivalente.")
-    if f"modo_next_{BK}" in st.session_state:      # auto-avance tras confirmar / Enter
+    st.caption("1) Elige el modo · 2) haz click en la imagen — el punto queda "
+               "fijado al instante, sin paso de confirmación. El eje X (Q) se "
+               "calibra una sola vez y se comparte entre Q-H y Q-η; Y se calibra "
+               "por separado en cada curva (escalas distintas). Enter físico "
+               "avanza de Q-H a Q-η en modo 'lupa en tiempo real'; en modo "
+               "clásico usa el botón ⏎ equivalente.")
+    if f"modo_next_{BK}" in st.session_state:      # auto-avance tras fijar / Enter
         st.session_state[f"w_radio_modo_{BK}"] = st.session_state.pop(f"modo_next_{BK}")
 
-    # Layout de una sola pantalla, intento 2. El anterior (WP-B3) seguía sin
-    # caber: apilaba TODO en la columna angosta — modo, ejes, unidad, clásico,
-    # zoom, nudge, confirmar, estado, reiniciar, autodetección, enter — mucho
-    # más alto que la imagen, así que había que bajar para llegar a los
-    # botones de ajuste del punto (reportado por el usuario con captura:
-    # espacio vacío a la izquierda bajo la imagen, scroll obligatorio a la
-    # derecha para "fijar"/confirmar).
-    #
-    # Ahora: una fila superior angosta (modo + ejes/unidad/clásico) antes de
-    # partir en columnas — es lo único que hace falta ver ANTES de hacer
-    # click. Las columnas quedan con la imagen (izquierda) y SOLO zoom +
-    # nudge + confirmar/fijar (derecha) — el ciclo que se repite en cada
-    # punto y el único que de verdad necesita estar siempre a la vista sin
-    # scroll. Todo lo demás (autodetección, reiniciar, estado de calibración,
-    # enter) baja a una fila a todo lo ancho DEBAJO de las columnas, usando
-    # el espacio que antes quedaba vacío bajo la imagen.
-    modo = st.radio("Modo de click (avanza solo al confirmar)", ETAPAS,
-                    horizontal=True, key=f"w_radio_modo_{BK}")
+    modo = st.radio("Modo de click", ETAPAS, horizontal=True, key=f"w_radio_modo_{BK}")
     destino = _modo_destino(modo)
     curva = _curva_activa(modo)
     oc1, oc2, oc3, oc4 = st.columns([1, 1, 2, 2])
@@ -259,205 +259,183 @@ def _bloque_calibracion():
                            value=not DIGITIZER_OK, disabled=not DIGITIZER_OK,
                            key=f"w_chk_clasico_{BK}")
 
-    col_img, col_ctrl = st.columns([3, 2])
+    # El valor real del eje se fija ANTES del click (un único click ya
+    # calibra) — hay que poder leerlo en cuanto llega el click, así que el
+    # widget se renderiza en esta fila superior, no después de hacer click.
+    val_eje = None
+    if modo.startswith("Calibrar"):
+        eje_actual = modo.split()[1]
+        val_eje = num_input(f"Valor real en {eje_actual}",
+                            f"val_{eje_actual}_{destino}_{BK}", 0.0, decimals=3)
 
     cal_all = pj.migrate_pump_cal_v7(bomba.cal)   # {"x": {...}, "qh": {...}, "qe": {...}}
     bomba.cal = cal_all
     cal_x = cal_all["x"]                       # calibración X (compartida)
     cal_y = cal_all[curva]                     # calibración Y de la curva activa
     cal_merged = {**cal_x, **cal_y}            # para overlay / markers / pixel_to_data
-    pend_key = f"pend_{BK}"
-    pend = st.session_state.get(pend_key)
+    tabla_key = f"w_{curva}_{BK}"
+    calman_key = f"w_calman_{curva}_{BK}"
 
-    with col_img:
-        if not clasico:
-            marks_cal = []
-            for eje, v in cal_merged.items():
-                if eje.startswith("X"):
-                    marks_cal.append({"x": v["px"], "y": v.get("py", img.height - 20),
-                                      "label": eje})
-                else:
-                    marks_cal.append({"x": v.get("px_x", 20), "y": v["px"],
-                                      "label": eje})
-            markers = {"cal": marks_cal,
-                       "qh": st.session_state.get(f"qh_px_{BK}", []),
-                       "qe": st.session_state.get(f"qe_px_{BK}", []),
-                       "pending": [pend["x"], pend["y"]] if pend else None}
-            # WP-5: sin st.rerun() explícito aquí — setValue() del componente
-            # (index.html) ya dispara un rerun de Streamlit al cambiar su
-            # valor; un segundo st.rerun() duplicaba el costo de cada click
-            # (doble ciclo de render completo por punto capturado).
-            click = digitizer(bomba.imagen_b64, markers, key=f"dg_{BK}")
-            if click:
-                n = click.get("n")
-                if click.get("enterPressed"):
-                    if n != st.session_state.get(f"last_enter_{BK}"):
-                        st.session_state[f"last_enter_{BK}"] = n
-                        siguiente = _ENTER_ADVANCE.get(modo)
-                        if siguiente:
-                            st.session_state[f"modo_next_{BK}"] = siguiente
-                elif n != st.session_state.get(f"last_click_{BK}"):
-                    st.session_state[f"last_click_{BK}"] = n
-                    st.session_state[pend_key] = {"x": int(click["x"]), "y": int(click["y"])}
-                    if click.get("autoConfirm"):
-                        # El punto recién llegado se confirma solo, en cuanto
-                        # `pend` esté disponible más abajo (esta misma
-                        # ejecución si ya lo estaba, o la siguiente — mismo
-                        # patrón que ya usa el resto del click handling, que
-                        # no fuerza un rerun extra porque setValue() ya lo hace).
-                        st.session_state[f"do_autoconfirm_{BK}"] = True
-        else:
-            shown = _overlay(img, cal_merged, pend)
-            # Altura fija (ítem 8, modo clásico): a diferencia del componente
-            # JS, streamlit_image_coordinates muestra la imagen a resolución
-            # nativa (sin CSS que la escale) — un PDF vertical de alta
-            # resolución revienta la altura del iframe igual que en modo
-            # lupa. Se reescala aquí a la misma altura máxima y las
-            # coordenadas de click se reproyectan al espacio de pixel
-            # original antes de guardarlas (cal/puntos siguen en ese
-            # espacio, igual que en el componente).
-            ESCALA_MAX_ALTO = 640
-            factor = min(1.0, ESCALA_MAX_ALTO / shown.height)
-            if factor < 1.0:
-                shown = shown.resize((max(1, round(shown.width * factor)),
-                                      max(1, round(shown.height * factor))))
-            # WP-5: mismo motivo — streamlit_image_coordinates ya reruns al
-            # cambiar su valor devuelto, un st.rerun() extra era redundante.
-            click = streamlit_image_coordinates(shown, key=f"img_{BK}")
-            if click is not None:
-                nuevo_p = {"x": int(round(click["x"] / factor)),
-                          "y": int(round(click["y"] / factor))}
-                if nuevo_p != st.session_state.get(f"last_click_{BK}"):
-                    st.session_state[f"last_click_{BK}"] = nuevo_p
-                    st.session_state[pend_key] = dict(nuevo_p)
-
-    with col_ctrl:
-        st.markdown("**Zoom de precisión**")
-        if pend:
-            # Se consume aquí (no donde se puso la bandera) porque `pend` en
-            # ese punto todavía era el valor de la ejecución anterior — el
-            # mismo desfase de un ciclo que ya asume el resto del click
-            # handling (setValue ya dispara el rerun que lo pone al día).
-            auto_fire = st.session_state.pop(f"do_autoconfirm_{BK}", False)
-            Z, R = 4, 30
-            x0, y0 = max(pend["x"] - R, 0), max(pend["y"] - R, 0)
-            crop = img.crop((x0, y0, min(pend["x"] + R, img.width),
-                             min(pend["y"] + R, img.height)))
-            crop = crop.resize((crop.width * Z, crop.height * Z), Image.NEAREST)
-            dz = ImageDraw.Draw(crop)
-            cx, cy = (pend["x"] - x0) * Z, (pend["y"] - y0) * Z
-            dz.line([(cx, 0), (cx, crop.height)], fill="#FFD400", width=1)
-            dz.line([(0, cy), (crop.width, cy)], fill="#FFD400", width=1)
-            st.image(crop, width="stretch")
-            st.caption(f"pixel ({pend['x']}, {pend['y']})")
-            n1, n2, n3, n4 = st.columns(4)
-            # scope="fragment": pend solo lo lee este fragmento (nada fuera de
-            # _bloque_calibracion toca bomba.cal ni el punto pendiente), así que
-            # un rerun de página completa por cada pixel de ajuste era puro
-            # desperdicio — exactamente el caso que el reviewer detectó sin
-            # arreglar en el primer pase de WP-5.
-            if n1.button("←", key=f"w_l_{BK}"):
-                pend["x"] -= 1; st.rerun(scope="fragment")
-            if n2.button("→", key=f"w_r_{BK}"):
-                pend["x"] += 1; st.rerun(scope="fragment")
-            if n3.button("↑", key=f"w_u_{BK}"):
-                pend["y"] -= 1; st.rerun(scope="fragment")
-            if n4.button("↓", key=f"w_d_{BK}"):
-                pend["y"] += 1; st.rerun(scope="fragment")
-
-            if modo.startswith("Calibrar"):
-                eje = modo.split()[1]
-                val = num_input(f"Valor real en {eje}", f"val_{eje}_{destino}_{BK}", 0.0,
-                                decimals=3)
-                if st.button(f"✔ Fijar {eje}", key=f"w_fix_{eje}_{destino}_{BK}") or auto_fire:
-                    entrada = ({"px": pend["x"], "py": pend["y"]} if eje.startswith("X")
-                              else {"px": pend["y"], "px_x": pend["x"]})
-                    entrada["val"] = val
-                    cal_all[destino][eje] = entrada
-                    bomba.cal = cal_all
-                    st.session_state[pend_key] = None
-                    st.session_state[f"modo_next_{BK}"] = _NEXT_CAL[(destino, eje)]
-                    st.rerun(scope="fragment")
+    def _procesar_click(x: int, y: int) -> None:
+        """Un único click = la acción completa, sin punto pendiente ni paso
+        de confirmación aparte (pedido explícito del usuario: eliminar el
+        "doble click"/corrección manual — clic = fijado)."""
+        if modo.startswith("Calibrar"):
+            eje = modo.split()[1]
+            entrada = ({"px": x, "py": y} if eje.startswith("X")
+                      else {"px": y, "px_x": x})
+            entrada["val"] = val_eje
+            cal_all[destino][eje] = entrada
+            bomba.cal = cal_all
+            _reset_tabla_puntos(calman_key)  # la tabla manual debe reflejar este click
+            st.session_state[f"modo_next_{BK}"] = _NEXT_CAL[(destino, eje)]
+            st.rerun(scope="fragment")
+        elif {"X1", "X2"} <= set(cal_x) and {"Y1", "Y2"} <= set(cal_y):
+            calx = cv.AxisCalibration(cal_x["X1"]["px"], cal_x["X1"]["val"],
+                                      cal_x["X2"]["px"], cal_x["X2"]["val"], log_x)
+            caly = cv.AxisCalibration(cal_y["Y1"]["px"], cal_y["Y1"]["val"],
+                                      cal_y["Y2"]["px"], cal_y["Y2"]["val"], log_y)
+            q, y_dato = cv.pixel_to_data((x, y), calx, caly)
+            q *= FACTOR_Q[unidad_q]
+            if curva == "qh":
+                bomba.puntos_qh.append((round(q, 4), round(y_dato, 4)))
             else:
-                if {"X1", "X2"} <= set(cal_x) and {"Y1", "Y2"} <= set(cal_y):
-                    calx = cv.AxisCalibration(cal_x["X1"]["px"], cal_x["X1"]["val"],
-                                              cal_x["X2"]["px"], cal_x["X2"]["val"], log_x)
-                    caly = cv.AxisCalibration(cal_y["Y1"]["px"], cal_y["Y1"]["val"],
-                                              cal_y["Y2"]["px"], cal_y["Y2"]["val"], log_y)
-                    q, y = cv.pixel_to_data((pend["x"], pend["y"]), calx, caly)
-                    q *= FACTOR_Q[unidad_q]
-                    st.caption(f"→ Q = {fmt_q(q)} L/s · {'H' if curva == 'qh' else 'η'}"
-                               f" = {fmt_h(y) if curva == 'qh' else f'{y:.3f}'}")
-                    if st.button("✔ Confirmar punto", key=f"w_ok_{curva}_{BK}") or auto_fire:
-                        if curva == "qh":
-                            bomba.puntos_qh.append((round(q, 4), round(y, 4)))
-                            st.session_state.setdefault(f"qh_px_{BK}", []).append(
-                                (pend["x"], pend["y"]))
-                        else:
-                            bomba.puntos_qe.append((round(q, 4), round(y, 4)))
-                            st.session_state.setdefault(f"qe_px_{BK}", []).append(
-                                (pend["x"], pend["y"]))
-                        st.session_state[pend_key] = None
-                        st.rerun()
-                else:
-                    st.warning("Calibra X1, X2 (eje compartido) y Y1, Y2 de "
-                              f"{'Q-H' if curva == 'qh' else 'Q-η'} antes de capturar puntos.")
+                bomba.puntos_qe.append((round(q, 4), round(y_dato, 4)))
+            st.session_state.setdefault(f"{curva}_px_{BK}", []).append((x, y))
+            _reset_tabla_puntos(tabla_key)
+            st.rerun(scope="fragment")
         else:
-            st.caption("Haz click en la imagen para ubicar un punto.")
+            st.warning("Calibra X1, X2 (eje compartido) y Y1, Y2 de "
+                      f"{'Q-H' if curva == 'qh' else 'Q-η'} antes de capturar puntos.")
 
-    # Fila a todo lo ancho DEBAJO de las columnas: todo lo que no hace falta
-    # ver mientras se ajusta un punto (estado de calibración, reiniciar,
-    # autodetección, enter). Antes vivía apilado en col_ctrl y era lo que
-    # obligaba a bajar para llegar al zoom/nudge/confirmar de más arriba.
+    if not clasico:
+        marks_cal = []
+        for eje, v in cal_merged.items():
+            if eje.startswith("X"):
+                marks_cal.append({"x": v["px"], "y": v.get("py", img.height - 20),
+                                  "label": eje})
+            else:
+                marks_cal.append({"x": v.get("px_x", 20), "y": v["px"],
+                                  "label": eje})
+        markers = {"cal": marks_cal,
+                   "qh": st.session_state.get(f"qh_px_{BK}", []),
+                   "qe": st.session_state.get(f"qe_px_{BK}", []),
+                   "pending": None}
+        # WP-5: sin st.rerun() explícito aquí — setValue() del componente
+        # (index.html) ya dispara un rerun de Streamlit al cambiar su
+        # valor; un segundo st.rerun() duplicaba el costo de cada click
+        # (doble ciclo de render completo por punto capturado).
+        click = digitizer(bomba.imagen_b64, markers, key=f"dg_{BK}")
+        if click:
+            n = click.get("n")
+            if click.get("enterPressed"):
+                if n != st.session_state.get(f"last_enter_{BK}"):
+                    st.session_state[f"last_enter_{BK}"] = n
+                    siguiente = _ENTER_ADVANCE.get(modo)
+                    if siguiente:
+                        st.session_state[f"modo_next_{BK}"] = siguiente
+                        st.rerun(scope="fragment")
+            elif n != st.session_state.get(f"last_click_{BK}"):
+                st.session_state[f"last_click_{BK}"] = n
+                _procesar_click(int(click["x"]), int(click["y"]))
+    else:
+        shown = _overlay(img, cal_merged, None)
+        # Altura fija (ítem 8, modo clásico): a diferencia del componente
+        # JS, streamlit_image_coordinates muestra la imagen a resolución
+        # nativa (sin CSS que la escale) — un PDF vertical de alta
+        # resolución revienta la altura del iframe igual que en modo
+        # lupa. Se reescala aquí a la misma altura máxima y las
+        # coordenadas de click se reproyectan al espacio de pixel
+        # original antes de guardarlas (cal/puntos siguen en ese
+        # espacio, igual que en el componente).
+        ESCALA_MAX_ALTO = 640
+        factor = min(1.0, ESCALA_MAX_ALTO / shown.height)
+        if factor < 1.0:
+            shown = shown.resize((max(1, round(shown.width * factor)),
+                                  max(1, round(shown.height * factor))))
+        # WP-5: mismo motivo — streamlit_image_coordinates ya reruns al
+        # cambiar su valor devuelto, un st.rerun() extra era redundante.
+        click = streamlit_image_coordinates(shown, key=f"img_{BK}")
+        if click is not None:
+            nuevo_p = {"x": int(round(click["x"] / factor)),
+                      "y": int(round(click["y"] / factor))}
+            if nuevo_p != st.session_state.get(f"last_click_{BK}"):
+                st.session_state[f"last_click_{BK}"] = nuevo_p
+                _procesar_click(nuevo_p["x"], nuevo_p["y"])
+
     st.caption(f"Calibración X (compartida): {_estado_cal(cal_x)} · "
               f"Calibración Y Q-H: {_estado_cal(cal_all['qh'])} · "
               f"Calibración Y Q-η: {_estado_cal(cal_all['qe'])}")
+
+    # ---------- calibración manual (alternativa a hacer click en la imagen) ----------
+    with st.expander("✏️ Calibración manual de X1, X2, Y1, Y2 (px y valor real)"):
+        st.caption("Alternativa a hacer click en la imagen: edita el pixel y el "
+                  "valor real de cada punto de calibración directamente. X1/X2 "
+                  "son compartidos entre Q-H y Q-η; Y1/Y2 son de la curva activa "
+                  f"({'Q-H' if curva == 'qh' else 'Q-η'}).")
+        seed_calman = editor_seed(calman_key, lambda: pd.DataFrame([
+            {"Eje": eje, "px": (cal_x if eje.startswith("X") else cal_y)
+                              .get(eje, {}).get("px", 0),
+             "Valor real": (cal_x if eje.startswith("X") else cal_y)
+                           .get(eje, {}).get("val", 0.0)}
+            for eje in ("X1", "X2", "Y1", "Y2")]))
+        df_calman = st.data_editor(st.session_state[seed_calman], hide_index=True,
+                                   width="stretch", disabled=["Eje"], key=calman_key,
+                                   column_config={"Eje": st.column_config.TextColumn()})
+        editor_commit(seed_calman, df_calman)
+        if st.button("✔ Aplicar calibración manual", key=f"w_calman_btn_{curva}_{BK}"):
+            for _, r in df_calman.iterrows():
+                eje = r["Eje"]
+                px, val = int(round(f_num(r["px"]))), f_num(r["Valor real"])
+                destino_eje = "x" if eje.startswith("X") else curva
+                entrada = ({"px": px, "py": img.height - 20} if eje.startswith("X")
+                          else {"px": px, "px_x": 20})
+                entrada["val"] = val
+                cal_all[destino_eje][eje] = entrada
+            bomba.cal = cal_all
+            st.rerun(scope="fragment")
+
     rb1, rb2 = st.columns(2)
     if rb1.button(f"♻ Reiniciar Y ({'Q-H' if curva == 'qh' else 'Q-η'})",
                  key=f"w_rst_cal_{BK}"):
         cal_all[curva] = {}
         bomba.cal = cal_all
-        st.session_state[pend_key] = None
+        _reset_tabla_puntos(calman_key)
         st.rerun(scope="fragment")
     if rb2.button("♻ Reiniciar X (compartido)", key=f"w_rst_calx_{BK}"):
         cal_all["x"] = {}
         bomba.cal = cal_all
-        st.session_state[pend_key] = None
+        _reset_tabla_puntos(calman_key)
         st.rerun(scope="fragment")
     # WP-6: controles reales de autodetección — antes tolerance=60/
     # n_points=15 estaban fijos en el código y el bbox no se restringía
     # a la región calibrada (recogía ejes/texto/leyenda).
     if {"X1", "X2"} <= set(cal_x) and {"Y1", "Y2"} <= set(cal_y):
         st.markdown("**Autodetección por color**")
-        ad1, ad2 = st.columns(2)
+        ad1, ad2, ad3 = st.columns([1, 1, 1])
         tol = num_input("Distancia de color (tolerancia)", f"auto_tol_{destino}_{BK}",
                         40.0, decimals=0, container=ad1, min_value=10.0, max_value=150.0)
         n_pts = int_input("Nº de puntos (bandas en X, como en automeris)",
                           f"auto_npts_{destino}_{BK}", 20, container=ad2,
                           min_value=5, max_value=100)
-        if pend:
-            color_prev = tuple(int(c) for c in np.array(img)[pend["y"], pend["x"]])
-            st.color_picker("Color muestreado (del punto pendiente)",
-                            value="#%02X%02X%02X" % color_prev,
-                            key=f"auto_color_{destino}_{BK}", disabled=True)
-        else:
-            st.caption("Haz click cerca de la curva (o arrastra en la lupa) para "
-                      "fijar el color de muestra.")
+        # Antes se tomaba del "punto pendiente" (ya no existe, eliminado con
+        # el paso de confirmación) — ahora el color de muestra se elige
+        # directo, sin depender de haber hecho click primero.
+        color_hex = ad3.color_picker("Color de la curva a detectar",
+                                     value="#00E5FF", key=f"auto_color_{destino}_{BK}")
         puntos_existentes = bomba.puntos_qh if curva == "qh" else bomba.puntos_qe
         sobrescribir = (st.checkbox(
             f"Sobrescribir los {len(puntos_existentes)} puntos existentes de "
             f"{'Q-H' if curva == 'qh' else 'Q-η'}", key=f"auto_ow_{curva}_{BK}")
             if puntos_existentes else True)
-        if st.button(f"🪄 Detectar {'Q-H' if curva == 'qh' else 'Q-η'} por color "
-                    "(usa el punto pendiente como muestra)",
-                    key=f"w_auto_{curva}_{BK}", disabled=not pend):
+        if st.button(f"🪄 Detectar {'Q-H' if curva == 'qh' else 'Q-η'} por color",
+                    key=f"w_auto_{curva}_{BK}"):
             if not sobrescribir:
                 st.warning("Marca la casilla de sobrescritura para reemplazar los "
-                          "puntos existentes con la detección automática — no se "
-                          "pisan puntos ya capturados sin confirmar.")
+                          "puntos existentes con la detección automática.")
             else:
                 arr = np.array(img)
-                color = tuple(int(c) for c in arr[pend["y"], pend["x"]])
+                color = tuple(int(color_hex[i:i + 2], 16) for i in (1, 3, 5))
                 # bbox = rectángulo calibrado (X1..X2 · Y1..Y2 de la curva
                 # activa) con margen — fija sola la búsqueda a la zona de la
                 # gráfica, sin que el usuario tenga que dibujarlo a mano.
@@ -482,7 +460,7 @@ def _bloque_calibracion():
                 else:
                     bomba.puntos_qe = pts_data
                     st.session_state[f"qe_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
-                st.session_state[pend_key] = None
+                _reset_tabla_puntos(tabla_key)
                 st.rerun()
     _siguiente_enter = _ENTER_ADVANCE.get(modo)
     if st.button("⏎ Enter — pasar a Q-η" if _siguiente_enter
@@ -513,6 +491,7 @@ with st.expander("📥 Importar puntos desde CSV"):
                 df_imp = df_imp.iloc[1:]
             nuevos = [(float(r[0]), float(r[1])) for _, r in df_imp.iterrows()]
             bomba.puntos_qh = sorted(set(bomba.puntos_qh) | set(nuevos))
+            _reset_tabla_puntos(f"w_qh_{BK}")
             st.success(f"{len(nuevos)} puntos Q-H importados.")
         except Exception as e:
             st.error(f"No se pudo leer el CSV: {e}")
@@ -524,6 +503,7 @@ with st.expander("📥 Importar puntos desde CSV"):
                 df_imp = df_imp.iloc[1:]
             nuevos = [(float(r[0]), float(r[1])) for _, r in df_imp.iterrows()]
             bomba.puntos_qe = sorted(set(bomba.puntos_qe) | set(nuevos))
+            _reset_tabla_puntos(f"w_qe_{BK}")
             st.success(f"{len(nuevos)} puntos Q-η importados.")
         except Exception as e:
             st.error(f"No se pudo leer el CSV: {e}")
@@ -552,15 +532,12 @@ d1, d2 = st.columns(2)
 if d1.button("↩ Deshacer último punto Q-H", key=f"w_undo_qh_{BK}",
              disabled=not bomba.puntos_qh):
     bomba.puntos_qh.pop()
-    # el editor se resiembra del modelo: borra tanto el widget como su semilla
-    st.session_state.pop(f"w_qh_{BK}", None)
-    st.session_state.pop(f"{WIDGET_PREFIX}seed_w_qh_{BK}", None)
+    _reset_tabla_puntos(f"w_qh_{BK}")
     st.rerun()
 if d2.button("↩ Deshacer último punto Q-η", key=f"w_undo_qe_{BK}",
              disabled=not bomba.puntos_qe):
     bomba.puntos_qe.pop()
-    st.session_state.pop(f"w_qe_{BK}", None)
-    st.session_state.pop(f"{WIDGET_PREFIX}seed_w_qe_{BK}", None)
+    _reset_tabla_puntos(f"w_qe_{BK}")
     st.rerun()
 st.caption("Para borrar filas sueltas: selecciona la fila en la tabla y usa el "
            "ícono 🗑 de la barra del editor.")
