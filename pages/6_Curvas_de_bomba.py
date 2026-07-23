@@ -19,6 +19,12 @@ except Exception:
     DIGITIZER_OK = False
 
 try:
+    from components.paste_image import paste_image
+    PASTE_OK = True
+except Exception:
+    PASTE_OK = False
+
+try:
     import pypdfium2 as pdfium
     PDFIUM_OK = True
 except Exception:
@@ -85,8 +91,9 @@ with st.popover("🗑 Eliminar esta bomba"):
         st.rerun()
 
 # ---------- imagen ----------
-up = st.file_uploader("Imagen de la curva (png/jpg/pdf del catálogo)",
-                      type=["png", "jpg", "jpeg", "pdf"], key=f"w_up_{BK}")
+img_up, img_paste = st.columns(2)
+up = img_up.file_uploader("Imagen de la curva (png/jpg/pdf del catálogo, o arrastra el archivo)",
+                          type=["png", "jpg", "jpeg", "pdf"], key=f"w_up_{BK}")
 if up is not None:
     raw = up.getvalue()
     es_pdf = raw[:4] == b"%PDF" or up.name.lower().endswith(".pdf")
@@ -102,8 +109,16 @@ if up is not None:
                 st.error(f"No se pudo renderizar el PDF: {e}")
     else:
         bomba.imagen_b64 = base64.b64encode(raw).decode()
+if PASTE_OK:
+    with img_paste:
+        pasted = paste_image(key=f"w_paste_{BK}")
+        if pasted and pasted.get("n") != st.session_state.get(f"last_paste_{BK}"):
+            st.session_state[f"last_paste_{BK}"] = pasted["n"]
+            bomba.imagen_b64 = pasted["b64"]
+            st.rerun()
 if not bomba.imagen_b64:
-    st.info("Sube la imagen del catálogo, o ingresa los puntos Q-H / Q-η a mano abajo.")
+    st.info("Sube la imagen del catálogo, arrastra el archivo, o pega (Ctrl+V) una "
+            "captura de pantalla — o ingresa los puntos Q-H / Q-η a mano abajo.")
 @st.cache_data(show_spinner=False)
 def _decode_imagen(imagen_b64: str) -> Image.Image:
     """Decodifica base64→PIL RGB, cacheado por el hash del propio string b64
