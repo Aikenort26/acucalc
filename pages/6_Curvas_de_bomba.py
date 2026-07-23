@@ -214,29 +214,35 @@ def _bloque_calibracion():
     if f"modo_next_{BK}" in st.session_state:      # auto-avance tras confirmar / Enter
         st.session_state[f"w_radio_modo_{BK}"] = st.session_state.pop(f"modo_next_{BK}")
 
-    # WP-B3: layout de una sola pantalla — imagen a la izquierda (más ancha,
-    # es lo que el usuario necesita ver grande) y TODOS los controles
-    # (modo/ejes/unidad/clásico + zoom + calibración + confirmar/nudge/enter)
-    # apilados en una única columna angosta a la derecha, en vez de una fila
-    # de controles a todo el ancho arriba + una columna angosta aparte para
-    # el zoom (el layout viejo dejaba hueco vacío y obligaba a hacer scroll
-    # en la barra de controles). [3, 2] deja la imagen dominante sin dejar
-    # los controles demasiado angostos para sus botones/inputs.
-    col_img, col_ctrl = st.columns([3, 2])
+    # Layout de una sola pantalla, intento 2. El anterior (WP-B3) seguía sin
+    # caber: apilaba TODO en la columna angosta — modo, ejes, unidad, clásico,
+    # zoom, nudge, confirmar, estado, reiniciar, autodetección, enter — mucho
+    # más alto que la imagen, así que había que bajar para llegar a los
+    # botones de ajuste del punto (reportado por el usuario con captura:
+    # espacio vacío a la izquierda bajo la imagen, scroll obligatorio a la
+    # derecha para "fijar"/confirmar).
+    #
+    # Ahora: una fila superior angosta (modo + ejes/unidad/clásico) antes de
+    # partir en columnas — es lo único que hace falta ver ANTES de hacer
+    # click. Las columnas quedan con la imagen (izquierda) y SOLO zoom +
+    # nudge + confirmar/fijar (derecha) — el ciclo que se repite en cada
+    # punto y el único que de verdad necesita estar siempre a la vista sin
+    # scroll. Todo lo demás (autodetección, reiniciar, estado de calibración,
+    # enter) baja a una fila a todo lo ancho DEBAJO de las columnas, usando
+    # el espacio que antes quedaba vacío bajo la imagen.
+    modo = st.radio("Modo de click (avanza solo al confirmar)", ETAPAS,
+                    horizontal=True, key=f"w_radio_modo_{BK}")
+    destino = _modo_destino(modo)
+    curva = _curva_activa(modo)
+    oc1, oc2, oc3, oc4 = st.columns([1, 1, 2, 2])
+    log_x = oc1.checkbox("X log", value=False, key=f"w_chk_lx_{BK}")
+    log_y = oc2.checkbox("Y log", value=False, key=f"w_chk_ly_{BK}")
+    unidad_q = oc3.selectbox("Unidad de Q", list(FACTOR_Q), key=f"w_sel_uq_{BK}")
+    clasico = oc4.checkbox("Modo clásico (sin lupa en vivo)",
+                           value=not DIGITIZER_OK, disabled=not DIGITIZER_OK,
+                           key=f"w_chk_clasico_{BK}")
 
-    with col_ctrl:
-        modo = st.radio("Modo de click (avanza solo al confirmar)", ETAPAS,
-                        key=f"w_radio_modo_{BK}")
-        destino = _modo_destino(modo)
-        curva = _curva_activa(modo)
-        oc1, oc2 = st.columns(2)
-        log_x = oc1.checkbox("Eje X log", value=False, key=f"w_chk_lx_{BK}")
-        log_y = oc2.checkbox("Eje Y log", value=False, key=f"w_chk_ly_{BK}")
-        unidad_q = st.selectbox("Unidad de Q en la gráfica", list(FACTOR_Q),
-                                key=f"w_sel_uq_{BK}")
-        clasico = st.checkbox("Modo clásico (sin lupa en vivo)",
-                              value=not DIGITIZER_OK, disabled=not DIGITIZER_OK,
-                              key=f"w_chk_clasico_{BK}")
+    col_img, col_ctrl = st.columns([3, 2])
 
     cal_all = pj.migrate_pump_cal_v7(bomba.cal)   # {"x": {...}, "qh": {...}, "qe": {...}}
     bomba.cal = cal_all
@@ -370,93 +376,95 @@ def _bloque_calibracion():
         else:
             st.caption("Haz click en la imagen para ubicar un punto.")
 
-        st.caption(f"Calibración X (compartida): {_estado_cal(cal_x)} · "
-                  f"Calibración Y Q-H: {_estado_cal(cal_all['qh'])} · "
-                  f"Calibración Y Q-η: {_estado_cal(cal_all['qe'])}")
-        # botones en fila propia (no en la columna angosta de controles) para
-        # que quepan legibles.
-        rb1, rb2 = st.columns(2)
-        if rb1.button(f"♻ Reiniciar Y ({'Q-H' if curva == 'qh' else 'Q-η'})",
-                     key=f"w_rst_cal_{BK}"):
-            cal_all[curva] = {}
-            bomba.cal = cal_all
-            st.session_state[pend_key] = None
-            st.rerun(scope="fragment")
-        if rb2.button("♻ Reiniciar X (compartido)", key=f"w_rst_calx_{BK}"):
-            cal_all["x"] = {}
-            bomba.cal = cal_all
-            st.session_state[pend_key] = None
-            st.rerun(scope="fragment")
-        # WP-6: controles reales de autodetección — antes tolerance=60/
-        # n_points=15 estaban fijos en el código y el bbox no se restringía
-        # a la región calibrada (recogía ejes/texto/leyenda).
-        if {"X1", "X2"} <= set(cal_x) and {"Y1", "Y2"} <= set(cal_y):
-            st.markdown("**Autodetección por color**")
-            ad1, ad2 = st.columns(2)
-            tol = num_input("Distancia de color (tolerancia)", f"auto_tol_{destino}_{BK}",
-                            40.0, decimals=0, container=ad1, min_value=10.0, max_value=150.0)
-            n_pts = int_input("Nº de puntos (bandas en X, como en automeris)",
-                              f"auto_npts_{destino}_{BK}", 20, container=ad2,
-                              min_value=5, max_value=100)
-            if pend:
-                color_prev = tuple(int(c) for c in np.array(img)[pend["y"], pend["x"]])
-                st.color_picker("Color muestreado (del punto pendiente)",
-                                value="#%02X%02X%02X" % color_prev,
-                                key=f"auto_color_{destino}_{BK}", disabled=True)
+    # Fila a todo lo ancho DEBAJO de las columnas: todo lo que no hace falta
+    # ver mientras se ajusta un punto (estado de calibración, reiniciar,
+    # autodetección, enter). Antes vivía apilado en col_ctrl y era lo que
+    # obligaba a bajar para llegar al zoom/nudge/confirmar de más arriba.
+    st.caption(f"Calibración X (compartida): {_estado_cal(cal_x)} · "
+              f"Calibración Y Q-H: {_estado_cal(cal_all['qh'])} · "
+              f"Calibración Y Q-η: {_estado_cal(cal_all['qe'])}")
+    rb1, rb2 = st.columns(2)
+    if rb1.button(f"♻ Reiniciar Y ({'Q-H' if curva == 'qh' else 'Q-η'})",
+                 key=f"w_rst_cal_{BK}"):
+        cal_all[curva] = {}
+        bomba.cal = cal_all
+        st.session_state[pend_key] = None
+        st.rerun(scope="fragment")
+    if rb2.button("♻ Reiniciar X (compartido)", key=f"w_rst_calx_{BK}"):
+        cal_all["x"] = {}
+        bomba.cal = cal_all
+        st.session_state[pend_key] = None
+        st.rerun(scope="fragment")
+    # WP-6: controles reales de autodetección — antes tolerance=60/
+    # n_points=15 estaban fijos en el código y el bbox no se restringía
+    # a la región calibrada (recogía ejes/texto/leyenda).
+    if {"X1", "X2"} <= set(cal_x) and {"Y1", "Y2"} <= set(cal_y):
+        st.markdown("**Autodetección por color**")
+        ad1, ad2 = st.columns(2)
+        tol = num_input("Distancia de color (tolerancia)", f"auto_tol_{destino}_{BK}",
+                        40.0, decimals=0, container=ad1, min_value=10.0, max_value=150.0)
+        n_pts = int_input("Nº de puntos (bandas en X, como en automeris)",
+                          f"auto_npts_{destino}_{BK}", 20, container=ad2,
+                          min_value=5, max_value=100)
+        if pend:
+            color_prev = tuple(int(c) for c in np.array(img)[pend["y"], pend["x"]])
+            st.color_picker("Color muestreado (del punto pendiente)",
+                            value="#%02X%02X%02X" % color_prev,
+                            key=f"auto_color_{destino}_{BK}", disabled=True)
+        else:
+            st.caption("Haz click cerca de la curva (o arrastra en la lupa) para "
+                      "fijar el color de muestra.")
+        puntos_existentes = bomba.puntos_qh if curva == "qh" else bomba.puntos_qe
+        sobrescribir = (st.checkbox(
+            f"Sobrescribir los {len(puntos_existentes)} puntos existentes de "
+            f"{'Q-H' if curva == 'qh' else 'Q-η'}", key=f"auto_ow_{curva}_{BK}")
+            if puntos_existentes else True)
+        if st.button(f"🪄 Detectar {'Q-H' if curva == 'qh' else 'Q-η'} por color "
+                    "(usa el punto pendiente como muestra)",
+                    key=f"w_auto_{curva}_{BK}", disabled=not pend):
+            if not sobrescribir:
+                st.warning("Marca la casilla de sobrescritura para reemplazar los "
+                          "puntos existentes con la detección automática — no se "
+                          "pisan puntos ya capturados sin confirmar.")
             else:
-                st.caption("Haz click cerca de la curva (o arrastra en la lupa) para "
-                          "fijar el color de muestra.")
-            puntos_existentes = bomba.puntos_qh if curva == "qh" else bomba.puntos_qe
-            sobrescribir = (st.checkbox(
-                f"Sobrescribir los {len(puntos_existentes)} puntos existentes de "
-                f"{'Q-H' if curva == 'qh' else 'Q-η'}", key=f"auto_ow_{curva}_{BK}")
-                if puntos_existentes else True)
-            if st.button(f"🪄 Detectar {'Q-H' if curva == 'qh' else 'Q-η'} por color "
-                        "(usa el punto pendiente como muestra)",
-                        key=f"w_auto_{curva}_{BK}", disabled=not pend):
-                if not sobrescribir:
-                    st.warning("Marca la casilla de sobrescritura para reemplazar los "
-                              "puntos existentes con la detección automática — no se "
-                              "pisan puntos ya capturados sin confirmar.")
+                arr = np.array(img)
+                color = tuple(int(c) for c in arr[pend["y"], pend["x"]])
+                # bbox = rectángulo calibrado (X1..X2 · Y1..Y2 de la curva
+                # activa) con margen — fija sola la búsqueda a la zona de la
+                # gráfica, sin que el usuario tenga que dibujarlo a mano.
+                margen_x = max(int(0.05 * abs(cal_x["X2"]["px"] - cal_x["X1"]["px"])), 5)
+                margen_y = max(int(0.10 * abs(cal_y["Y2"]["px"] - cal_y["Y1"]["px"])), 5)
+                x0 = min(cal_x["X1"]["px"], cal_x["X2"]["px"]) - margen_x
+                x1 = max(cal_x["X1"]["px"], cal_x["X2"]["px"]) + margen_x
+                y0 = min(cal_y["Y1"]["px"], cal_y["Y2"]["px"]) - margen_y
+                y1 = max(cal_y["Y1"]["px"], cal_y["Y2"]["px"]) + margen_y
+                bbox = (max(x0, 0), max(y0, 0), min(x1, img.width), min(y1, img.height))
+                pts_px = cv.detect_curve_by_color(arr, color, tolerance=tol,
+                                                  n_points=n_pts, bbox=bbox)
+                calx = cv.AxisCalibration(cal_x["X1"]["px"], cal_x["X1"]["val"],
+                                          cal_x["X2"]["px"], cal_x["X2"]["val"], log_x)
+                caly = cv.AxisCalibration(cal_y["Y1"]["px"], cal_y["Y1"]["val"],
+                                          cal_y["Y2"]["px"], cal_y["Y2"]["val"], log_y)
+                pts_data = [(round(cv.pixel_to_data(pt, calx, caly)[0] * FACTOR_Q[unidad_q], 4),
+                            round(cv.pixel_to_data(pt, calx, caly)[1], 4)) for pt in pts_px]
+                if curva == "qh":
+                    bomba.puntos_qh = pts_data
+                    st.session_state[f"qh_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
                 else:
-                    arr = np.array(img)
-                    color = tuple(int(c) for c in arr[pend["y"], pend["x"]])
-                    # bbox = rectángulo calibrado (X1..X2 · Y1..Y2 de la curva
-                    # activa) con margen — fija sola la búsqueda a la zona de la
-                    # gráfica, sin que el usuario tenga que dibujarlo a mano.
-                    margen_x = max(int(0.05 * abs(cal_x["X2"]["px"] - cal_x["X1"]["px"])), 5)
-                    margen_y = max(int(0.10 * abs(cal_y["Y2"]["px"] - cal_y["Y1"]["px"])), 5)
-                    x0 = min(cal_x["X1"]["px"], cal_x["X2"]["px"]) - margen_x
-                    x1 = max(cal_x["X1"]["px"], cal_x["X2"]["px"]) + margen_x
-                    y0 = min(cal_y["Y1"]["px"], cal_y["Y2"]["px"]) - margen_y
-                    y1 = max(cal_y["Y1"]["px"], cal_y["Y2"]["px"]) + margen_y
-                    bbox = (max(x0, 0), max(y0, 0), min(x1, img.width), min(y1, img.height))
-                    pts_px = cv.detect_curve_by_color(arr, color, tolerance=tol,
-                                                      n_points=n_pts, bbox=bbox)
-                    calx = cv.AxisCalibration(cal_x["X1"]["px"], cal_x["X1"]["val"],
-                                              cal_x["X2"]["px"], cal_x["X2"]["val"], log_x)
-                    caly = cv.AxisCalibration(cal_y["Y1"]["px"], cal_y["Y1"]["val"],
-                                              cal_y["Y2"]["px"], cal_y["Y2"]["val"], log_y)
-                    pts_data = [(round(cv.pixel_to_data(pt, calx, caly)[0] * FACTOR_Q[unidad_q], 4),
-                                round(cv.pixel_to_data(pt, calx, caly)[1], 4)) for pt in pts_px]
-                    if curva == "qh":
-                        bomba.puntos_qh = pts_data
-                        st.session_state[f"qh_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
-                    else:
-                        bomba.puntos_qe = pts_data
-                        st.session_state[f"qe_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
-                    st.session_state[pend_key] = None
-                    st.rerun()
-        _siguiente_enter = _ENTER_ADVANCE.get(modo)
-        if st.button("⏎ Enter — pasar a Q-η" if _siguiente_enter
-                     else "⏎ Enter (ya en la última etapa)",
-                     key=f"w_enter_{BK}", disabled=_siguiente_enter is None,
-                     help="Equivalente al Enter físico (que solo funciona sobre la imagen "
-                          "en modo 'lupa en tiempo real'). Termina de capturar los puntos "
-                          "de Q-H y pasa a calibrar Y de Q-η (X ya quedó calibrado, "
-                          "es compartido)."):
-            st.session_state[f"modo_next_{BK}"] = _siguiente_enter
-            st.rerun(scope="fragment")
+                    bomba.puntos_qe = pts_data
+                    st.session_state[f"qe_px_{BK}"] = [(int(x), int(y)) for x, y in pts_px]
+                st.session_state[pend_key] = None
+                st.rerun()
+    _siguiente_enter = _ENTER_ADVANCE.get(modo)
+    if st.button("⏎ Enter — pasar a Q-η" if _siguiente_enter
+                 else "⏎ Enter (ya en la última etapa)",
+                 key=f"w_enter_{BK}", disabled=_siguiente_enter is None,
+                 help="Equivalente al Enter físico (que solo funciona sobre la imagen "
+                      "en modo 'lupa en tiempo real'). Termina de capturar los puntos "
+                      "de Q-H y pasa a calibrar Y de Q-η (X ya quedó calibrado, "
+                      "es compartido)."):
+        st.session_state[f"modo_next_{BK}"] = _siguiente_enter
+        st.rerun(scope="fragment")
 
 
 if img is not None:
