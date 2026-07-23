@@ -194,5 +194,7 @@ ACUCALC/
 
 ## Licencia
 
-MIT — ver `LICENSE`. El digitalizador de curvas (`core/curves.py`,
+GPL-3.0 — ver `LICENSE`. El digitalizador de curvas (`core/curves.py`,
 `components/digitizer/`) es una implementación propia.
+
+Autor: Aiken H. Ortega-Heredia.
