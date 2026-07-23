@@ -260,3 +260,38 @@ def test_compilacion_captura_stderr(tmp_path, monkeypatch):
     pdf, log = report.compile_pdf(tmp_path)
     assert pdf is None
     assert "Perl" in log and "STDERR" in log
+
+
+def test_engine_cmd_enable_installer_solo_en_miktex(monkeypatch):
+    """`--enable-installer` es una opción de MiKTeX (auto-instala paquetes que
+    falten). TeX Live (lo que trae Streamlit Cloud/Linux) no la reconoce y
+    pdflatex aborta con 'Unrecognized option' — la compilación entera se
+    rompería en producción aunque funcionara en el MiKTeX local del usuario.
+    La flag debe depender del motor detectado, no ir siempre."""
+    monkeypatch.setattr(report.subprocess, "run",
+                        lambda *a, **k: type("R", (), {"returncode": 0,
+                                            "stdout": b"MiKTeX-pdfTeX 4.27 (MiKTeX 26.5)",
+                                            "stderr": b""})())
+    cmd, runs = report._engine_cmd("pdflatex", "pdflatex")
+    assert "--enable-installer" in cmd
+    assert runs == 2
+
+    monkeypatch.setattr(report.subprocess, "run",
+                        lambda *a, **k: type("R", (), {"returncode": 0,
+                                            "stdout": b"pdfTeX 3.141592653-2.6-1.40.25 (TeX Live 2023)",
+                                            "stderr": b""})())
+    cmd, runs = report._engine_cmd("pdflatex", "pdflatex")
+    assert "--enable-installer" not in cmd
+    assert runs == 2
+
+
+def test_engine_cmd_pdflatex_sin_poder_consultar_version_no_revienta(monkeypatch):
+    """Si `pdflatex --version` falla por lo que sea (permisos, timeout), no debe
+    tumbar la compilación entera — se asume TeX Live (opción más segura, la
+    flag de más se omite en vez de arriesgar un motor desconocido)."""
+    def _boom(*a, **k):
+        raise FileNotFoundError("no se pudo consultar la versión")
+    monkeypatch.setattr(report.subprocess, "run", _boom)
+    cmd, runs = report._engine_cmd("pdflatex", "pdflatex")
+    assert "--enable-installer" not in cmd
+    assert runs == 2

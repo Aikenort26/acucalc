@@ -44,6 +44,24 @@ def _find_engine() -> tuple[str | None, str | None]:
     return None, None
 
 
+def _es_miktex(exe: str) -> bool:
+    """`--enable-installer` es una opción propia de MiKTeX (auto-instala
+    paquetes que falten en la compilación). TeX Live —lo que trae Streamlit
+    Cloud/Debian, y cualquier despliegue en Linux— NO la reconoce: pdflatex
+    aborta con 'Unrecognized option' y la compilación entera se rompe, aunque
+    funcione perfecto en el MiKTeX local de Windows del usuario. Se detecta
+    por el string de versión, no por la plataforma (más robusto: cubre WSL
+    con MiKTeX, o Windows con TeX Live si algún día se instala así)."""
+    try:
+        res = subprocess.run([exe, "--version"], capture_output=True, timeout=10)
+        return b"MiKTeX" in (res.stdout or b"")
+    except Exception:
+        # Sin poder consultar la versión, se asume TeX Live: es la opción más
+        # segura (la flag de más se omite en vez de arriesgar un motor
+        # desconocido que la rechace y tumbe la compilación).
+        return False
+
+
 def _engine_cmd(exe_name: str, exe: str) -> tuple[list[str], int]:
     """Comando y nº de pasadas para cada motor LaTeX soportado."""
     if exe_name == "tectonic":
@@ -51,8 +69,12 @@ def _engine_cmd(exe_name: str, exe: str) -> tuple[list[str], int]:
         return [exe, "--outdir", ".", "main.tex"], 1
     if exe_name == "latexmk":
         return [exe, "-pdf", "-interaction=nonstopmode", "main.tex"], 1
-    # pdflatex directo (2 pasadas para refs); MiKTeX auto-instala paquetes.
-    return [exe, "-interaction=nonstopmode", "--enable-installer", "main.tex"], 2
+    # pdflatex directo (2 pasadas para refs); --enable-installer solo si el
+    # motor detectado es MiKTeX (autoinstala paquetes que falten).
+    cmd = [exe, "-interaction=nonstopmode", "main.tex"]
+    if _es_miktex(exe):
+        cmd.insert(-1, "--enable-installer")
+    return cmd, 2
 
 
 def compile_pdf(project_dir: Path) -> tuple[Path | None, str]:
