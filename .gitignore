@@ -9,3 +9,6 @@ saves/
 tectonic.exe
 tectonic
 .detener_acucalc
+.env
+.env.*
+!.env.example
