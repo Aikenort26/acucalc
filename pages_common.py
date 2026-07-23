@@ -157,12 +157,49 @@ div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] {
 /* Cursor de cruz sobre imágenes y el componente de digitalización */
 [data-testid="stImage"] img, iframe[title*="image_coordinates"] { cursor: crosshair !important; }
 
+/* ---------- botón Guardar anclado en la barra de navegación superior ----------
+   st.navigation no permite widgets propios dentro de su barra; se ancla el
+   botón con position:fixed en la banda del header, justo tras el último ítem
+   del nav (Reporte). Se fija el PROPIO element-container del botón
+   (`.st-key-w_btn_guardar`, clase que Streamlit añade por el key), NO un
+   contenedor externo — ese mete un stLayoutWrapper extra que atrapa el fixed.
+   El transform persistente (translateY 4px) del stLayoutWrapper ancestro se
+   neutraliza con :has() para que el fixed escape al viewport (verificado:
+   offsetParent null, top:6px). `left` = borde derecho aprox. de "Reporte"
+   con el nav completo (nav es left-aligned → x estable por resolución). */
+[data-testid="stLayoutWrapper"]:has(.st-key-w_btn_guardar) {
+  transform: none !important;
+  animation: none !important;
+}
+.st-key-w_btn_guardar {
+  position: fixed !important;
+  top: 0.4rem !important;
+  left: var(--guardar-left, 1015px) !important;
+  z-index: 1000000 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  transform: none !important;
+  animation: none !important;
+}
+.st-key-w_btn_guardar .stButton > button {
+  padding: 0.15rem 0.55rem !important;
+  min-height: 2.2rem !important;
+  font-size: 1.15rem !important;
+  line-height: 1 !important;
+}
+/* Pantallas donde el nav se colapsa a "N more" (no cabe completo): el ancla
+   por-Reporte deja de tener sentido → el botón pasa a la derecha, antes del
+   grupo Deploy/Share, para no flotar sobre el contenido. */
+@media (max-width: 1500px) {
+  .st-key-w_btn_guardar { left: auto !important; right: 8.5rem !important; }
+}
 
 /* ---------- responsive: tablet / pantallas angostas ---------- */
 @media (max-width: 900px) {
   h1, h2, h3 { font-size: 90% !important; }
   .stButton > button, .stDownloadButton > button { width: 100% !important; }
   [data-testid="stMetricValue"] { font-size: 1.4rem !important; }
+  .st-key-w_btn_guardar { top: auto !important; bottom: 1rem !important; right: 1rem !important; }
 }
 </style>
 """
@@ -228,33 +265,41 @@ def page_setup() -> Project:
     st.markdown(_CSS, unsafe_allow_html=True)
     p = get_project()
     _autosave(p)
-    _, bar_r = st.columns([6, 1])
-    with bar_r:
-        dest = resolve_save_path(p)
-        ayuda = (f"Guarda en tu carpeta: {dest}" if dest is not None
-                 else "Guarda en la carpeta saves/ del programa (fija una ruta en "
-                      "la página 1 para guardar en tu propia carpeta)")
-        if p.nombre:
-            ayuda = f"Proyecto: {p.nombre} — {ayuda}"
-        if "last_save" in st.session_state:
-            n, h = st.session_state["last_save"]
-            ayuda = f"Guardado: {n} · {h} — {ayuda}"
-        if st.button("💾", key="w_btn_guardar", disabled=not p.nombre, help=ayuda):
-            try:
-                if dest is not None:
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    pj.save(p, dest)
-                    guardado_en = str(dest)
-                else:
-                    SAVES_DIR.mkdir(exist_ok=True)
-                    f = SAVES_DIR / f"{p.nombre.replace(' ', '_')}.acucalc.json"
-                    pj.save(p, f)
-                    guardado_en = f.name
-                st.session_state["last_save"] = (
-                    guardado_en, dt.datetime.now().strftime("%H:%M:%S"))
-                st.session_state.pop("_autosave_error", None)
-            except OSError as e:
-                st.error(f"No se pudo guardar en la ruta indicada: {e}")
+    # Botón de guardado anclado a la barra de navegación superior, justo tras
+    # el último ítem del nav (Reporte). st.navigation no admite widgets propios
+    # dentro de su barra nativa, así que se ancla con position:fixed en la
+    # banda del header. Clave: se fija el PROPIO element-container del botón
+    # (clase `.st-key-w_btn_guardar` que Streamlit añade por el `key`), NO un
+    # st.container externo — ese introduce un stLayoutWrapper extra que
+    # atrapa el fixed (offsetParent deja de ser null). El transform
+    # persistente (translateY 4px) del stLayoutWrapper ancestro se neutraliza
+    # con :has(). Verificado: top:6px, offsetParent null. Ver `.st-key-w_btn_guardar`
+    # en _CSS. `left` = borde derecho aprox. de "Reporte" con el nav completo.
+    dest = resolve_save_path(p)
+    ayuda = (f"Guarda en tu carpeta: {dest}" if dest is not None
+             else "Guarda en la carpeta saves/ del programa (fija una ruta en "
+                  "la página 1 para guardar en tu propia carpeta)")
+    if p.nombre:
+        ayuda = f"Proyecto: {p.nombre} — {ayuda}"
+    if "last_save" in st.session_state:
+        n, h = st.session_state["last_save"]
+        ayuda = f"Guardado: {n} · {h} — {ayuda}"
+    if st.button("💾", key="w_btn_guardar", disabled=not p.nombre, help=ayuda):
+        try:
+            if dest is not None:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                pj.save(p, dest)
+                guardado_en = str(dest)
+            else:
+                SAVES_DIR.mkdir(exist_ok=True)
+                f = SAVES_DIR / f"{p.nombre.replace(' ', '_')}.acucalc.json"
+                pj.save(p, f)
+                guardado_en = f.name
+            st.session_state["last_save"] = (
+                guardado_en, dt.datetime.now().strftime("%H:%M:%S"))
+            st.session_state.pop("_autosave_error", None)
+        except OSError as e:
+            st.error(f"No se pudo guardar en la ruta indicada: {e}")
     if "_autosave_error" in st.session_state:
         st.caption(f"⚠ Autosave falló: {st.session_state['_autosave_error']}")
     return p
