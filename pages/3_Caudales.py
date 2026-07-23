@@ -1,7 +1,8 @@
 import pandas as pd
 import streamlit as st
 from core import catalogs, demand
-from pages_common import page_setup, num_input, show_issues, f_num, fmt_q, SP_CAUDAL
+from pages_common import (SP_CAUDAL, editor_commit, editor_seed, f_num,
+                          fmt_q, num_input, page_setup, show_issues)
 
 p = page_setup()
 st.header("3 · Dotación y caudales de diseño")
@@ -21,10 +22,13 @@ if p.demanda.modo == "altitud":
     st.info(f"Altitud {p.altitud:,.0f} m.s.n.m. → dotación neta máxima "
             f"**{p.demanda.dneta:.0f} L/hab/d** (Art. 43 Res. 0330 de 2017)")
 elif p.demanda.modo == "usos":
-    base = p.demanda.usos or [(u["actividad"], float(u["adoptada"]))
-                              for u in refs["usos_default"]]
-    df = st.data_editor(pd.DataFrame(base, columns=["Actividad", "Dotación [L/hab/d]"]),
+    seed_usos = editor_seed("usos", lambda: pd.DataFrame(
+        p.demanda.usos or [(u["actividad"], float(u["adoptada"]))
+                           for u in refs["usos_default"]],
+        columns=["Actividad", "Dotación [L/hab/d]"]))
+    df = st.data_editor(st.session_state[seed_usos],
                         num_rows="dynamic", width="stretch", key="w_ed_usos")
+    editor_commit(seed_usos, df)
     p.demanda.usos = [(str(r["Actividad"]), f_num(r["Dotación [L/hab/d]"], 0.0))
                       for _, r in df.iterrows() if str(r["Actividad"] or "").strip()]
     p.demanda.dneta = demand.dotacion_usos(p.demanda.usos)

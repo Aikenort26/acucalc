@@ -4,6 +4,7 @@ from core import catalogs, pipes, pumping as pu
 from core.project import PumpSystemData, SegmentData, AccessoryData
 from pages_common import (page_setup, num_input, show_issues, i_num, fmt_q,
                           fmt_h, fmt_v, fmt_d, fmt_perdida, fmt_p,
+                          editor_commit, editor_seed,
                           SP_VELOCIDAD, SP_PERDIDA, SP_COEF, SP_DIAMETRO)
 
 p = page_setup()
@@ -225,15 +226,17 @@ st.subheader("Accesorios")
 km_cat = catalogs.minor_loss_coefficients()
 tipos_km = [f"{k}  (Km={v})" for k, v in km_cat.items()]
 nombres_tramos = [t.nombre for t in sys_d.tramos]
-acc_df = st.data_editor(pd.DataFrame(
+seed_acc = editor_seed(f"acc_{K}", lambda: pd.DataFrame(
     [{"Accesorio": f"{a.tipo}  (Km={km_cat.get(a.tipo, '?')})",
       "Cantidad": a.cantidad, "Tramo": a.tramo} for a in sys_d.accesorios] or
     [{"Accesorio": tipos_km[2], "Cantidad": 1,
-      "Tramo": nombres_tramos[0] if nombres_tramos else ""}]),
+      "Tramo": nombres_tramos[0] if nombres_tramos else ""}]))
+acc_df = st.data_editor(st.session_state[seed_acc],
     num_rows="dynamic", width="stretch", key=f"w_ed_acc_{K}",
     column_config={
         "Accesorio": st.column_config.SelectboxColumn(options=tipos_km),
         "Tramo": st.column_config.SelectboxColumn(options=nombres_tramos)})
+editor_commit(seed_acc, acc_df)
 sys_d.accesorios = []
 for _, r in acc_df.iterrows():
     cant = i_num(r["Cantidad"], 0)     # `not NaN` es False: la guarda vieja no servía

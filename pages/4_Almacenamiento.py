@@ -3,9 +3,9 @@ import pandas as pd
 import streamlit as st
 from core import catalogs, report_figs as rf, storage
 from core.project import TankSpec
-from pages_common import (SP_ALTURA, SP_VOLUMEN, f_num, fila_incompleta,
-                          fmt_vol, get_project, i_num, num_input, page_setup,
-                          s_txt, sel_state)
+from pages_common import (SP_ALTURA, SP_VOLUMEN, editor_commit, editor_seed,
+                          f_num, fila_incompleta, fmt_vol, get_project, i_num,
+                          num_input, page_setup, s_txt, sel_state)
 
 p = page_setup()
 st.header("4 · Almacenamiento")
@@ -65,9 +65,11 @@ with st.expander("Cargar patrón desde Excel/CSV"):
                 st.success("Patrón cargado.")
         except Exception as e:
             st.error(f"No se pudo leer el archivo: {e}")
-df_pat = st.data_editor(pd.DataFrame({"Hora": list(range(24)),
-                                      "Factor consumo": cfg.factores_hora}),
+seed_pat = editor_seed("patron", lambda: pd.DataFrame(
+    {"Hora": list(range(24)), "Factor consumo": cfg.factores_hora}))
+df_pat = st.data_editor(st.session_state[seed_pat],
                         hide_index=True, width="stretch", key="w_ed_patron")
+editor_commit(seed_pat, df_pat)
 cfg.factores_hora = [f_num(x, 1.0) for x in df_pat["Factor consumo"]]
 
 # ========== Sección 1 · Volumen total por norma ==========
@@ -76,9 +78,11 @@ if not cfg.suministro_hora:
     cfg.suministro_hora = [1 if 5 <= h <= 14 else 0 for h in range(24)]
 st.caption("Ventana de suministro de la comunidad (horas de entrada al sistema, 1/0). "
            "La curva integral compara este suministro contra el patrón de consumo.")
-df_su = st.data_editor(pd.DataFrame({"Hora": list(range(24)),
-                                     "Suministro (1/0)": cfg.suministro_hora}),
+seed_su = editor_seed("suministro", lambda: pd.DataFrame(
+    {"Hora": list(range(24)), "Suministro (1/0)": cfg.suministro_hora}))
+df_su = st.data_editor(st.session_state[seed_su],
                        hide_index=True, width="stretch", key="w_ed_sum")
+editor_commit(seed_su, df_su)
 cfg.suministro_hora = [1 if i_num(x, 0) else 0 for x in df_su["Suministro (1/0)"]]
 cfg.frac_regulacion = num_input("Fracción de regulación (criterio QMD/3, Art. 81)",
                                 "fracreg", cfg.frac_regulacion, decimals=3,
@@ -120,13 +124,14 @@ st.caption("Define cada tanque: tipo, forma, unidades, geometría, el **volumen 
 if not cfg.tanques:
     cfg.tanques = [TankSpec("Tanque 1", "elevado", "circular", float(v_norma), 2.5,
                             entrada_ini=5, entrada_fin=14, salida_ini=6, salida_fin=22)]
-df_tk = st.data_editor(pd.DataFrame(
+seed_tk = editor_seed("tanques", lambda: pd.DataFrame(
     [{"Nombre": t.nombre, "Tipo constructivo": t.tipo_constructivo, "Forma": t.forma,
       "Cantidad": t.cantidad, "Altura útil [m]": t.altura, "Largo/ancho": t.ratio,
       "Volumen asignado [m³]": t.volumen,
       "Suministro desde [h]": t.entrada_ini, "Suministro hasta [h]": t.entrada_fin,
       "Salida desde [h]": t.salida_ini, "Salida hasta [h]": t.salida_fin}
-     for t in cfg.tanques]),
+     for t in cfg.tanques]))
+df_tk = st.data_editor(st.session_state[seed_tk],
     num_rows="dynamic", width="stretch", key="w_ed_tanques",
     column_config={
         "Tipo constructivo": st.column_config.SelectboxColumn(
@@ -139,6 +144,7 @@ df_tk = st.data_editor(pd.DataFrame(
         "Suministro hasta [h]": st.column_config.NumberColumn(min_value=0, max_value=23),
         "Salida desde [h]": st.column_config.NumberColumn(min_value=0, max_value=23),
         "Salida hasta [h]": st.column_config.NumberColumn(min_value=0, max_value=23)})
+editor_commit(seed_tk, df_tk)
 tipos_previos = {t.nombre: t.tipo for t in cfg.tanques}
 NUM_TK = ["Cantidad", "Altura útil [m]", "Largo/ancho", "Volumen asignado [m³]",
           "Suministro desde [h]", "Suministro hasta [h]",

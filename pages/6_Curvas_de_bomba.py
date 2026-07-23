@@ -9,7 +9,8 @@ from core import curves as cv, pumping as pu
 from core import project as pj
 from core.project import PumpData
 from pages_common import (page_setup, num_input, int_input, f_num, fila_incompleta,
-                          fmt_h, fmt_q, sel_state, SP_CAUDAL, SP_ALTURA, SP_POTENCIA)
+                          fmt_h, fmt_q, sel_state, editor_commit, editor_seed,
+                          WIDGET_PREFIX, SP_CAUDAL, SP_ALTURA, SP_POTENCIA)
 
 try:
     from components.digitizer import digitizer
@@ -507,9 +508,11 @@ def _tabla_puntos(container, puntos, cols, key):
     vaciar la tabla: al borrar la última fila se resembraba sola) y filtrando por
     presencia de dato, no por truthiness — `if q or h` descartaba un punto legítimo
     en Q=0 y además dejaba pasar NaN (que es truthy) hacia `fit_curve`."""
-    df = pd.DataFrame(puntos, columns=cols) if puntos else pd.DataFrame(
-        {c: pd.Series(dtype="float64") for c in cols})
-    ed = container.data_editor(df, num_rows="dynamic", key=key, width="stretch")
+    seed_key = editor_seed(key, lambda: pd.DataFrame(puntos, columns=cols) if puntos
+                           else pd.DataFrame({c: pd.Series(dtype="float64") for c in cols}))
+    ed = container.data_editor(st.session_state[seed_key], num_rows="dynamic",
+                               key=key, width="stretch")
+    editor_commit(seed_key, ed)
     return [(f_num(r[cols[0]]), f_num(r[cols[1]]))
             for _, r in ed.iterrows() if not fila_incompleta(r, cols)]
 
@@ -521,12 +524,15 @@ d1, d2 = st.columns(2)
 if d1.button("↩ Deshacer último punto Q-H", key=f"w_undo_qh_{BK}",
              disabled=not bomba.puntos_qh):
     bomba.puntos_qh.pop()
-    st.session_state.pop(f"w_qh_{BK}", None)   # el editor se resiembra del modelo
+    # el editor se resiembra del modelo: borra tanto el widget como su semilla
+    st.session_state.pop(f"w_qh_{BK}", None)
+    st.session_state.pop(f"{WIDGET_PREFIX}seed_w_qh_{BK}", None)
     st.rerun()
 if d2.button("↩ Deshacer último punto Q-η", key=f"w_undo_qe_{BK}",
              disabled=not bomba.puntos_qe):
     bomba.puntos_qe.pop()
     st.session_state.pop(f"w_qe_{BK}", None)
+    st.session_state.pop(f"{WIDGET_PREFIX}seed_w_qe_{BK}", None)
     st.rerun()
 st.caption("Para borrar filas sueltas: selecciona la fila en la tabla y usa el "
            "ícono 🗑 de la barra del editor.")

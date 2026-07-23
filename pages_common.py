@@ -346,3 +346,33 @@ def clear_widget_state() -> None:
     que los valores del archivo cargado se conviertan en los nuevos defaults."""
     for k in [k for k in st.session_state if k.startswith(WIDGET_PREFIX)]:
         del st.session_state[k]
+
+
+def editor_seed(key: str, build_df):
+    """Semilla de un `data_editor`: siembra `st.session_state` UNA sola vez
+    desde `build_df()` (el modelo) y devuelve el seed_key a usar como `data=`.
+
+    Reconstruir el DataFrame del modelo en cada rerun y pasarlo a `data=`
+    desalinea el delta que Streamlit guarda internamente contra el `key` del
+    editor — sobre todo cuando el readback filtra/coerciona filas (nombre
+    vacío, NaN) y esa versión "limpia" se le devuelve como si fueran los
+    datos frescos. Resultado: el usuario teclea, el primer rerun descarta la
+    edición, hay que teclear una segunda vez. Sembrando una sola vez y
+    dejando que `editor_commit` guarde tal cual lo que el editor devuelve,
+    el ciclo nunca reintroduce esa versión "limpia" como dato de entrada.
+    `clear_widget_state()` ya borra este seed (prefijo `w_`) al cargar
+    proyecto, forzando resiembra desde el modelo nuevo.
+    """
+    seed_key = f"{WIDGET_PREFIX}seed_{key}"
+    if seed_key not in st.session_state:
+        st.session_state[seed_key] = build_df()
+    return seed_key
+
+
+def editor_commit(seed_key: str, edited_df) -> None:
+    """Guarda el DataFrame devuelto por `st.data_editor` como semilla del
+    siguiente rerun. Llamar justo después del editor, ANTES de filtrar o
+    coercionar filas para derivar el modelo de dominio — ese filtrado debe
+    seguir aplicándose solo a la copia que alimenta el modelo, nunca a lo
+    que vuelve a entrar como `data=` del editor."""
+    st.session_state[seed_key] = edited_df

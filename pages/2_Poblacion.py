@@ -3,7 +3,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 from core import dane, population as pop
-from pages_common import page_setup, num_input, int_input, i_num
+from pages_common import (editor_commit, editor_seed, i_num, int_input,
+                          num_input, page_setup)
 
 p = page_setup()
 st.header("2 · Proyección de población")
@@ -56,9 +57,11 @@ if cfg.fuente == "dane":
 else:
     st.subheader("Censo manual")
     st.caption("Edita la tabla o pega desde Excel (columnas: año, población).")
-    censo_df = pd.DataFrame(p.censo or [(2018, 0)], columns=["Año", "Población"])
-    censo_df = st.data_editor(censo_df, num_rows="dynamic", width="stretch",
-                              key="w_ed_censo")
+    seed_censo = editor_seed("censo", lambda: pd.DataFrame(
+        p.censo or [(2018, 0)], columns=["Año", "Población"]))
+    censo_df = st.data_editor(st.session_state[seed_censo], num_rows="dynamic",
+                              width="stretch", key="w_ed_censo")
+    editor_commit(seed_censo, censo_df)
     p.censo = [(i_num(r["Año"], 0), i_num(r["Población"], 0))
                for _, r in censo_df.iterrows()
                if i_num(r["Población"], 0) > 0 and i_num(r["Año"], 0) > 0]

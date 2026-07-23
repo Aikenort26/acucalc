@@ -3,7 +3,10 @@ from pathlib import Path
 import pandas as pd
 
 from core.project import Project
-from pages_common import f_num, fila_incompleta, i_num, resolve_save_path, s_txt
+import streamlit as st
+
+from pages_common import (editor_commit, editor_seed, f_num, fila_incompleta,
+                           i_num, resolve_save_path, s_txt)
 
 
 def test_resolve_vacio_devuelve_none():
@@ -86,3 +89,37 @@ def test_s_txt_nan_no_produce_literal_nan():
     assert s_txt("nan", "circular") == "circular"   # pandas ya lo stringificó
     assert s_txt("rectangular", "circular") == "rectangular"
     assert s_txt("  T1  ") == "T1"
+
+
+# ---------- editor_seed / editor_commit (fix "teclear dos veces" en data_editor) ----------
+
+def test_editor_seed_siembra_solo_una_vez():
+    st.session_state.clear()
+    llamadas = []
+
+    def build():
+        llamadas.append(1)
+        return pd.DataFrame([{"Nombre": "T1"}])
+
+    k1 = editor_seed("tanques", build)
+    k1_again = editor_seed("tanques", build)
+    assert k1 == k1_again == "w_seed_tanques"
+    assert len(llamadas) == 1  # build_df solo se ejecuta la primera vez
+
+
+def test_editor_commit_persiste_lo_editado_sin_reconstruir():
+    st.session_state.clear()
+    seed_key = editor_seed("tanques", lambda: pd.DataFrame([{"Nombre": "T1"}]))
+    editado = pd.DataFrame([{"Nombre": "Tanque nuevo"}])
+    editor_commit(seed_key, editado)
+    # rerun simulado: editor_seed NO debe pisar lo que el usuario acaba de escribir
+    seed_key2 = editor_seed("tanques", lambda: pd.DataFrame([{"Nombre": "T1"}]))
+    assert st.session_state[seed_key2]["Nombre"].tolist() == ["Tanque nuevo"]
+
+
+def test_editor_seed_key_distinto_por_editor():
+    st.session_state.clear()
+    editor_seed("censo", lambda: pd.DataFrame([{"Año": 2020}]))
+    editor_seed("usos", lambda: pd.DataFrame([{"Actividad": "x"}]))
+    assert "w_seed_censo" in st.session_state
+    assert "w_seed_usos" in st.session_state
