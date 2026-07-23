@@ -207,7 +207,8 @@ def _estado_cal(c: dict) -> str:
 def _bloque_calibracion():
     st.subheader("Calibración y captura de puntos")
     st.caption("1) Elige el modo · 2) haz click en la imagen · 3) afina el punto en el "
-               "panel de zoom (±1 px) · 4) confirma. Los puntos confirmados quedan "
+               "panel de zoom (±1 px) · 4) se confirma solo tras ~1s sin tocarlo (o pulsa "
+               "✔ para confirmar de inmediato). Los puntos confirmados quedan "
                "marcados sobre la imagen. El eje X (Q) se calibra una sola vez y se "
                "comparte entre Q-H y Q-η; Y se calibra por separado en cada curva "
                "(escalas distintas). Enter físico avanza de Q-H a Q-η en modo 'lupa "
@@ -283,6 +284,13 @@ def _bloque_calibracion():
                 elif n != st.session_state.get(f"last_click_{BK}"):
                     st.session_state[f"last_click_{BK}"] = n
                     st.session_state[pend_key] = {"x": int(click["x"]), "y": int(click["y"])}
+                    if click.get("autoConfirm"):
+                        # El punto recién llegado se confirma solo, en cuanto
+                        # `pend` esté disponible más abajo (esta misma
+                        # ejecución si ya lo estaba, o la siguiente — mismo
+                        # patrón que ya usa el resto del click handling, que
+                        # no fuerza un rerun extra porque setValue() ya lo hace).
+                        st.session_state[f"do_autoconfirm_{BK}"] = True
         else:
             shown = _overlay(img, cal_merged, pend)
             # Altura fija (ítem 8, modo clásico): a diferencia del componente
@@ -311,6 +319,11 @@ def _bloque_calibracion():
     with col_ctrl:
         st.markdown("**Zoom de precisión**")
         if pend:
+            # Se consume aquí (no donde se puso la bandera) porque `pend` en
+            # ese punto todavía era el valor de la ejecución anterior — el
+            # mismo desfase de un ciclo que ya asume el resto del click
+            # handling (setValue ya dispara el rerun que lo pone al día).
+            auto_fire = st.session_state.pop(f"do_autoconfirm_{BK}", False)
             Z, R = 4, 30
             x0, y0 = max(pend["x"] - R, 0), max(pend["y"] - R, 0)
             crop = img.crop((x0, y0, min(pend["x"] + R, img.width),
@@ -341,7 +354,7 @@ def _bloque_calibracion():
                 eje = modo.split()[1]
                 val = num_input(f"Valor real en {eje}", f"val_{eje}_{destino}_{BK}", 0.0,
                                 decimals=3)
-                if st.button(f"✔ Fijar {eje}", key=f"w_fix_{eje}_{destino}_{BK}"):
+                if st.button(f"✔ Fijar {eje}", key=f"w_fix_{eje}_{destino}_{BK}") or auto_fire:
                     entrada = ({"px": pend["x"], "py": pend["y"]} if eje.startswith("X")
                               else {"px": pend["y"], "px_x": pend["x"]})
                     entrada["val"] = val
@@ -360,7 +373,7 @@ def _bloque_calibracion():
                     q *= FACTOR_Q[unidad_q]
                     st.caption(f"→ Q = {fmt_q(q)} L/s · {'H' if curva == 'qh' else 'η'}"
                                f" = {fmt_h(y) if curva == 'qh' else f'{y:.3f}'}")
-                    if st.button("✔ Confirmar punto", key=f"w_ok_{curva}_{BK}"):
+                    if st.button("✔ Confirmar punto", key=f"w_ok_{curva}_{BK}") or auto_fire:
                         if curva == "qh":
                             bomba.puntos_qh.append((round(q, 4), round(y, 4)))
                             st.session_state.setdefault(f"qh_px_{BK}", []).append(

@@ -144,12 +144,32 @@ window.addEventListener('keydown', e => {
   setValue({enterPressed: true, n: Date.now()});
 });
 
+// Auto-confirmar tras pausa: mientras haya un punto pendiente, cada render
+// reinicia un timer de 900ms; si no llega un render nuevo antes de que
+// dispare (usuario dejó de tocar el punto — ni click nuevo ni nudge), se
+// emite el mismo contrato {x, y, n} más autoConfirm:true. Cada click de
+// nudge (botones ←→↑↓, en Python) fuerza un rerun del fragment → nuevo
+// render aquí → el timer se reinicia solo, así que "pausa tras nudge" y
+// "pausa tras click" quedan cubiertas sin lógica de tiempo en el servidor.
+let autoTimer = null;
+const AUTO_CONFIRM_MS = 900;
+function scheduleAutoConfirm() {
+  if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; }
+  if (!args || !args.markers || !args.markers.pending) return;
+  const [px, py] = args.markers.pending;
+  autoTimer = setTimeout(() => {
+    autoTimer = null;
+    setValue({x: Math.round(px), y: Math.round(py), n: Date.now(), autoConfirm: true});
+  }, AUTO_CONFIRM_MS);
+}
+
 window.addEventListener('message', e => {
   const d = e.data;
   if (d.type !== 'streamlit:render') return;
   args = d.args;
   if (img.getAttribute('src') !== args.image) img.setAttribute('src', args.image);
   else { drawMarkers(); frameHeight(); }
+  scheduleAutoConfirm();
 });
 
 send('streamlit:componentReady', {apiVersion: 1});
