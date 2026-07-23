@@ -157,6 +157,7 @@ div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] {
 /* Cursor de cruz sobre imágenes y el componente de digitalización */
 [data-testid="stImage"] img, iframe[title*="image_coordinates"] { cursor: crosshair !important; }
 
+
 /* ---------- responsive: tablet / pantallas angostas ---------- */
 @media (max-width: 900px) {
   h1, h2, h3 { font-size: 90% !important; }
@@ -213,22 +214,32 @@ def _autosave(p: Project) -> None:
 
 
 def page_setup() -> Project:
-    """CSS del tema + autosave + barra superior de guardado.
+    """CSS del tema + autosave + botón de guardado (solo ícono, alineado a la
+    derecha) en la primera línea de cada página, pegado a la barra de
+    navegación superior. st.navigation no expone una API para insertar
+    widgets propios DENTRO de su barra nativa; se intentó anclar con CSS
+    position:fixed pero Streamlit envuelve cada st.container() en su propio
+    stLayoutWrapper con un `transform` interno (framework, no del tema
+    propio) que rompe fixed/sticky respecto al viewport — el botón terminaba
+    flotando a ~120px del top en vez de pegado al header. Sin API pública
+    para eso, esta es la aproximación más cercana posible: primera fila de
+    contenido, mínima, sin caption ni texto — no dentro de la barra nativa.
     Llamar al inicio de cada página; devuelve el proyecto activo."""
     st.markdown(_CSS, unsafe_allow_html=True)
     p = get_project()
     _autosave(p)
-    bar_l, bar_r = st.columns([3, 2])
-    with bar_l:
-        if p.nombre:
-            st.caption(f"Proyecto: **{p.nombre}**")
+    _, bar_r = st.columns([6, 1])
     with bar_r:
         dest = resolve_save_path(p)
         ayuda = (f"Guarda en tu carpeta: {dest}" if dest is not None
                  else "Guarda en la carpeta saves/ del programa (fija una ruta en "
                       "la página 1 para guardar en tu propia carpeta)")
-        if st.button("💾 Guardar estado del proyecto", width="stretch",
-                     disabled=not p.nombre, help=ayuda):
+        if p.nombre:
+            ayuda = f"Proyecto: {p.nombre} — {ayuda}"
+        if "last_save" in st.session_state:
+            n, h = st.session_state["last_save"]
+            ayuda = f"Guardado: {n} · {h} — {ayuda}"
+        if st.button("💾", key="w_btn_guardar", disabled=not p.nombre, help=ayuda):
             try:
                 if dest is not None:
                     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -244,12 +255,8 @@ def page_setup() -> Project:
                 st.session_state.pop("_autosave_error", None)
             except OSError as e:
                 st.error(f"No se pudo guardar en la ruta indicada: {e}")
-        if "last_save" in st.session_state:
-            n, h = st.session_state["last_save"]
-            st.caption(f"Guardado: {n} · {h}")
-        if "_autosave_error" in st.session_state:
-            st.caption(f"⚠ Autosave falló: {st.session_state['_autosave_error']}")
-    st.divider()
+    if "_autosave_error" in st.session_state:
+        st.caption(f"⚠ Autosave falló: {st.session_state['_autosave_error']}")
     return p
 
 
