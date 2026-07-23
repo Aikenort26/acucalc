@@ -213,15 +213,16 @@ def _autosave(p: Project) -> None:
 
 
 def page_setup() -> Project:
-    """CSS del tema + autosave + controles de guardado en la barra lateral.
+    """CSS del tema + autosave + barra superior de guardado.
     Llamar al inicio de cada página; devuelve el proyecto activo."""
     st.markdown(_CSS, unsafe_allow_html=True)
     p = get_project()
     _autosave(p)
-    with st.sidebar:
-        st.divider()
+    bar_l, bar_r = st.columns([3, 2])
+    with bar_l:
         if p.nombre:
             st.caption(f"Proyecto: **{p.nombre}**")
+    with bar_r:
         dest = resolve_save_path(p)
         ayuda = (f"Guarda en tu carpeta: {dest}" if dest is not None
                  else "Guarda en la carpeta saves/ del programa (fija una ruta en "
@@ -248,6 +249,7 @@ def page_setup() -> Project:
             st.caption(f"Guardado: {n} · {h}")
         if "_autosave_error" in st.session_state:
             st.caption(f"⚠ Autosave falló: {st.session_state['_autosave_error']}")
+    st.divider()
     return p
 
 
