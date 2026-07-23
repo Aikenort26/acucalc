@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="ACUCALC">
+  <defs>
+    <linearGradient id="gota" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <linearGradient id="tuberia" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#16A34A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- tubería horizontal con dos bridas: alude al diseño hidráulico -->
+  <g stroke="url(#tuberia)" fill="none" stroke-linecap="round">
+    <line x1="24" y1="182" x2="216" y2="182" stroke-width="18"/>
+  </g>
+  <g fill="#16A34A">
+    <rect x="56" y="166" width="10" height="32" rx="3"/>
+    <rect x="174" y="166" width="10" height="32" rx="3"/>
+  </g>
+
+  <!-- gota de agua: cuerpo del logo -->
+  <path d="M120 34
+           C120 34 66 104 66 140
+           a54 54 0 1 0 108 0
+           C174 104 120 34 120 34 Z"
+        fill="url(#gota)"/>
+  <!-- brillo de la gota -->
+  <path d="M100 118
+           C92 130 92 146 100 156"
+        fill="none" stroke="#E0F2FE" stroke-width="8"
+        stroke-linecap="round" opacity="0.85"/>
+
+  <!-- onda/curva de caudal dentro de la gota: guiño a la curva Q-H -->
+  <path d="M92 150 C104 138 116 162 128 150 S 150 138 150 150"
+        fill="none" stroke="#0B1416" stroke-width="6"
+        stroke-linecap="round" opacity="0.55"/>
+</svg>
