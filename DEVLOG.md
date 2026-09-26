@@ -47,6 +47,40 @@ Párrafo libre con contexto crítico que el otro agente necesita saber.
 
 ## Entradas
 
+## [2026-09-26] — Registro retroactivo: 21 commits del 22-23 jul sin entrada + plan v9
+
+**Agente:** Claude Code
+**Rama:** claude/elegant-gates-2y7i8w (desde main @ 8fab53d)
+**Sesión:** El usuario pidió levantar la app y un diagnóstico de pendientes. El diagnóstico encontró que las sesiones del 22-23 jul no escribieron entrada en este DEVLOG (protocolo de CLAUDE.md incumplido). Esta entrada las registra a partir de los mensajes de commit y define el plan v9 aprobado por el usuario.
+
+### Cambios realizados (commits 22-23 jul, ya en main, sin entrada previa)
+- `assets/acucalc_logo.svg` (ae49f6b): logo de ACUCALC (C2, marca). Aún sin referenciar desde el informe
+- `pages/6_Curvas_de_bomba.py` (06c416a, 87e7cbb, dbd2151): layout de calibración sin scroll; auto-confirmar punto tras pausa; después, por pedido del usuario, captura de **un solo click** (se eliminaron punto pendiente, lupa de ajuste y confirmar). Fix: los puntos no se acumulaban porque la semilla del data_editor no se invalidaba tras escrituras que no venían de la tabla (`_reset_tabla_puntos`). Nueva tabla de calibración manual X1/X2/Y1/Y2
+- `components/paste_image/` (e8f01ef): pegar captura con Ctrl+V en la curva de bomba
+- `app.py`, `pages_common.py` (544792b, cb79283, 8fab53d): `st.navigation(position="top")` reemplaza el sidebar; botón Guardar solo icono, anclado con `position:fixed` a la barra (`--guardar-left`, offset fijo en px calibrado para 9 ítems de navegación)
+- `pages_common.py::editor_seed/editor_commit` (c3bb6ad): los 6 data_editor se siembran una sola vez; antes re-sembraban cada rerun y perdían lo tecleado
+- `LICENSE` (54e4818): GPL-3.0 (reemplaza MIT)
+- `Procfile`, `.python-version`=3.14, `.gitignore` (e0723a9): despliegue en Railway
+- `packages.txt` + `core/report.py` (001f17e): TeX mínimo para Streamlit Cloud; `--enable-installer` solo si el motor es MiKTeX (TeX Live abortaba con "Unrecognized option")
+- `.devcontainer/devcontainer.json` (fab3354): imagen python 3.11
+
+### Tests
+- `pytest -q` → 240 passed, 0 failed (verificado hoy; la última entrada registraba 235)
+
+### Decisiones tomadas
+- Plan v9 aprobado: `docs/plans/2026-09-26-acucalc-v9.md` (WP0–WP13)
+- EPANET real vía `epyt` (wheel py3-none-any, instalable en 3.11 y 3.14) como motor principal; GGA propio como respaldo. Revierte la decisión v7 de "sin EPANET real", tomada por falta de wheels
+- Red: estático con QMH (Art. 47) + periodo extendido con QMD × patrón 24 h. **Cambia resultados de proyectos anteriores** (antes QMD)
+- Transitorios: MOC (Wylie–Streeter) + método clásico de Allievi como segundo motor de validación; escenarios cierre/apertura de válvula, parada/arranque de bomba, tanque hidroneumático; ventosas solo diagnóstico
+- Cartografía solo OSM/Esri (sin Google); multi-tanque "verifica y sugiere", sin aplicar el volumen sugerido
+
+### Pendientes (TODO)
+- [ ] Ejecutar WP1–WP13 del plan v9
+- [ ] Inconsistencia de versión de Python: `.python-version` 3.14 (Railway) frente a devcontainer/IDX 3.11. Verificar en Railway que la librería EPANET de epyt cargue (`ldd`)
+
+### Contexto para el siguiente agente
+El protocolo del DEVLOG se rompió en las sesiones del 22-23 jul: si cambias código, escribe tu entrada antes del último push. El botón Guardar depende de un offset en px que se rompe si se agregan páginas a la navegación (se corrige en WP7).
+
 ## [2026-07-17] — v8 bloques A+B: informe dentro de márgenes + bug de reparto de demandas
 
 **Agente:** Claude Code
