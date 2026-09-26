@@ -56,6 +56,7 @@ p.demanda.dneta = 110.0
 p.demanda.perdidas = 0.0
 p.demanda.k1 = 1.0
 p.demanda.k2 = 1.0
+p.demanda.k_auto = False     # K manuales: sin esto la página 3 los recalcula (1.2/1.5)
 p.demanda.referencia = "res0844_2018"
 p.demanda.justificacion = ("Dotación de 110 L/hab/d adoptada para la cabecera "
                            "municipal; no se consideran pérdidas técnicas ni "

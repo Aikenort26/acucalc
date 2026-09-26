@@ -3,40 +3,38 @@ import datetime as dt
 import streamlit as st
 from core import dane, project as pj
 from core.imagenes import reducir_a_b64
-from pages_common import (SAVES_DIR, AUTOSAVE_FILE, page_setup, num_input, clear_widget_state)
+from pages_common import (SAVES_DIR, AUTOSAVE_FILE, page_setup, num_input, clear_widget_state,
+                          sel_state, txt_state)
 
 p = page_setup()
 st.header("1 · Proyecto")
 
 c1, c2 = st.columns(2)
 with c1:
-    p.nombre = st.text_input("Nombre del proyecto", p.nombre, key="w_txt_nombre")
+    p.nombre = st.text_input("Nombre del proyecto", key=txt_state("txt_nombre", p.nombre))
     dptos = dane.departamentos()
     p.poblacion.dpto = st.selectbox(
-        "Departamento (DANE)", dptos,
-        index=dptos.index(p.poblacion.dpto) if p.poblacion.dpto in dptos else 0,
-        key="w_sel_dpto")
+        "Departamento (DANE)", dptos, key=sel_state(dptos, "sel_dpto", p.poblacion.dpto))
     p.departamento = p.poblacion.dpto
     mpios = dane.municipios(p.poblacion.dpto)
     p.poblacion.mpio = st.selectbox(
-        "Municipio (DANE)", mpios,
-        index=mpios.index(p.poblacion.mpio) if p.poblacion.mpio in mpios else 0,
-        key="w_sel_mpio")
+        "Municipio (DANE)", mpios, key=sel_state(mpios, "sel_mpio", p.poblacion.mpio))
     p.municipio = p.poblacion.mpio
     p.poblacion.tipo = st.radio(
         "El estudio es en:", ["municipio", "corregimiento"],
         format_func={"municipio": "Cabecera municipal",
                      "corregimiento": "Corregimiento / vereda"}.get,
-        index=["municipio", "corregimiento"].index(p.poblacion.tipo),
-        horizontal=True, key="w_radio_tipo")
+        horizontal=True,
+        key=sel_state(["municipio", "corregimiento"], "radio_tipo", p.poblacion.tipo))
     if p.poblacion.tipo == "corregimiento":
         p.corregimiento = st.text_input("Nombre del corregimiento / vereda",
-                                        p.corregimiento, key="w_txt_corr")
+                                        key=txt_state("txt_corr", p.corregimiento))
     else:
         p.corregimiento = ""
 with c2:
-    p.consultor = st.text_input("Consultor / entidad", p.consultor, key="w_txt_consultor")
-    p.fecha = st.text_input("Fecha", p.fecha or dt.date.today().isoformat(), key="w_txt_fecha")
+    p.consultor = st.text_input("Consultor / entidad", key=txt_state("txt_consultor", p.consultor))
+    p.fecha = st.text_input("Fecha", key=txt_state("txt_fecha",
+                                                 p.fecha or dt.date.today().isoformat()))
     p.altitud = num_input("Altitud promedio [m.s.n.m.]", "altitud", p.altitud,
                           decimals=0, min_value=0.0, max_value=4500.0)
     p.temperatura = num_input("Temperatura del agua [°C]", "temperatura", p.temperatura,
@@ -81,7 +79,7 @@ with st.expander("Logos de portada del informe", expanded=False):
 st.divider()
 p.ruta_guardado = st.text_input(
     "📁 Ruta de guardado del proyecto (carpeta o archivo .acucalc.json en tu computador)",
-    p.ruta_guardado, key="w_txt_ruta_guardado",
+    key=txt_state("txt_ruta_guardado", p.ruta_guardado),
     placeholder=r"ej. C:\Users\aiken\Proyectos\San_Jacinto   —   o un archivo .acucalc.json",
     help="El botón '💾 Guardar estado del proyecto' de la barra lateral y el autosave "
          "escribirán AQUÍ (tu carpeta), no en la carpeta interna de la app. Si dejas "
@@ -117,7 +115,10 @@ with c4:
             except pj.SchemaError as e:
                 st.error(f"No se pudo cargar: {e}")
     up = st.file_uploader("…o cargar archivo de proyecto", type=["json"])
-    if up is not None:
+    # El uploader conserva el archivo entre reruns: sin este guard cada rerun lo
+    # volvía a cargar (bucle de st.rerun y ediciones de la página pisadas).
+    if up is not None and st.session_state.get("proy_upload_id") != up.file_id:
+        st.session_state["proy_upload_id"] = up.file_id
         import tempfile, pathlib
         tmp = pathlib.Path(tempfile.mkstemp(suffix=".json")[1])
         tmp.write_bytes(up.getvalue())

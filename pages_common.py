@@ -395,6 +395,18 @@ def sel_state(options: list, key: str, default) -> str:
     return k
 
 
+def txt_state(key: str, default: str) -> str:
+    """Siembra el key de un `text_input`/`text_area` y devuelve ese key (mismo
+    principio que `num_input`/`sel_state`). Con `value=` en vez de sembrar,
+    tras cargar un proyecto (`clear_widget_state` + `st.rerun`) el navegador
+    reenvía el texto viejo del widget y este pisa el valor del proyecto
+    cargado: el nombre del proyecto quedaba vacío."""
+    k = WIDGET_PREFIX + key
+    if k not in st.session_state:
+        st.session_state[k] = default or ""
+    return k
+
+
 def clear_widget_state() -> None:
     """Borra los keys de widgets numéricos — llamar al cargar un proyecto para
     que los valores del archivo cargado se conviertan en los nuevos defaults."""
