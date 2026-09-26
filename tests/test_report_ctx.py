@@ -274,3 +274,27 @@ def test_texto_red_declara_qmh_como_condicion_de_diseno(tmp_path):
     tex = (report.render(ctx, tmp_path / "o") / "main.tex").read_text(encoding="utf-8")
     assert "que es la condición de diseño de la red" not in tex
     assert "QMH" in tex[tex.index(r"\section{Red de distribución}"):]
+
+
+def _con_bombeo(tipo_bomba="superficie"):
+    p = _proyecto_minimo()
+    s = pj.PumpSystemData(nombre="Captación", horas=12, he=25.0, eficiencia=0.7,
+                          tipo_bomba=tipo_bomba, z_succion=3.0, npsh_r=4.0, margen_npsh=0.5)
+    s.tramos = [pj.SegmentData("Succión", "succion", 6.0, 102.2, "PVC"),
+                pj.SegmentData("Impulsión", "impulsion", 300.0, 79.5, "PEAD", e_mm=5.3)]
+    p.bombeos = [s]
+    return p
+
+
+def test_npsh_en_el_informe(tmp_path):
+    ctx, _ = report_ctx.build(_con_bombeo())
+    n = ctx["sistemas"][0]["npsh"]
+    assert n["cumple"] == "Sí" and float(n["npsh_d"]) > 4.5
+    assert n["npsh_r"] == "4.00" and n["margen"] == "0.50"
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    assert "NPSH disponible" in tex and r"\cite{iapws2012}" in tex and r"\cite{iso2533}" in tex
+
+
+def test_npsh_no_aplica_a_sumergible():
+    ctx, _ = report_ctx.build(_con_bombeo("sumergible"))
+    assert ctx["sistemas"][0]["npsh"] is None

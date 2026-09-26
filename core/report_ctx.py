@@ -227,6 +227,17 @@ def build(p: Project) -> tuple[dict, dict]:
                 "bep_q": fm.fmt_q(bep.q) if bep else "—",
                 "desv_bep": f"{(op[0] - bep.q) / bep.q * 100:.1f}" if (op and bep) else "—",
                 "p_hp": fm.fmt_p(pot) if pot == pot else "—"})
+        npsh_ctx = None
+        if s.tipo_bomba != "sumergible":
+            n = pu.npsh_sistema(r, p.altitud, p.temperatura, s.z_succion, s.npsh_r,
+                                s.margen_npsh)
+            npsh_ctx = {
+                "patm": fm.fmt_perdida(n.patm_m), "pv": fm.fmt_perdida(n.pv_m),
+                "z": fm.fmt_perdida(n.z_succion), "perdidas": fm.fmt_perdida(n.perdidas_succion),
+                "npsh_d": fm.fmt_h(n.npsh_d),
+                "npsh_r": fm.fmt_h(n.npsh_r) if n.npsh_r else "—",
+                "margen": fm.fmt_h(n.margen),
+                "cumple": "—" if n.cumple is None else ("Sí" if n.cumple else "No")}
         fig_name = f"sistema_{i + 1}"
         _save(rf.fig_sistema(sys_lps, bombas_fig, qb_lps, r.hd, s.nombre), fig_name)
         sistemas_ctx.append({
@@ -242,6 +253,7 @@ def build(p: Project) -> tuple[dict, dict]:
                        for t in r.tramos],
             "bombas": bombas_tab,
             "ariete": ariete_tab,
+            "npsh": npsh_ctx,
             "bomba_seleccionada": latex_escape(s.bomba_seleccionada or "—"),
             "fig": f"{fig_name}.png"})
 

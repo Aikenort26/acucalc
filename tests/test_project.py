@@ -382,6 +382,7 @@ def _proyecto_completo():
     s = p.bombeos[0]
     s.sumar_5m_ras = True
     s.bomba_seleccionada = "Bomba A"
+    s.z_succion, s.npsh_r, s.margen_npsh = 3.5, 4.2, 0.5
     b = s.bombas[0]
     b.puntos_qe = [(2.9, 0.61), (4.0, 0.70)]
     b.imagen_b64 = "iVBORw0KGgoCURVA"

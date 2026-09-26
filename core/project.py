@@ -146,6 +146,9 @@ class PumpSystemData:
     tipo_bomba: str = "superficie"    # superficie|sumergible
     bombas: list = field(default_factory=list, metadata={"item": PumpData})
     bomba_seleccionada: str = ""
+    z_succion: float = 0.0            # + eje de bomba sobre la lámina, − ahogada [m]
+    npsh_r: float = 0.0               # NPSH requerido del fabricante al Q de diseño (0 = sin dato)
+    margen_npsh: float = 0.0          # margen que define el proyectista [m]
 
 
 @dataclass

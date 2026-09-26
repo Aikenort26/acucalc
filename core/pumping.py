@@ -1,7 +1,7 @@
 """Sistema de bombeo multi-tramo: pérdidas acumuladas, Hd, potencia."""
 import math
 from dataclasses import dataclass, field
-from core import catalogs, hydraulics as hy
+from core import catalogs, hydraulics as hy, propiedades as pr
 
 HP_W = 745.7
 
@@ -170,6 +170,31 @@ def npsh_disponible(patm_m: float, h_succion: float, perdidas_succion: float,
                     presion_vapor_m: float) -> float:
     """NPSHd = Patm − Pv − h_succión_estática − pérdidas de succión [m]."""
     return patm_m - presion_vapor_m - h_succion - perdidas_succion
+
+
+@dataclass(frozen=True)
+class NpshResult:
+    patm_m: float            # presión atmosférica local [m de columna de agua]
+    pv_m: float              # presión de vapor a la temperatura del agua [m]
+    z_succion: float         # + bomba sobre la lámina (succión negativa), − ahogada
+    perdidas_succion: float  # Σ(hf + hl) de los tramos de succión al Q de diseño [m]
+    npsh_d: float
+    npsh_r: float | None     # NPSH requerido del fabricante al Q de diseño
+    margen: float
+    cumple: bool | None      # None si no hay NPSHr
+
+
+def npsh_sistema(r: SolveResult, altitud_m: float, temperatura: float, z_succion: float,
+                 npsh_r: float | None = None, margen: float = 0.0) -> NpshResult:
+    """NPSH disponible con Patm por altitud (ISA) y presión de vapor por
+    temperatura (IAPWS-IF97); verifica NPSHd ≥ NPSHr + margen si hay NPSHr."""
+    rho = catalogs.water_props(temperatura).rho
+    patm = pr.carga_m(pr.presion_atmosferica_pa(altitud_m), rho)
+    pv = pr.carga_m(pr.presion_vapor_pa(temperatura), rho)
+    perd = sum(t.hf + t.hl for t in r.tramos if t.segment.tipo == "succion")
+    npsh_d = npsh_disponible(patm, z_succion, perd, pv)
+    cumple = None if not npsh_r else npsh_d >= npsh_r + margen
+    return NpshResult(patm, pv, z_succion, perd, npsh_d, npsh_r or None, margen, cumple)
 
 
 @dataclass(frozen=True)

@@ -333,6 +333,23 @@ Tramo & $L$ [m] & $D$ [mm] & Material & $V$ [m/s] & $h_f$ [m] & $h_l$ [m] \\ \mi
 Altura dinámica total: $H_d=\VAR{s.hd}$ m. Con eficiencia $\eta=\VAR{s.eficiencia}$,
 la potencia requerida es \textbf{\VAR{s.potencia_kw} kW (\VAR{s.potencia_hp} HP)}.
 
+\BLOCK{if s.npsh}
+\paragraph{NPSH disponible.} Se verifica la cavitación con
+$NPSH_d = P_{atm}/\gamma - P_v/\gamma - z_s - h_{s}$, donde la presión
+atmosférica se obtiene de la atmósfera estándar a
+\VAR{altitud}~m~s.n.m.~\cite{iso2533}, la presión de vapor de la ecuación de
+saturación IAPWS-IF97 a \VAR{temperatura}~°C~\cite{iapws2012}, $z_s$ es la altura
+estática de succión (positiva con la bomba sobre la lámina de agua) y $h_s$ las
+pérdidas de la succión al caudal de bombeo. La condición es
+$NPSH_d \geq NPSH_r + \text{margen}$.
+\begin{table}[H]\centering
+\caption{Verificación de NPSH --- \VAR{s.nombre} (valores en m).}
+\begin{tabular}{rrrrrrrl}\toprule
+$P_{atm}/\gamma$ & $P_v/\gamma$ & $z_s$ & $h_s$ & $NPSH_d$ & $NPSH_r$ & Margen & Cumple \\ \midrule
+\VAR{s.npsh.patm} & \VAR{s.npsh.pv} & \VAR{s.npsh.z} & \VAR{s.npsh.perdidas} & \VAR{s.npsh.npsh_d} & \VAR{s.npsh.npsh_r} & \VAR{s.npsh.margen} & \BLOCK{if s.npsh.cumple == "No"}\textbf{No}\BLOCK{else}\VAR{s.npsh.cumple}\BLOCK{endif} \\
+\bottomrule\end{tabular}\end{table}
+\BLOCK{endif}
+
 \BLOCK{if s.ariete}
 \begin{table}[H]\centering
 \caption{Golpe de ariete (Joukowsky) y factor de seguridad --- \VAR{s.nombre}. FS $=PN/(H_d+\Delta H)$, cumple si $\geq 1$; el uso se calcula con la $H_d$ del sistema completo (conservador).}

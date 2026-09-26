@@ -164,3 +164,51 @@ def test_ariete_tramo_frozen():
     r = pu.ariete_tramo("T", 0.0795, 0.0043, 111.11, 1.0, 50.0, 150.0)
     with pytest.raises(dataclasses.FrozenInstanceError):
         r.fs = 9.0
+
+
+# --- WP5 v9: NPSH disponible del sistema -------------------------------------
+
+from core import propiedades as _pr
+
+
+def _sistema_con_succion(he=20.0):
+    return pu.PumpSystem(
+        tramos=[pu.Segment("Succión", "succion", 6.0, 0.1022, "PVC"),
+                pu.Segment("Impulsión", "impulsion", 300.0, 0.0795, "PEAD")],
+        accesorios=[pu.Accessory("Entrada recta a tope", 1, "Succión"),
+                    pu.Accessory("Codo radio corto", 2, "Succión")],
+        he=he, temperatura=20.0, eficiencia=0.7)
+
+
+def test_npsh_sistema_suma_solo_perdidas_de_succion():
+    sist = _sistema_con_succion()
+    r = pu.solve(sist, 0.008)
+    n = pu.npsh_sistema(r, altitud_m=0.0, temperatura=20.0, z_succion=3.0)
+    suc = r.tramos[0]
+    assert n.perdidas_succion == pytest.approx(suc.hf + suc.hl)
+    rho = 998.29
+    assert n.patm_m == pytest.approx(_pr.carga_m(101325.0, rho))
+    assert n.pv_m == pytest.approx(_pr.carga_m(_pr.presion_vapor_pa(20.0), rho))
+    assert n.npsh_d == pytest.approx(n.patm_m - n.pv_m - 3.0 - n.perdidas_succion)
+    assert 6.5 < n.npsh_d < 7.4          # ~10.35 − 0.24 − 3 − pérdidas
+    assert n.cumple is None              # sin NPSHr no se verifica
+
+
+def test_npsh_verifica_con_margen():
+    r = pu.solve(_sistema_con_succion(), 0.008)
+    n0 = pu.npsh_sistema(r, 0.0, 20.0, 3.0)
+    assert pu.npsh_sistema(r, 0.0, 20.0, 3.0, npsh_r=n0.npsh_d - 1.0, margen=0.5).cumple is True
+    assert pu.npsh_sistema(r, 0.0, 20.0, 3.0, npsh_r=n0.npsh_d - 1.0, margen=1.5).cumple is False
+
+
+def test_npsh_baja_con_altitud_y_temperatura():
+    r = pu.solve(_sistema_con_succion(), 0.008)
+    base = pu.npsh_sistema(r, 0.0, 20.0, 3.0).npsh_d
+    assert pu.npsh_sistema(r, 2600.0, 20.0, 3.0).npsh_d < base
+    assert pu.npsh_sistema(r, 0.0, 35.0, 3.0).npsh_d < base
+
+
+def test_succion_ahogada_aumenta_npsh():
+    r = pu.solve(_sistema_con_succion(), 0.008)
+    assert (pu.npsh_sistema(r, 0.0, 20.0, -2.0).npsh_d
+            == pytest.approx(pu.npsh_sistema(r, 0.0, 20.0, 3.0).npsh_d + 5.0))

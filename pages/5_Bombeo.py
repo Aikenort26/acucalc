@@ -280,6 +280,52 @@ st.info(f"Bomba mínima requerida: **Q = {fmt_q(qb_lps)} L/s · H = {fmt_h(r.hd)
         f"P = {fmt_p(r.potencia_hp)} HP** → compárala en la página 6 con las curvas "
         f"de las bombas candidatas de este sistema.")
 
+# ---------- NPSH: verificación de cavitación ----------
+with st.expander("NPSH — verificación de cavitación", expanded=False):
+    if sys_d.tipo_bomba == "sumergible":
+        st.caption("Bomba sumergible: trabaja ahogada; no aplica la verificación de NPSH "
+                   "por succión.")
+    else:
+        n1, n2, n3 = st.columns(3)
+        sys_d.z_succion = num_input(
+            "Altura estática de succión z_s [m]", f"zs_{K}", sys_d.z_succion, decimals=2,
+            container=n1, min_value=-100.0, max_value=15.0,
+            help="Positiva si el eje de la bomba está por encima de la lámina de agua "
+                 "(succión negativa); negativa si la bomba está ahogada.")
+        sys_d.npsh_r = num_input(
+            "NPSH requerido [m]", f"npshr_{K}", sys_d.npsh_r, decimals=2, container=n2,
+            min_value=0.0, max_value=60.0,
+            help="Del catálogo del fabricante, al caudal de diseño. 0 = sin dato.")
+        sys_d.margen_npsh = num_input(
+            "Margen de seguridad [m]", f"mnpsh_{K}", sys_d.margen_npsh, decimals=2,
+            container=n3, min_value=0.0, max_value=20.0,
+            help="Lo define el proyectista (recomendación del fabricante u otra "
+                 "referencia técnica). La verificación es NPSHd ≥ NPSHr + margen.")
+        npsh = pu.npsh_sistema(r, p.altitud, p.temperatura, sys_d.z_succion,
+                               sys_d.npsh_r, sys_d.margen_npsh)
+        st.dataframe(pd.DataFrame([
+            {"Concepto": "Presión atmosférica (ISA, "
+                         f"{p.altitud:,.0f} m s.n.m.)", "[m]": npsh.patm_m},
+            {"Concepto": f"Presión de vapor (IAPWS-IF97, {p.temperatura:.1f} °C)",
+             "[m]": -npsh.pv_m},
+            {"Concepto": "Altura estática de succión", "[m]": -npsh.z_succion},
+            {"Concepto": "Pérdidas en la succión (hf + hl)", "[m]": -npsh.perdidas_succion},
+            {"Concepto": "NPSH disponible", "[m]": npsh.npsh_d}])
+            .style.format({"[m]": SP_PERDIDA}), hide_index=True, width="stretch")
+        if not any(t.tipo == "succion" for t in sys_d.tramos):
+            st.caption("El sistema no tiene tramos de succión: las pérdidas de succión "
+                       "se toman como 0.")
+        if npsh.cumple is None:
+            st.info("Ingresa el NPSH requerido de la bomba para verificar.")
+        elif npsh.cumple:
+            st.success(f"Cumple: NPSHd = {npsh.npsh_d:.2f} m ≥ NPSHr + margen = "
+                       f"{npsh.npsh_r + npsh.margen:.2f} m.")
+        else:
+            st.error(f"No cumple: NPSHd = {npsh.npsh_d:.2f} m < NPSHr + margen = "
+                     f"{npsh.npsh_r + npsh.margen:.2f} m. Riesgo de cavitación: reduce "
+                     "la altura de succión, aumenta el diámetro de la succión o baja "
+                     "la bomba.")
+
 sistemas = st.session_state.setdefault("sistemas", {})
 sistemas[sys_d.nombre] = {"sistema": sistema, "solve": r, "qb_lps": qb_lps}
 
