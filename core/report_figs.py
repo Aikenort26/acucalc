@@ -8,6 +8,7 @@ páginas de la app usan `dark_background` para la vista en pantalla, y sin este
 blindaje una figura del PDF podía heredar el fondo negro y volver invisibles
 las líneas negras (bug reportado con la curva del sistema)."""
 import functools
+import math
 
 import matplotlib
 matplotlib.use("Agg")
@@ -350,25 +351,40 @@ def fig_esquema(sistemas: list[dict], tanques: list) -> "plt.Figure":
     return fig
 
 
-# Paleta categórica (orden fijo, modo claro) y tintas para las figuras nuevas.
-SERIE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
-TINTA, TINTA_2, GRILLA = "#0b0b0b", "#52514e", "#dcdcd8"
+# Paleta categórica (orden fijo) y tintas, con pasos propios para fondo claro
+# (informe impreso) y oscuro (vista en la app).
+_SERIE_CLARO = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
+_SERIE_OSCURO = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767"]
+
+
+def _es_oscuro() -> bool:
+    from matplotlib.colors import to_rgb
+    return sum(to_rgb(plt.rcParams["axes.facecolor"])) < 1.5
+
+
+def _tintas():
+    """(serie, tinta, tinta secundaria, grilla) según el estilo activo."""
+    if _es_oscuro():
+        return _SERIE_OSCURO, "#ffffff", "#c3c2b7", "#3a3a38"
+    return _SERIE_CLARO, "#0b0b0b", "#52514e", "#dcdcd8"
 
 
 def _ejes_sobrios(ax):
-    ax.grid(color=GRILLA, lw=0.6)
+    _, _, t2, grilla = _tintas()
+    ax.grid(color=grilla, lw=0.6)
     ax.set_axisbelow(True)
     for lado in ("top", "right"):
         ax.spines[lado].set_visible(False)
     for lado in ("left", "bottom"):
-        ax.spines[lado].set_color(TINTA_2)
-    ax.tick_params(colors=TINTA_2, labelsize=8)
+        ax.spines[lado].set_color(t2)
+    ax.tick_params(colors=t2, labelsize=8)
 
 
 @_light
 def fig_eps(horas: list, nodo: str, presion: list, niveles: dict, p_min: float):
     """Periodo extendido: presión del nodo crítico y nivel de los tanques en
     paneles separados (magnitudes distintas: nunca en un eje doble)."""
+    SERIE, TINTA, TINTA_2, _ = _tintas()
     paneles = 2 if niveles else 1
     fig, axes = plt.subplots(paneles, 1, figsize=(8.5, 2.9 * paneles + 0.4), sharex=True,
                              squeeze=False)
@@ -390,5 +406,36 @@ def fig_eps(horas: list, nodo: str, presion: list, niveles: dict, p_min: float):
         _ejes_sobrios(axn)
     axes[-1][0].set_xlabel("Hora del día", color=TINTA)
     axes[-1][0].set_xticks(range(0, 25, 3))
+    fig.tight_layout()
+    return fig
+
+
+@_light
+def fig_balance_red(resultado, frac_incendio: float, dias_reserva: float):
+    """Balance de masas entre tanques: un panel por tanque (los volúmenes
+    pueden diferir en órdenes de magnitud) con el volumen de regulación
+    almacenado hora a hora y la capacidad de regulación del volumen asignado."""
+    SERIE, TINTA, TINTA_2, _ = _tintas()
+    tanques = resultado.tanques
+    n = len(tanques)
+    cols = 1 if n == 1 else 2
+    filas = math.ceil(n / cols)
+    fig, axes = plt.subplots(filas, cols, figsize=(8.5, 2.6 * filas + 0.3), squeeze=False)
+    horas = list(range(25))
+    for i, t in enumerate(tanques):
+        ax = axes[i // cols][i % cols]
+        ax.plot(horas, t.volumen_h, color=SERIE[0], lw=2)
+        cap = t.v_asignado / ((1 + frac_incendio) * dias_reserva) if dias_reserva else 0
+        ax.axhline(cap, color=TINTA_2, lw=1, ls="--")
+        ax.annotate("capacidad asignada", (24, cap), xytext=(-4, 3), textcoords="offset points",
+                    ha="right", fontsize=7, color=TINTA_2)
+        ax.set_title(t.nombre, fontsize=10, color=TINTA, loc="left")
+        ax.set_ylabel("Regulación [m³]", color=TINTA, fontsize=8)
+        ax.set_xticks(range(0, 25, 6))
+        _ejes_sobrios(ax)
+    for j in range(n, filas * cols):
+        axes[j // cols][j % cols].set_visible(False)
+    for ax in axes[-1]:
+        ax.set_xlabel("Hora del día", color=TINTA, fontsize=8)
     fig.tight_layout()
     return fig

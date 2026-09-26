@@ -79,6 +79,22 @@ class TankSpec:
 
 
 @dataclass
+class ZonaSpec:
+    nombre: str = ""
+    fraccion: float = 1.0        # fracción del QMD que consume la zona
+
+
+@dataclass
+class EnlaceSpec:
+    origen: str = ""             # fuente (nombre libre) o tanque
+    destino: str = ""            # tanque o zona
+    tipo: str = "bombeo"         # bombeo | gravedad
+    ini: int = 0                 # ventana de operación (horas, inclusive)
+    fin: int = 23
+    caudal_lps: float = 0.0      # 0 = auto (cierra el balance del tanque destino)
+
+
+@dataclass
 class StorageConfig:
     frac_regulacion: float = 1 / 3
     frac_incendio: float = 0.15
@@ -88,6 +104,9 @@ class StorageConfig:
     suministro_hora: list = field(default_factory=list)   # ventana de bombeo bajo→elevado
     ventana_captacion: list = field(default_factory=list)
     tanques: list = field(default_factory=list, metadata={"item": TankSpec})
+    modo_balance: str = "por_tanque"   # por_tanque | red (balance de masas entre tanques)
+    zonas: list = field(default_factory=list, metadata={"item": ZonaSpec})
+    enlaces: list = field(default_factory=list, metadata={"item": EnlaceSpec})
 
 
 @dataclass

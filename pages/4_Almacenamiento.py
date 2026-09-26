@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
-from core import catalogs, pipeline, report_figs as rf, storage
-from core.project import TankSpec
+from core import catalogs, pipeline, report_figs as rf, storage, tank_network as tn
+from core.project import EnlaceSpec, TankSpec, ZonaSpec
 from pages_common import (SP_ALTURA, SP_VOLUMEN, editor_commit, editor_seed,
                           f_num, fila_incompleta, fmt_vol, get_project, i_num,
                           num_input, page_setup, s_txt, sel_state)
@@ -241,5 +241,83 @@ if checks:
         if not c.cumple:
             st.warning(f"El tanque '{c.nombre}' necesita ≥ {c.v_balance_req:.0f} m³ "
                        f"por su balance interno (asignado: {c.v_asignado:.0f} m³).")
+
+# --- balance de masas entre tanques (opcional) ---
+st.markdown("**Balance de masas entre tanques**")
+modos = ["por_tanque", "red"]
+cfg.modo_balance = st.radio(
+    "Modo", modos, horizontal=True, label_visibility="collapsed",
+    format_func={"por_tanque": "Cada tanque por separado (ventanas propias, QMD completo)",
+                 "red": "Red de tanques: conexiones, caudales y zonas de consumo"}.get,
+    key=sel_state(modos, "radio_modo_balance", cfg.modo_balance))
+if cfg.modo_balance == "red":
+    st.caption("Define qué alimenta a cada tanque y qué zona abastece cada uno. La app "
+               "simula el día hora a hora (V(h+1) = V(h) + Q entra − Q sale), verifica el "
+               "volumen que asignaste y sugiere el mínimo; no cambia tus volúmenes. "
+               "Caudal 0 = **auto**: reparte en la ventana lo que ese tanque entrega aguas "
+               "abajo. Un caudal fijo nunca se reescala: si el día no cierra, se avisa.")
+    if not cfg.enlaces:
+        cfg.zonas, cfg.enlaces = tn.config_inicial(cfg)
+    nombres_tk = [t.nombre for t in cfg.tanques]
+    z1, z2 = st.columns([1, 2])
+    seed_z = editor_seed("zonas", lambda: pd.DataFrame(
+        [{"Zona": z.nombre, "Fracción del QMD": z.fraccion} for z in cfg.zonas]))
+    df_z = z1.data_editor(st.session_state[seed_z], num_rows="dynamic", width="stretch",
+                          key="w_ed_zonas", column_config={
+                              "Fracción del QMD": st.column_config.NumberColumn(
+                                  min_value=0.0, max_value=1.0, step=0.05)})
+    editor_commit(seed_z, df_z)
+    cfg.zonas = [ZonaSpec(s_txt(r["Zona"]), f_num(r["Fracción del QMD"], 0.0))
+                 for _, r in df_z.iterrows() if s_txt(r["Zona"])]
+    destinos = nombres_tk + [z.nombre for z in cfg.zonas]
+    seed_e = editor_seed("enlaces", lambda: pd.DataFrame(
+        [{"Origen": e.origen, "Destino": e.destino, "Tipo": e.tipo, "Desde [h]": e.ini,
+          "Hasta [h]": e.fin, "Caudal [L/s] (0 = auto)": e.caudal_lps} for e in cfg.enlaces]))
+    df_e = z2.data_editor(st.session_state[seed_e], num_rows="dynamic", width="stretch",
+                          key="w_ed_enlaces", column_config={
+                              "Destino": st.column_config.SelectboxColumn(options=destinos),
+                              "Tipo": st.column_config.SelectboxColumn(
+                                  options=["bombeo", "gravedad"]),
+                              "Desde [h]": st.column_config.NumberColumn(min_value=0, max_value=23),
+                              "Hasta [h]": st.column_config.NumberColumn(min_value=0, max_value=23),
+                              "Caudal [L/s] (0 = auto)": st.column_config.NumberColumn(
+                                  min_value=0.0)})
+    editor_commit(seed_e, df_e)
+    cfg.enlaces = [EnlaceSpec(s_txt(r["Origen"]), s_txt(r["Destino"]), s_txt(r["Tipo"], "bombeo"),
+                              i_num(r["Desde [h]"], 0), i_num(r["Hasta [h]"], 23),
+                              f_num(r["Caudal [L/s] (0 = auto)"], 0.0))
+                   for _, r in df_e.iterrows() if s_txt(r["Origen"]) and s_txt(r["Destino"])]
+    suma_z = sum(z.fraccion for z in cfg.zonas)
+    if abs(suma_z - 1.0) > 1e-6:
+        st.warning(f"Las fracciones de las zonas suman {suma_z:.2f}: el balance reparte "
+                   f"{suma_z * 100:.0f}% del QMD.")
+    patron_bal = (cfg.factores_hora if len(cfg.factores_hora) == 24
+                  else list(storage.DEFAULT_PATTERN))
+    try:
+        res_red = tn.resolver(*tn.desde_config(cfg), flows.qmd_lps, patron_bal,
+                              cfg.frac_incendio, cfg.dias_reserva)
+    except ValueError as e:
+        st.error(str(e))
+    else:
+        for a in res_red.avisos:
+            st.warning(a)
+        st.dataframe(pd.DataFrame(
+            [{"Tanque": b.nombre, "V asignado [m³]": b.v_asignado,
+              "V regulación [m³]": b.v_reg, "V requerido [m³]": b.v_req,
+              "V sugerido [m³]": b.v_sugerido, "Cierre diario [m³]": b.cierre_diario_m3,
+              "Cumple": "✓" if b.cumple else "✗"} for b in res_red.tanques])
+            .style.format({"V asignado [m³]": "{:.0f}", "V regulación [m³]": SP_VOLUMEN,
+                           "V requerido [m³]": SP_VOLUMEN, "V sugerido [m³]": "{:.0f}",
+                           "Cierre diario [m³]": "{:+.2f}"}),
+            hide_index=True, width="stretch")
+        st.caption("V requerido = regulación × (1 + incendio) × días de reserva. El sugerido "
+                   "es ese valor redondeado a 5 m³: aplícalo tú en la tabla de tanques si "
+                   "lo adoptas.")
+        st.dataframe(pd.DataFrame([{"Conexión": f"{o} → {d}", "Caudal [L/s]": q}
+                                   for (o, d), q in res_red.caudales.items()])
+                     .style.format({"Caudal [L/s]": "{:.2f}"}), hide_index=True)
+        fig_bal = rf.fig_balance_red(res_red, cfg.frac_incendio, cfg.dias_reserva, dark=True)
+        st.pyplot(fig_bal)
+        plt.close(fig_bal)
 
 st.metric("Volumen total de almacenamiento (por norma)", f"{v_norma:.0f} m³")

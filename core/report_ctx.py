@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from core import biblio, curves as cvs, demand, network, pipeline, pipes, population as pop, pumping as pu
 from core import epanet_engine as ee, formato as fm, network_map as nm, red_diseno as rd
-from core import report_figs as rf, storage
+from core import report_figs as rf, storage, tank_network as tn
 from core.latex import latex_escape
 from core.project import Project
 
@@ -166,6 +166,31 @@ def build(p: Project) -> tuple[dict, dict]:
             "cumple": "Sí" if chk.cumple else "No"})
     v_asignado_total = sum(t.volumen for t in alm.tanques)
 
+    # balance de masas entre tanques (modo red, opcional)
+    res_red, balance_red = None, None
+    if alm.modo_balance == "red" and alm.tanques and alm.enlaces:
+        patron_bal = (alm.factores_hora if patron_ok else list(storage.DEFAULT_PATTERN))
+        try:
+            res_red = tn.resolver(*tn.desde_config(alm), flows.qmd_lps, patron_bal,
+                                  alm.frac_incendio, alm.dias_reserva)
+        except ValueError as e:
+            balance_red = {"error": latex_escape(str(e)), "tanques": [], "enlaces": [],
+                           "avisos": [], "fig": None}
+        else:
+            balance_red = {
+                "error": "",
+                "tanques": [{"nombre": latex_escape(b.nombre), "v_asignado": f"{b.v_asignado:.0f}",
+                             "v_reg": fm.fmt_vol(b.v_reg), "v_req": fm.fmt_vol(b.v_req),
+                             "v_sugerido": f"{b.v_sugerido}",
+                             "cierre": f"{b.cierre_diario_m3:+.2f}",
+                             "cumple": "Sí" if b.cumple else "No"} for b in res_red.tanques],
+                "enlaces": [{"origen": latex_escape(e.origen), "destino": latex_escape(e.destino),
+                             "tipo": e.tipo, "ventana": f"{e.ini:02d}--{e.fin:02d} h",
+                             "q": fm.fmt_q(res_red.caudal(e.origen, e.destino)),
+                             "auto": e.caudal_lps <= 0} for e in alm.enlaces],
+                "avisos": [latex_escape(a) for a in res_red.avisos],
+                "fig": "balance_red.png"}
+
     # ---------- figuras ----------
     figdir = Path(tempfile.mkdtemp())
     figuras: dict[str, str] = {}
@@ -186,6 +211,8 @@ def build(p: Project) -> tuple[dict, dict]:
     if patron_ok and suministro_ok:
         _save(rf.fig_balance_train([("Comunidad", alm.suministro_hora, alm.factores_hora)]),
               "balance")
+    if res_red is not None:
+        _save(rf.fig_balance_red(res_red, alm.frac_incendio, alm.dias_reserva), "balance_red")
     sistemas_bomba_ctx = ([{"tipo_bomba": s.tipo_bomba} for s in p.bombeos]
                          or [{"tipo_bomba": "superficie"}])
     _save(rf.fig_esquema(sistemas_bomba_ctx, alm.tanques), "esquema")
@@ -406,6 +433,7 @@ def build(p: Project) -> tuple[dict, dict]:
              "qmd": fm.fmt_q(fr.qmd_lps), "qmh": fm.fmt_q(fr.qmh_lps)}
             for (t, fr), (_, pob_t) in list(zip(serie_q, serie_total))[::paso]],
         "tanques_balance": tanques_balance,
+        "balance_red": balance_red,
         "v_art81": a.v_total_redondeado,
         "v_curva": b.v_total_redondeado if b else "—",
         "v_gobierna": gobierna,

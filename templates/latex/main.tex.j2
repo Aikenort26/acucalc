@@ -274,6 +274,56 @@ asignado o ajustar sus ventanas de suministro/salida.\\
 \BLOCK{endfor}
 \BLOCK{endif}
 
+\BLOCK{if balance_red}
+\subsection{Balance de masas entre tanques}
+\label{sec:balance_red}
+Además de la verificación individual, se simula el funcionamiento conjunto de
+los tanques durante un día, hora a hora. Para cada tanque,
+\[
+V(h+1) \;=\; V(h) + Q_{\text{entra}}(h)\,\Delta t - Q_{\text{sale}}(h)\,\Delta t,
+\qquad \Delta t = 1~\text{h},
+\]
+donde las salidas hacia las zonas de consumo siguen el patrón horario y las
+conexiones entre tanques operan en su ventana horaria con caudal fijo o
+``auto'' (el que cierra el balance diario del tanque al que llegan). El volumen de
+regulación de cada tanque es la diferencia entre el máximo y el mínimo de $V$ en
+el día; el requerido le suma la afectación por incendio y los días de reserva.
+Un caudal fijo no se reescala: si el balance diario no cierra se informa la
+diferencia.
+\BLOCK{if balance_red.error}
+
+\textbf{No fue posible resolver el balance:} \VAR{balance_red.error}
+\BLOCK{else}
+\begin{table}[H]\centering
+\caption{Conexiones del balance de masas.}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}Xllr}\toprule
+Origen & Destino & Tipo & Operación & $Q$ [L/s] \\ \midrule
+\BLOCK{for e in balance_red.enlaces}
+\VAR{e.origen} & \VAR{e.destino} & \VAR{e.tipo} & \VAR{e.ventana} & \VAR{e.q}\BLOCK{if e.auto} (auto)\BLOCK{endif} \\
+\BLOCK{endfor}
+\bottomrule\end{tabularx}\end{table}
+\begin{table}[H]\centering
+\caption{Resultado del balance de masas por tanque [m\textsuperscript{3}].}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}Xrrrrrc}\toprule
+Tanque & Asignado & Regulación & Requerido & Sugerido & Cierre & Cumple \\
+       &          &            &           &          & diario &        \\ \midrule
+\BLOCK{for t in balance_red.tanques}
+\VAR{t.nombre} & \VAR{t.v_asignado} & \VAR{t.v_reg} & \VAR{t.v_req} & \VAR{t.v_sugerido} & \VAR{t.cierre} & \BLOCK{if t.cumple == "No"}\textbf{No}\BLOCK{else}Sí\BLOCK{endif} \\
+\BLOCK{endfor}
+\bottomrule\end{tabularx}\end{table}
+\BLOCK{for a in balance_red.avisos}
+\textbf{Aviso:} \VAR{a}\par
+\BLOCK{endfor}
+\begin{figure}[H]\centering
+\includegraphics[width=0.95\textwidth]{figures/\VAR{balance_red.fig}}
+\caption{Volumen de regulación almacenado en cada tanque durante el día.}
+\label{fig:balance_red}
+\end{figure}
+\BLOCK{endif}
+\BLOCK{endif}
+
 \BLOCK{if "balance" in figuras}
 \begin{figure}[H]\centering
 \includegraphics[width=0.95\textwidth]{figures/balance.png}

@@ -328,3 +328,26 @@ def test_red_sin_k2_usa_multiplicador_1():
     p.red_inp, p.red_aplicar_k2, p.red_motor = INP_RED, False, "gga"
     e = report_ctx.build(p)[0]["red"]["estatico"]
     assert e["multiplicador"] == "1.00" and e["motor"] == _ee.MOTOR_GGA
+
+
+def test_balance_red_de_tanques_en_el_informe(tmp_path):
+    from core import tank_network as tn
+    p = _proyecto_minimo()
+    alm = p.almacenamiento
+    alm.factores_hora = [1.0] * 24
+    alm.suministro_hora = [1 if 5 <= h <= 14 else 0 for h in range(24)]
+    alm.tanques = [pj.TankSpec("Bajo", "bajo", "circular", 40, 3, entrada_ini=5, entrada_fin=14),
+                   pj.TankSpec("Elevado", "elevado", "circular", 20, 3, entrada_ini=0,
+                               entrada_fin=23)]
+    alm.modo_balance = "red"
+    alm.zonas, alm.enlaces = tn.config_inicial(alm)
+    ctx, figuras = report_ctx.build(p)
+    b = ctx["balance_red"]
+    assert [t["nombre"] for t in b["tanques"]] == ["Bajo", "Elevado"]
+    assert "balance_red" in figuras and b["fig"] == "balance_red.png"
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    assert "Balance de masas entre tanques" in tex and "Captación" in tex
+
+
+def test_modo_por_tanque_no_genera_balance_red():
+    assert report_ctx.build(_proyecto_minimo())[0]["balance_red"] is None

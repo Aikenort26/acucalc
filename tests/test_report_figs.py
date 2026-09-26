@@ -101,3 +101,14 @@ def test_fig_eps_sin_tanques_un_panel():
     horas = list(range(25))
     fig = rf.fig_eps(horas, "N5", [40.0] * 25, {}, p_min=15.0)
     assert len(fig.axes) == 1
+
+
+def test_fig_balance_red_un_panel_por_tanque():
+    from core import tank_network as tn
+    r = tn.resolver([tn.Tanque("A", 100), tn.Tanque("B", 60)], [tn.Zona("Z", 1.0)],
+                    [tn.Enlace("F", "A", "bombeo", tn.ventana(5, 14)),
+                     tn.Enlace("A", "B", "bombeo", tn.ventana(0, 23)),
+                     tn.Enlace("B", "Z", "gravedad")], 2.0, FACTORES, 0.15, 1)
+    fig = rf.fig_balance_red(r, frac_incendio=0.15, dias_reserva=1)
+    ejes = [a for a in fig.axes if a.get_visible()]
+    assert len(ejes) == 2 and {a.get_title(loc="left") for a in ejes} == {"A", "B"}

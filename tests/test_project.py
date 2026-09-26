@@ -379,6 +379,9 @@ def _proyecto_completo():
     st.ventana_captacion = [0] * 24
     st.tanques = [pj.TankSpec("T1", "bajo", "rectangular", 90, 3.0, 2.0, 4, 16, 2,
                               "enterrado", 5, 21)]
+    st.modo_balance = "red"
+    st.zonas = [pj.ZonaSpec("Barrio", 0.4)]
+    st.enlaces = [pj.EnlaceSpec("Pozo", "T1", "gravedad", 5, 14, 3.5)]
     s = p.bombeos[0]
     s.sumar_5m_ras = True
     s.bomba_seleccionada = "Bomba A"
