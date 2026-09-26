@@ -25,6 +25,7 @@ import numpy as np
 
 G = 9.81
 RHO = 998.2
+MAX_PASOS = 200_000               # tope de pasos: evita que un dato extremo cuelgue la app
 
 
 @dataclass(frozen=True)
@@ -234,6 +235,10 @@ def run(cfg: Config) -> MocResult:
     idx_mon = {xm: int(np.argmin(np.abs(x - xm))) for xm in cfg.monitor}
     monitor = {xm: [H_ini[i]] for xm, i in idx_mon.items()}
     pasos = int(math.ceil(cfg.t_fin / dt - 1e-9))
+    if pasos > MAX_PASOS:
+        raise ValueError(f"La simulación requiere {pasos:,} pasos de tiempo (máximo "
+                         f"{MAX_PASOS:,}, Δt = {dt:.4g} s): reduzca el tiempo a simular, los "
+                         "tramos de malla o una los tramos muy cortos.")
     t_serie = [0.0]
     Hu, Qu, Hd_, Qd_ = [H[0][0]], [Q[0][0]], [H[-1][-1]], [Q[-1][-1]]
     alfa = 0.0 if (bomba and bomba.modo == "arranque") else 1.0

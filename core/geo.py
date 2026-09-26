@@ -141,8 +141,11 @@ def _tesela(fuente: str, z: int, x: int, y: int, fetch, cache_dir: Path) -> Imag
     except (UnidentifiedImageError, OSError) as e:
         raise GeoError(f"El servidor de teselas de {FUENTES[fuente].nombre} no devolvió una "
                        "imagen; intente más tarde o cambie de fuente.") from e
-    ruta.parent.mkdir(parents=True, exist_ok=True)
-    ruta.write_bytes(datos)
+    try:                                  # la caché es opcional: sin permisos se omite
+        ruta.parent.mkdir(parents=True, exist_ok=True)
+        ruta.write_bytes(datos)
+    except OSError:
+        pass
     return img
 
 

@@ -132,3 +132,10 @@ def test_mensaje_de_error_legible_sin_conexion(tmp_path):
     with pytest.raises(geo.GeoError, match="sin conexión con el servidor") as e:
         geo.componer(4.6, -74.08, 10, 300, 300, "osm", fetch=falla, cache_dir=tmp_path)
     assert "Max retries" not in str(e.value)
+
+
+def test_cache_no_escribible_no_impide_componer(tmp_path):
+    archivo = tmp_path / "no_es_carpeta"
+    archivo.write_text("x")                      # la «carpeta» de caché es un archivo
+    m = geo.componer(4.6, -74.08, 10, 300, 300, "osm", fetch=_FetchFalso(), cache_dir=archivo)
+    assert m.imagen.size == (300, 300)

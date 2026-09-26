@@ -126,6 +126,29 @@ def _localizacion(p: Project, _save) -> dict | None:
     }
 
 
+def _alcance(localizacion, estudios, balance_red, sistemas, transitorio, red, detalles) -> str:
+    """Contenido de la memoria en una frase, según las secciones incluidas."""
+    partes = []
+    if localizacion:
+        partes.append("la localización del proyecto")
+    if estudios:
+        partes.append("los estudios previos")
+    partes += ["la proyección de población", "la dotación y los caudales de diseño",
+               "el volumen de almacenamiento"
+               + (" con el balance de masas entre tanques" if balance_red else "")]
+    if sistemas:
+        partes.append("el dimensionamiento de los sistemas de bombeo con la verificación de "
+                      "NPSH y la selección de los equipos por sus curvas características")
+    if transitorio and not transitorio.get("error"):
+        partes.append("el análisis de transitorios hidráulicos por el método de las "
+                      "características, contrastado con el método de Allievi")
+    if red:
+        partes.append("la verificación hidráulica de la red de distribución")
+    if detalles["zanja"] or detalles["estaciones"] or detalles["tanques"]:
+        partes.append("los detalles típicos de construcción")
+    return ", ".join(partes[:-1]) + " y " + partes[-1]
+
+
 def _detalles(p: Project, _save) -> dict:
     """Detalles típicos: zanja (solo con todas sus dimensiones), esquema de
     cada estación de bombeo y corte de cada tanque con sus niveles."""
@@ -644,6 +667,8 @@ def build(p: Project) -> tuple[dict, dict]:
         "localizacion": localizacion,
         "detalles": detalles,
         "estudios": estudios_ctx,
+        "alcance": _alcance(localizacion, estudios_ctx, balance_red, sistemas_ctx, transitorio,
+                            red_ctx, detalles),
         "estudios_faltantes": estudios_faltantes,
         "anexos_curvas": anexos_curvas,
     }

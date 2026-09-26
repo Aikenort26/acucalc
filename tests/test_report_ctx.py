@@ -517,3 +517,18 @@ def test_sin_estudios_no_hay_seccion(tmp_path):
     assert ctx["estudios"] == []
     tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
     assert r"\section{Estudios previos}" not in tex
+
+
+def test_alcance_de_la_introduccion_sigue_las_secciones_incluidas(tmp_path):
+    base = report_ctx.build(_proyecto_minimo())[0]["alcance"]
+    assert "la proyección de población" in base and "transitorios" not in base
+    assert base.count(" y ") >= 1 and not base.endswith(".")
+    con = report_ctx.build(_con_transitorio())[0]["alcance"]
+    assert "método de las características" in con
+    tex = (report.render(report_ctx.build(_con_transitorio())[0], tmp_path) / "main.tex"
+           ).read_text(encoding="utf-8")
+    intro = tex[tex.index(r"\section{Introducción}"):tex.index(r"\section{Marco legal}")]
+    assert "método de las características" in intro
+    acerca = tex[tex.index(r"\section{Acerca de ACUCALC}"):]
+    assert "más allá de la estimación de Joukowsky" not in acerca
+    assert "separación de columna" in acerca

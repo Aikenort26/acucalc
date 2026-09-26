@@ -71,11 +71,8 @@
 El presente documento contiene la memoria de cálculo hidráulico del sistema de
 acueducto de \VAR{corregimiento}, municipio de \VAR{municipio},
 departamento de \VAR{departamento}, elaborada conforme a la Resolución 0330 de
-2017 del Ministerio de Vivienda, Ciudad y Territorio. La memoria cubre la
-proyección de población, la determinación de la dotación y los caudales de
-diseño, el volumen de almacenamiento, el dimensionamiento hidráulico de los
-sistemas de bombeo y la selección de los equipos a partir de sus curvas
-características.
+2017 del Ministerio de Vivienda, Ciudad y Territorio. La memoria cubre
+\VAR{alcance}.
 
 \section{Marco legal}
 \begin{itemize}
@@ -958,13 +955,23 @@ predimensionamiento hidráulico de sistemas de acueducto desarrollada por
   \item Calcula el volumen de almacenamiento por el criterio del Art.~81 y por
     curva integral, incluyendo la afectación por incendio, y predimensiona la
     geometría de cada tanque.
-  \item Dimensiona sistemas de bombeo (pérdidas por tramo, altura dinámica,
-    potencia), verifica el golpe de ariete por Joukowsky y digitaliza curvas de
-    bomba de catálogo para hallar el punto de operación.
-  \item Asigna demandas a una red de EPANET por longitud aferente
-    (Sección~\ref{sec:aferente}), la resuelve con el motor EPANET en régimen
-    estático (QMH) y en periodo extendido de 24 h, y exporta el archivo
-    \texttt{.inp}.
+  \item Simula hora a hora el balance de masas entre varios tanques conectados por
+    bombeo o gravedad, verifica el volumen asignado y sugiere el mínimo.
+  \item Dimensiona sistemas de bombeo (pérdidas por fricción y locales, altura
+    dinámica, potencia), verifica el NPSH con la presión de vapor IAPWS-IF97 y la
+    atmósfera estándar, estima el golpe de ariete por Joukowsky y digitaliza
+    curvas de bomba de catálogo para hallar el punto de operación.
+  \item Analiza transitorios hidráulicos por el método de las características
+    sobre el perfil de la conducción (cierre y apertura de válvula, parada y
+    arranque de bomba, tanque hidroneumático) y contrasta el resultado con las
+    ecuaciones de Allievi, Joukowsky y Michaud.
+  \item Asigna demandas a una red de EPANET por longitud aferente, la resuelve
+    con el motor EPANET en régimen estático (QMH) y en periodo extendido de 24 h,
+    y exporta el archivo \texttt{.inp}.
+  \item Compone mapas de localización (OpenStreetMap o Esri) con la red
+    reproyectada desde su sistema de coordenadas, dibuja detalles típicos de
+    zanja, estación de bombeo y tanque, e incluye estudios previos con tablas,
+    figuras y citas bibliográficas.
 \end{itemize}
 
 \subsection{Qué NO hace, y limitaciones conocidas}
@@ -975,9 +982,13 @@ predimensionamiento hidráulico de sistemas de acueducto desarrollada por
     en cada caso qué motor se usó.
   \item La optimización de diámetros es una heurística exploratoria dentro de la
     aplicación; sus resultados no se incluyen en esta memoria.
-  \item No hace análisis de calidad del agua, ni diseño estructural o
-    geotécnico, ni análisis de transitorios más allá de la estimación de
-    Joukowsky.
+  \item El análisis de transitorios no modela la separación de columna (los
+    resultados posteriores a alcanzar la presión de vapor no son válidos), usa la
+    curva de la bomba solo en su zona normal y diagnostica, sin modelarlas, las
+    protecciones distintas del tanque hidroneumático.
+  \item Los mapas se descargan una sola vez, con conexión a internet, y quedan
+    guardados en el proyecto; su cartografía es la de la fuente elegida.
+  \item No hace análisis de calidad del agua ni diseño estructural o geotécnico.
 \end{itemize}
 
 \section{Recomendaciones y limitaciones}
@@ -994,20 +1005,24 @@ consecuencia:
     diseño detallado, el análisis estructural y geotécnico de tanques y
     estructuras, ni el análisis de transitorios hidráulicos con software
     especializado para redes complejas.
-  \item Los diagramas de esquema del sistema (captación, tanques, bombeo) son
-    representaciones conceptuales, no planos constructivos definitivos --- el
-    diseño estructural y de detalle de cada componente requiere ingeniería
-    específica adicional.
+  \item Los diagramas de esquema del sistema (captación, tanques, bombeo) y los
+    detalles típicos son representaciones conceptuales, no planos constructivos
+    definitivos --- el diseño estructural y de detalle de cada componente
+    requiere ingeniería específica adicional.
   \item Las curvas de bomba digitalizadas y sus regresiones polinómicas son una
     aproximación numérica a la curva del fabricante; debe verificarse contra la
     ficha técnica oficial del equipo antes de la compra o instalación.
   \item El catálogo de tuberías (diámetros, espesores, presión nominal) usa
     valores normativos de referencia; deben confirmarse con la ficha técnica
     del fabricante específico antes de la construcción.
-  \item La verificación de golpe de ariete es una estimación de Joukowsky de
-    primer orden; sistemas críticos requieren un análisis de transitorios
-    completo (método de las características u otro) antes de definir las
-    protecciones finales.
+  \item La verificación de golpe de ariete por tramo es una estimación de
+    Joukowsky de primer orden\BLOCK{if transitorio and not transitorio.error}; el
+    análisis por el método de las características de la
+    Sección~\ref{sec:transitorios} incluye el perfil y la fricción, pero no la
+    separación de columna ni las protecciones que solo se diagnostican: el diseño
+    final de las protecciones requiere un análisis específico\BLOCK{else}; los
+    sistemas críticos requieren un análisis de transitorios completo (método de
+    las características u otro) antes de definir las protecciones finales\BLOCK{endif}.
   \item Este documento no sustituye el juicio profesional del ingeniero
     responsable ni las revisiones de las autoridades competentes.
 \end{itemize}

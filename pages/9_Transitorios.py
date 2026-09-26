@@ -35,6 +35,7 @@ if fuente == "recto":
             pr_ = pf.recto(L_rec, z1, z2)
             tc.perfil = [(s, z, z) for s, z in zip(pr_.abscisa, pr_.z_eje)]
             st.session_state.pop(editor_seed("tr_perfil", lambda: None), None)
+            st.session_state.pop("w_ed_tr_perfil", None)
             st.rerun()
         except ValueError as e:
             st.error(str(e))
@@ -58,6 +59,7 @@ else:
                           float(r[c_e]) if c_e is not None and pd.notna(r[c_e]) else None)
                          for _, r in df_up.iterrows() if pd.notna(r[c_s]) and pd.notna(r[c_t])]
             st.session_state.pop(editor_seed("tr_perfil", lambda: None), None)
+            st.session_state.pop("w_ed_tr_perfil", None)
             st.rerun()
         except (ValueError, KeyError) as e:
             st.error(f"No se pudo leer el perfil: {e}")
@@ -79,12 +81,19 @@ st.caption("Cada tramo va hasta la abscisa indicada. Del catálogo (material, se
            "ingresan diámetro interno, espesor, material (rugosidad y k) y PN.")
 mats = pipes.materials()
 ks_mats = list(catalogs.roughness())
+COLS_TR = ["Hasta abscisa [m]", "Material", "Serie", "DN", "D interno [mm]", "Espesor [mm]",
+           "Material (manual)", "PN [mca]"]
 if not tc.tramos and tc.perfil:
+    # un tramo que cubre todo el perfil como punto de partida; la tabla se
+    # resiembra para mostrarlo (su semilla pudo crearse vacía antes del perfil)
     tc.tramos = [pj.TramoTransitorio(max(s for s, _, _ in tc.perfil))]
+    st.session_state.pop(editor_seed("tr_tramos", lambda: None), None)
+    st.session_state.pop("w_ed_tr_tramos", None)
+# columnas explícitas: con una lista vacía el editor quedaría sin columnas y no
+# dejaría agregar filas
 seed_tr = editor_seed("tr_tramos", lambda: pd.DataFrame(
-    [{"Hasta abscisa [m]": t.hasta_abscisa, "Material": t.cat_material or "Manual",
-      "Serie": t.cat_serie, "DN": t.cat_dn, "D interno [mm]": t.D_mm, "Espesor [mm]": t.e_mm,
-      "Material (manual)": t.material, "PN [mca]": t.pn_mca} for t in tc.tramos]))
+    [[t.hasta_abscisa, t.cat_material or "Manual", t.cat_serie, t.cat_dn, t.D_mm, t.e_mm,
+      t.material, t.pn_mca] for t in tc.tramos], columns=COLS_TR))
 df_tr = st.data_editor(st.session_state[seed_tr], num_rows="dynamic", width="stretch",
                        key="w_ed_tr_tramos", column_config={
                            "Material": st.column_config.SelectboxColumn(options=mats + ["Manual"]),

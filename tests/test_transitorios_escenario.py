@@ -102,3 +102,14 @@ def test_hidroneumatico_reporta_expansion_del_aire_y_atenua_la_depresion():
     assert con.comparacion[0]["dh"] > sin.comparacion[0]["dh"]   # menos depresión
     assert any("volumen total del tanque" in t for t in con.recomendaciones)
     assert "v_aire_max" not in sin.resumen
+
+
+def test_perfil_con_cota_de_eje_tambien_exige_abscisas_crecientes():
+    p = _proyecto(perfil=[(1000.0, 100.0, 99.0), (0.0, 60.0, 59.0)])
+    with pytest.raises(ValueError, match="crecientes"):
+        esc.ejecutar(p)
+
+
+def test_simulacion_demasiado_larga_es_error_y_no_se_cuelga():
+    with pytest.raises(ValueError, match="pasos de tiempo"):
+        esc.ejecutar(_proyecto(t_sim=1e9))

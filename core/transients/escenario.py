@@ -55,12 +55,12 @@ class ResultadoTransitorio:
 def perfil_de(tc) -> pf.Perfil:
     if len(tc.perfil) < 2:
         raise ValueError("Define el perfil de la línea (al menos dos puntos).")
-    filas = [(s, zt, ze) for s, zt, ze in tc.perfil]
-    if all(ze is not None for _, _, ze in filas):
-        return pf.Perfil(tuple(r[0] for r in filas), tuple(r[1] for r in filas),
-                         tuple(r[2] for r in filas))
     import pandas as pd
-    D = _props_tramo(tc.tramos[0])[0] if tc.tramos else None
+    filas = [(s, zt, ze) for s, zt, ze in tc.perfil]
+    # cargar() valida siempre (abscisas crecientes); el diámetro solo hace falta
+    # para deducir la cota del eje desde la cobertura
+    faltan_ejes = any(ze is None for _, _, ze in filas)
+    D = _props_tramo(tc.tramos[0])[0] if faltan_ejes and tc.tramos else None
     return pf.cargar(pd.DataFrame(filas, columns=["Abscisa", "Terreno", "Eje"]),
                      cobertura=tc.cobertura or None, D_m=D)
 
