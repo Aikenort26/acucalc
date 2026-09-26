@@ -409,6 +409,11 @@ def _proyecto_completo():
         ley="potencial", em=1.5, bomba="S · B", modo_parada="inercia", n_rpm=1750,
         inercia=2.5, eta=0.7, t_arranque=4.0, v_aire=1.5, n_poli=1.3, d_orificio_mm=80,
         cd_orificio=0.6, t_sim=30, n_malla=30, en_informe=False)
+    p.ubicacion = pj.UbicacionConfig(
+        lat=9.83, lon=-75.12, busqueda="San Jacinto", fuente="esri", zoom_general=8,
+        zoom_zona=14, epsg_red=9377,
+        mapas=[pj.MapaGuardado("zona", "esri", 14, 1000, 2000, 1200, 800, "aGk=")],
+        en_informe=False)
     return p
 
 
@@ -428,6 +433,8 @@ def _defaults(cls):
     (lambda p: p.bombeos[0].bombas[0], pj.PumpData),
     (lambda p: p.transitorios, pj.TransientConfig),
     (lambda p: p.transitorios.tramos[0], pj.TramoTransitorio),
+    (lambda p: p.ubicacion, pj.UbicacionConfig),
+    (lambda p: p.ubicacion.mapas[0], pj.MapaGuardado),
 ])
 def test_fixture_completo_cubre_todos_los_campos(obtener, cls):
     """Guarda del test de round-trip: si alguien agrega un campo nuevo sin

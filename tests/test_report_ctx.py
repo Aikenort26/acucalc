@@ -396,3 +396,59 @@ def test_transitorio_con_datos_invalidos_documenta_el_error(tmp_path):
     assert "caudal" in ctx["transitorio"]["error"] and "transitorio_perfil" not in figuras
     tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
     assert r"\section{Transitorios hidráulicos}" in tex
+
+
+def _con_mapas(fuente="osm", epsg=0, red_inp=""):
+    import io as _io
+    from PIL import Image as _Image
+    from core import study_map as sm
+
+    def fetch(url):
+        buf = _io.BytesIO()
+        _Image.new("RGB", (256, 256), (210, 220, 210)).save(buf, "PNG")
+        return buf.getvalue()
+    p = _proyecto_minimo()
+    ub = p.ubicacion
+    ub.lat, ub.lon, ub.fuente, ub.epsg_red = 4.0, -73.0, fuente, epsg
+    ub.zoom_general, ub.zoom_zona = 9, 16
+    import tempfile as _tf
+    ub.mapas = sm.componer_mapas(ub, fetch=fetch, cache_dir=_tf.mkdtemp())
+    p.red_inp = red_inp
+    return p
+
+
+def test_localizacion_en_el_informe(tmp_path, monkeypatch):
+    from core import geo
+    monkeypatch.setattr(geo, "descargar", lambda *a, **k: (_ for _ in ()).throw(
+        AssertionError("build() no debe descargar")))
+    ctx, figuras = report_ctx.build(_con_mapas())
+    loc = ctx["localizacion"]
+    assert loc["lat"] == r"4.00000\textdegree{} N" and loc["lon"] == r"73.00000\textdegree{} O"
+    assert loc["fig_general"] == "localizacion_general.png" and "localizacion_zona" in figuras
+    assert loc["cita"] == "osm"
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    sec = tex[tex.index(r"\section{Localización del proyecto}"):]
+    assert "figures/localizacion_zona.png" in sec and r"\cite{osm}" in sec
+    assert tex.index(r"\section{Localización del proyecto}") < tex.index(
+        r"\section{Proyección de población}")
+
+
+def test_localizacion_esri_cita_su_fuente(tmp_path):
+    ctx, _ = report_ctx.build(_con_mapas("esri"))
+    assert ctx["localizacion"]["cita"] == "esri_imagery"
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    assert r"\bibitem{esri_imagery}" in tex
+
+
+def test_localizacion_superpone_la_red(tmp_path):
+    inp = INP_RED.replace("J1 100 200\nJ2 150 200\nR1 0 200",
+                          "J1 5000000 2000000\nJ2 5000100 2000050\nR1 4999900 2000000")
+    ctx, _ = report_ctx.build(_con_mapas(epsg=9377, red_inp=inp))
+    assert ctx["localizacion"]["con_red"] is True
+
+
+def test_sin_mapas_o_fuera_del_informe_no_hay_localizacion():
+    assert report_ctx.build(_proyecto_minimo())[0]["localizacion"] is None
+    p = _con_mapas()
+    p.ubicacion.en_informe = False
+    assert report_ctx.build(p)[0]["localizacion"] is None

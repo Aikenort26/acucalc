@@ -1,10 +1,11 @@
 import base64
 import datetime as dt
+import matplotlib.pyplot as plt
 import streamlit as st
-from core import dane, project as pj
+from core import dane, geo, network, project as pj, study_map as sm
 from core.imagenes import reducir_a_b64
-from pages_common import (SAVES_DIR, AUTOSAVE_FILE, page_setup, num_input, clear_widget_state,
-                          sel_state, txt_state)
+from pages_common import (SAVES_DIR, AUTOSAVE_FILE, page_setup, num_input, int_input,
+                          clear_widget_state, sel_state, txt_state)
 
 p = page_setup()
 st.header("1 · Proyecto")
@@ -75,6 +76,101 @@ with st.expander("Logos de portada del informe", expanded=False):
         if l2.button("Quitar logo del consultor", key="w_rm_logo_con"):
             p.logo_consultor_b64 = ""
             st.rerun()
+
+with st.expander("Localización y mapas de la zona de estudio", expanded=False):
+    ub = p.ubicacion
+    st.caption("Los mapas se descargan una sola vez con el botón y quedan guardados en el "
+               "proyecto: el informe se genera sin conexión. Fuentes: OpenStreetMap o Esri "
+               "World Imagery, con su atribución impresa en cada mapa.")
+    b1, b2 = st.columns([4, 1], vertical_alignment="bottom")
+    lugar_def = ", ".join(x for x in (p.corregimiento, p.municipio, p.departamento) if x)
+    ub.busqueda = b1.text_input("Buscar lugar (Nominatim, OpenStreetMap)",
+                                key=txt_state("txt_ub_buscar", ub.busqueda or lugar_def))
+    if b2.button("🔎 Buscar", key="w_ub_btn_buscar", width="stretch"):
+        try:
+            st.session_state["ub_lugares"] = geo.buscar(ub.busqueda)
+            if not st.session_state["ub_lugares"]:
+                st.warning("Sin resultados: pruebe con «municipio, departamento» o ingrese "
+                           "las coordenadas.")
+        except geo.GeoError as e:
+            st.error(str(e))
+    lugares = st.session_state.get("ub_lugares") or []
+    if lugares:
+        r1, r2 = st.columns([4, 1], vertical_alignment="bottom")
+        i_l = r1.selectbox("Resultados", range(len(lugares)), key="w_ub_resultado",
+                           format_func=lambda i: f"{lugares[i].nombre} "
+                                                 f"({lugares[i].lat:.5f}, {lugares[i].lon:.5f})")
+        if r2.button("Usar este lugar", key="w_ub_usar", width="stretch"):
+            ub.lat, ub.lon = lugares[i_l].lat, lugares[i_l].lon
+            st.session_state["w_ub_lat"] = round(ub.lat, 6)
+            st.session_state["w_ub_lon"] = round(ub.lon, 6)
+            st.session_state.pop("ub_lugares", None)
+            st.rerun()
+    g1, g2, g3, g4 = st.columns(4)
+    ub.lat = num_input("Latitud [°] (WGS84, + norte)", "ub_lat", ub.lat, decimals=6,
+                       container=g1, min_value=-85.0, max_value=85.0)
+    ub.lon = num_input("Longitud [°] (WGS84, − oeste)", "ub_lon", ub.lon, decimals=6,
+                       container=g2, min_value=-180.0, max_value=180.0)
+    ub.zoom_general = int_input("Zoom del mapa general", "ub_zg", ub.zoom_general,
+                                container=g3, min_value=3, max_value=14,
+                                help="8–10 muestra el municipio y su región.")
+    ub.zoom_zona = int_input("Zoom de la zona de estudio", "ub_zz", ub.zoom_zona,
+                             container=g4, min_value=10, max_value=19,
+                             help="15–17 muestra la cabecera o el corregimiento.")
+    f1, f2 = st.columns(2)
+    fuentes = list(geo.FUENTES)
+    ub.fuente = f1.radio("Fuente", fuentes, horizontal=True, key=sel_state(fuentes, "radio_ub_fuente",
+                                                                           ub.fuente),
+                         format_func=lambda k: geo.FUENTES[k].nombre)
+    epsgs = list(sm.EPSG_RED)
+    ub.epsg_red = f2.selectbox("Coordenadas del .inp de la red (para superponerla)", epsgs,
+                               key=sel_state(epsgs, "sel_ub_epsg", ub.epsg_red),
+                               format_func=sm.EPSG_RED.get)
+    if ub.fuente == "esri":
+        st.caption("Esri World Imagery: uso sujeto a los términos de Esri; verifique que su "
+                   "licencia cubre la publicación del informe.")
+    ub.en_informe = st.checkbox("Incluir la localización en la memoria", value=ub.en_informe,
+                                key="w_chk_ub_inf")
+    d1, d2 = st.columns([1, 1])
+    if d1.button("🗺️ Descargar mapas", key="w_ub_descargar", type="primary",
+                 disabled=not (ub.lat or ub.lon)):
+        with st.spinner("Descargando teselas…"):
+            try:
+                ub.mapas = sm.componer_mapas(ub)
+            except (geo.GeoError, ValueError) as e:
+                st.error(str(e))
+    if ub.mapas and d2.button("Quitar mapas guardados", key="w_ub_quitar"):
+        ub.mapas = []
+        st.rerun()
+    por_nombre = {m.nombre: m for m in ub.mapas}
+    if por_nombre:
+        zona, general = por_nombre.get("zona"), por_nombre.get("general")
+        desactualizado = any(
+            m.fuente != ub.fuente or m.z != z or not (
+                sm.extension(m)[0] < ub.lat < sm.extension(m)[2]
+                and sm.extension(m)[1] < ub.lon < sm.extension(m)[3])
+            for m, z in ((general, ub.zoom_general), (zona, ub.zoom_zona)) if m)
+        if desactualizado:
+            st.warning("Los mapas guardados no corresponden a la ubicación, el zoom o la "
+                       "fuente actuales: vuelva a descargarlos.")
+        segmentos = None
+        if ub.epsg_red and p.red_inp and zona:
+            try:
+                segmentos = sm.red_a_latlon(network.parse_inp(p.red_inp), ub.epsg_red)
+                if segmentos and sm.fraccion_dentro(zona, segmentos) < 0.5:
+                    st.warning("La mayor parte de la red cae fuera del mapa de la zona: revise "
+                               "el sistema de coordenadas del .inp o el zoom.")
+            except (ValueError, geo.GeoError) as e:
+                st.warning(f"No se pudo superponer la red: {e}")
+        m1, m2 = st.columns(2)
+        for col, mapa, titulo, kw in (
+                (m1, general, "Localización general",
+                 {"recuadro": sm.extension(zona) if zona else None}),
+                (m2, zona, "Zona de estudio", {"segmentos": segmentos})):
+            fig = sm.fig_localizacion(mapa, ub.lat, ub.lon, titulo, **kw)
+            if fig is not None:
+                col.pyplot(fig)
+                plt.close(fig)
 
 st.divider()
 p.ruta_guardado = st.text_input(

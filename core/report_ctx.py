@@ -10,7 +10,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 from core import biblio, curves as cvs, demand, network, pipeline, pipes, population as pop, pumping as pu
-from core import epanet_engine as ee, formato as fm, network_map as nm, red_diseno as rd
+from core import epanet_engine as ee, formato as fm, geo, network_map as nm, red_diseno as rd
+from core import study_map as sm
 from core import report_figs as rf, storage, tank_network as tn
 from core.transients import escenario as esc, perfil as pf
 from core.latex import latex_escape
@@ -81,6 +82,48 @@ def _red_hidraulica(p: Project, red, inp: str, k2: float, factores_hora: list, _
         _save(rf.fig_eps(eps.horas, re_.nodo_critico, eps.presiones[re_.nodo_critico],
                          eps.niveles, p.red_pmin), "red_eps")
     return out
+
+
+def _grados(v: float, pos: str, neg: str) -> str:
+    return latex_escape(f"{abs(v):.5f}° {pos if v >= 0 else neg}")
+
+
+def _localizacion(p: Project, _save) -> dict | None:
+    """Mapas de localización ya guardados en el proyecto (sin conexión: nunca
+    descarga teselas aquí)."""
+    ub = p.ubicacion
+    mapas = {m.nombre: m for m in ub.mapas if m.img_b64}
+    if not (ub.en_informe and mapas):
+        return None
+    general, zona = mapas.get("general"), mapas.get("zona")
+    segmentos = None
+    if ub.epsg_red and p.red_inp and zona:
+        try:
+            segmentos = sm.red_a_latlon(network.parse_inp(p.red_inp), ub.epsg_red)
+        except (ValueError, geo.GeoError):
+            segmentos = None
+        if segmentos and sm.fraccion_dentro(zona, segmentos) == 0:
+            segmentos = None                      # CRS equivocado: no se dibuja fuera de lugar
+    nombres = {}
+    for nombre, mapa, kw in (("general", general,
+                              {"recuadro": sm.extension(zona) if zona else None}),
+                             ("zona", zona, {"segmentos": segmentos})):
+        fig = sm.fig_localizacion(mapa, ub.lat, ub.lon, **kw)
+        if fig is not None:
+            _save(fig, f"localizacion_{nombre}")
+            nombres[nombre] = f"localizacion_{nombre}.png"
+    if not nombres:
+        return None
+    fuente = (zona or general).fuente
+    return {
+        "lat": _grados(ub.lat, "N", "S"), "lon": _grados(ub.lon, "E", "O"),
+        "fig_general": nombres.get("general"), "fig_zona": nombres.get("zona"),
+        "fuente": latex_escape(geo.FUENTES[fuente].nombre),
+        "atribucion": latex_escape(geo.FUENTES[fuente].atribucion),
+        "cita": "esri_imagery" if fuente == "esri" else "osm",
+        "con_red": bool(segmentos),
+        "epsg": latex_escape(sm.EPSG_RED.get(ub.epsg_red, f"EPSG:{ub.epsg_red}")),
+    }
 
 
 def _maniobra(tc) -> str:
@@ -453,6 +496,7 @@ def build(p: Project) -> tuple[dict, dict]:
             "volumen_real": fm.fmt_vol(ct.volumen_real * t.cantidad)})
 
     transitorio = _transitorio(p, _save)
+    localizacion = _localizacion(p, _save)
 
     # ---------- red de distribución (opcional) ----------
     red_ctx = None
@@ -551,6 +595,7 @@ def build(p: Project) -> tuple[dict, dict]:
         "autor": AUTOR_APP,
         "red": red_ctx,
         "transitorio": transitorio,
+        "localizacion": localizacion,
         "anexos_curvas": anexos_curvas,
     }
     return ctx, figuras

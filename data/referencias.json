@@ -152,5 +152,13 @@
   "anio": "s.f.",
   "titulo": "OpenStreetMap — datos cartográficos bajo licencia ODbL",
   "url": "https://www.openstreetmap.org/copyright"
+ },
+ {
+  "key": "esri_imagery",
+  "tipo": "misc",
+  "autor": "Esri",
+  "anio": "s.f.",
+  "titulo": "World Imagery — servicio de mapas de imágenes satelitales y aéreas (ArcGIS REST)",
+  "url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer"
  }
 ]

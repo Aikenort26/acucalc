@@ -210,6 +210,33 @@ class TransientConfig:
 
 
 @dataclass
+class MapaGuardado:
+    """Mosaico de teselas ya compuesto (el informe se genera sin conexión).
+    (px0, py0) es el píxel global Web Mercator de la esquina superior izquierda."""
+    nombre: str = ""               # general | zona
+    fuente: str = "osm"            # osm | esri
+    z: int = 0
+    px0: int = 0
+    py0: int = 0
+    ancho: int = 0
+    alto: int = 0
+    img_b64: str = ""
+
+
+@dataclass
+class UbicacionConfig:
+    lat: float = 0.0               # WGS84
+    lon: float = 0.0
+    busqueda: str = ""             # texto buscado en Nominatim
+    fuente: str = "osm"
+    zoom_general: int = 9          # mapa de localización general
+    zoom_zona: int = 15            # mapa de la zona de estudio
+    epsg_red: int = 0              # sistema de coordenadas del .inp (0 = no superponer)
+    mapas: list = field(default_factory=list, metadata={"item": MapaGuardado})
+    en_informe: bool = True
+
+
+@dataclass
 class Project:
     nombre: str = ""
     municipio: str = ""
@@ -239,6 +266,7 @@ class Project:
     ruta_guardado: str = ""       # carpeta o archivo .acucalc.json del usuario (vacío = saves/ interno)
     bibtex_usuario: str = ""      # referencias propias en BibTeX (se suman a la biblioteca base)
     transitorios: TransientConfig = field(default_factory=TransientConfig)
+    ubicacion: UbicacionConfig = field(default_factory=UbicacionConfig)
 
 
 def save(p: Project, path: str | Path) -> None:

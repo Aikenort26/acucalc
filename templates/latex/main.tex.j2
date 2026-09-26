@@ -89,6 +89,39 @@ características.
   \item Resolución CRA 750 de 2016 --- consumo básico~\cite{cra750}.
 \end{itemize}
 
+\BLOCK{if localizacion}
+\section{Localización del proyecto}
+\label{sec:localizacion}
+El proyecto se localiza en \VAR{corregimiento}\BLOCK{if municipio}, municipio de
+\VAR{municipio}\BLOCK{endif}\BLOCK{if departamento} (\VAR{departamento})\BLOCK{endif},
+en las coordenadas \VAR{localizacion.lat}, \VAR{localizacion.lon} (WGS84), a una
+altitud promedio de \VAR{altitud}~m~s.n.m.
+\BLOCK{if localizacion.fig_general}
+La Figura~\ref{fig:loc_general} ubica el sitio en su contexto regional\BLOCK{if localizacion.fig_zona} y la Figura~\ref{fig:loc_zona} muestra la zona de estudio\BLOCK{endif}.
+\BLOCK{elif localizacion.fig_zona}
+La Figura~\ref{fig:loc_zona} muestra la zona de estudio.
+\BLOCK{endif}
+\BLOCK{if localizacion.con_red}
+Sobre la zona de estudio se dibuja el trazado de la red de distribución, reproyectado
+a WGS84 desde \VAR{localizacion.epsg}.
+\BLOCK{endif}
+La cartografía base es \VAR{localizacion.fuente}~\cite{\VAR{localizacion.cita}}.
+\BLOCK{if localizacion.fig_general}
+\begin{figure}[H]\centering
+\includegraphics[width=0.72\textwidth]{figures/\VAR{localizacion.fig_general}}
+\caption{Localización general del proyecto. \VAR{localizacion.atribucion}.}
+\label{fig:loc_general}
+\end{figure}
+\BLOCK{endif}
+\BLOCK{if localizacion.fig_zona}
+\begin{figure}[H]\centering
+\includegraphics[width=0.72\textwidth]{figures/\VAR{localizacion.fig_zona}}
+\caption{Zona de estudio\BLOCK{if localizacion.con_red} y trazado de la red de distribución\BLOCK{endif}. \VAR{localizacion.atribucion}.}
+\label{fig:loc_zona}
+\end{figure}
+\BLOCK{endif}
+\BLOCK{endif}
+
 \section{Proyección de población}
 \label{sec:poblacion}
 Periodo de diseño: 25 años (Art. 40, Res. 0330 de 2017~\cite{res0330}),
