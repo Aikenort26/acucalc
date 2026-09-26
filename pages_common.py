@@ -4,6 +4,7 @@ import math
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 from core import project as pj
 from core.project import Project
 # Re-exporta la convención de decimales (única fuente de verdad, WP-2a). Vive
@@ -165,8 +166,9 @@ div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] {
    contenedor externo — ese mete un stLayoutWrapper extra que atrapa el fixed.
    El transform persistente (translateY 4px) del stLayoutWrapper ancestro se
    neutraliza con :has() para que el fixed escape al viewport (verificado:
-   offsetParent null, top:6px). `left` = borde derecho aprox. de "Reporte"
-   con el nav completo (nav es left-aligned → x estable por resolución). */
+   offsetParent null, top:6px). `left` lo fija `_JS_GUARDAR` midiendo el
+   borde derecho real del último ítem visible del nav (1015px es solo el
+   respaldo si el script no corre). */
 [data-testid="stLayoutWrapper"]:has(.st-key-w_btn_guardar) {
   transform: none !important;
   animation: none !important;
@@ -187,12 +189,8 @@ div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] {
   font-size: 1.15rem !important;
   line-height: 1 !important;
 }
-/* Pantallas donde el nav se colapsa a "N more" (no cabe completo): el ancla
-   por-Reporte deja de tener sentido → el botón pasa a la derecha, antes del
-   grupo Deploy/Share, para no flotar sobre el contenido. */
-@media (max-width: 1500px) {
-  .st-key-w_btn_guardar { left: auto !important; right: 8.5rem !important; }
-}
+/* iframe del script que ubica el botón: sin alto ni margen en el layout */
+.stElementContainer:has(iframe[title="st.iframe"]) { display: none !important; }
 
 /* ---------- responsive: tablet / pantallas angostas ---------- */
 @media (max-width: 900px) {
@@ -203,6 +201,33 @@ div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] {
 }
 </style>
 """
+
+
+# Ubica el botón Guardar justo después del último ítem visible de la barra de
+# navegación (incluido el "N more" cuando la barra colapsa). La función y el
+# observador se instalan UNA vez en el documento padre: el iframe del
+# componente se destruye en cada rerun y un callback suyo quedaría huérfano.
+_JS_GUARDAR = """<script>
+(function () {
+  const w = window.parent, d = w.document;
+  if (!w.__acucalcUbicar) {
+    const s = d.createElement("script");
+    s.textContent = `
+      window.__acucalcUbicar = function () {
+        let der = 0;
+        document.querySelectorAll('header [data-testid^="stTopNav"]').forEach(function (e) {
+          const r = e.getBoundingClientRect();
+          if (r.width > 0) der = Math.max(der, r.right);
+        });
+        if (der > 0) document.documentElement.style.setProperty("--guardar-left", (der + 16) + "px");
+      };
+      new ResizeObserver(function () { window.__acucalcUbicar(); }).observe(document.body);`;
+    d.head.appendChild(s);
+  }
+  w.__acucalcUbicar();
+  setTimeout(function () { w.__acucalcUbicar(); }, 400);
+})();
+</script>"""
 
 
 def get_project() -> Project:
@@ -263,6 +288,7 @@ def page_setup() -> Project:
     contenido, mínima, sin caption ni texto — no dentro de la barra nativa.
     Llamar al inicio de cada página; devuelve el proyecto activo."""
     st.markdown(_CSS, unsafe_allow_html=True)
+    components.html(_JS_GUARDAR, height=0)
     p = get_project()
     _autosave(p)
     # Botón de guardado anclado a la barra de navegación superior, justo tras

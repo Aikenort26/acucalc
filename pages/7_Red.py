@@ -1,4 +1,3 @@
-import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 from core import epanet_engine as ee
@@ -183,13 +182,15 @@ with st.expander("🗺 Mapa de la red", expanded=False):
                            help="Tamaño de nodos, fuentes y grosor de tramos.")
     if colorear != "topología" and res_est is None:
         st.caption("Calcula el régimen estático para colorear el mapa.")
-    fig_map = nm.fig_red(red, res_est if colorear != "topología" else None,
-                         colorear="presion" if colorear == "presión" else "velocidad",
-                         dark=True, escala=escala_map)
-    if not nm.tiene_coordenadas(red):
-        st.caption("El INP no trae [COORDINATES]; se usa un layout automático.")
-    st.pyplot(fig_map)
-    plt.close(fig_map)
+    st.plotly_chart(nm.fig_red_plotly(red, res_est if colorear != "topología" else None,
+                                      colorear="presion" if colorear == "presión"
+                                      else "velocidad", escala=escala_map,
+                                      p_min=p.red_pmin),
+                    width="stretch", config={"scrollZoom": True, "displaylogo": False})
+    st.caption("Rueda del ratón: zoom · arrastrar: desplazar · doble clic: vista completa · "
+               "pasa el cursor sobre nodos y tramos para ver sus datos."
+               + ("" if nm.tiene_coordenadas(red) else
+                  " El INP no trae [COORDINATES]: se usa un layout automático."))
 
 # ---------- 3. periodo extendido ----------
 st.subheader("3 · Periodo extendido de 24 h")

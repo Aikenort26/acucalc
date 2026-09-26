@@ -155,3 +155,116 @@ def fig_red(net_, resultado=None, colorear: str = "presion", dark: bool = True,
 def _np_array(vals):
     import numpy as np
     return np.array(vals)
+
+
+# ---------------------------------------------------------------- Plotly
+
+# Rampa secuencial de un solo tono (azul) para magnitudes: presión y velocidad.
+_RAMPA = ["#cfe2f7", "#a4c8ef", "#78ade6", "#4f92dc", "#2a78d6", "#1f5fae", "#164783"]
+_BANDAS_V = [0.0, 0.3, 0.6, 1.0, 1.5, 2.0, 3.0, math.inf]
+
+
+def _texto_nodo(jid, j, presion=None) -> str:
+    t = f"<b>{jid}</b><br>Cota {j.elevation:.2f} m<br>Demanda {j.demand:.3f} L/s"
+    return t + (f"<br>Presión {presion:.2f} m" if presion is not None else "")
+
+
+def fig_red_plotly(net_, resultado=None, colorear: str = "presion", escala: float = 1.0,
+                   oscuro: bool = True, p_min: float | None = None):
+    """Mapa interactivo (zoom, paneo, hover) de la red. Tuberías en una sola
+    traza WebGL con separadores `None` (rápido en redes de miles de tramos);
+    con resultado, nodos coloreados por presión o tramos agrupados en bandas
+    de velocidad (rampa secuencial de un tono: en fondo oscuro, lo alto es lo
+    claro). Los nodos bajo `p_min` van en su propia traza de estado (rojo, ✕)."""
+    import plotly.graph_objects as go
+    pos = _posiciones(net_)
+    escala = max(float(escala), 0.1)
+    rampa = _RAMPA[::-1] if oscuro else _RAMPA
+    borde = "#0e1117" if oscuro else "#ffffff"
+    fig = go.Figure()
+
+    def segmentos(tubos):
+        xs, ys = [], []
+        for p in tubos:
+            (x0, y0), (x1, y1) = pos[p.node1], pos[p.node2]
+            xs += [x0, x1, None]
+            ys += [y0, y1, None]
+        return xs, ys
+
+    if resultado is not None and colorear == "velocidad":
+        vel = {p.id: abs(resultado.velocities.get(p.id, 0.0)) for p in net_.pipes}
+        for i, (a, b) in enumerate(zip(_BANDAS_V[:-1], _BANDAS_V[1:])):
+            tubos = [p for p in net_.pipes if a <= vel[p.id] < b]
+            if not tubos:
+                continue
+            xs, ys = segmentos(tubos)
+            nombre = f"V {a:g}–{b:g} m/s" if b != math.inf else f"V ≥ {a:g} m/s"
+            fig.add_trace(go.Scattergl(x=xs, y=ys, mode="lines", name=nombre,
+                                       line=dict(color=rampa[i], width=2.5 * escala),
+                                       hoverinfo="skip"))
+    else:
+        xs, ys = segmentos(net_.pipes)
+        fig.add_trace(go.Scattergl(x=xs, y=ys, mode="lines", name="Tuberías",
+                                   line=dict(color="#8a8f98", width=1.8 * escala),
+                                   hoverinfo="skip"))
+
+    # puntos medios invisibles: dan el hover de cada tramo
+    mx, my, mtxt = [], [], []
+    for p in net_.pipes:
+        (x0, y0), (x1, y1) = pos[p.node1], pos[p.node2]
+        mx.append((x0 + x1) / 2)
+        my.append((y0 + y1) / 2)
+        t = f"<b>{p.id}</b><br>L {p.length:.1f} m · D {p.diameter_mm:.1f} mm"
+        if resultado is not None:
+            t += (f"<br>Q {resultado.flows.get(p.id, 0.0):.2f} L/s"
+                  f"<br>V {abs(resultado.velocities.get(p.id, 0.0)):.2f} m/s")
+        mtxt.append(t)
+    fig.add_trace(go.Scattergl(x=mx, y=my, mode="markers", name="Tramos",
+                               marker=dict(size=8 * escala, opacity=0), hovertext=mtxt,
+                               hoverinfo="text", showlegend=False))
+
+    jids = list(net_.junctions)
+    pres = ([resultado.heads.get(j, 0.0) - net_.junctions[j].elevation for j in jids]
+            if resultado is not None else None)
+    marcador = dict(size=8 * escala, line=dict(width=1, color=borde))
+    if pres is not None and colorear == "presion":
+        marcador.update(color=pres, colorscale=[[i / 6, c] for i, c in enumerate(rampa)],
+                        colorbar=dict(title="Presión [m]", thickness=12), showscale=True)
+    else:
+        marcador.update(color="#2a78d6")
+    fig.add_trace(go.Scattergl(
+        x=[pos[j][0] for j in jids], y=[pos[j][1] for j in jids], mode="markers",
+        name="Nodos", marker=marcador, hoverinfo="text",
+        hovertext=[_texto_nodo(j, net_.junctions[j], pres[i] if pres else None)
+                   for i, j in enumerate(jids)]))
+
+    if pres is not None and p_min is not None:
+        bajo = [i for i, v in enumerate(pres) if v < p_min]
+        if bajo:
+            fig.add_trace(go.Scattergl(
+                x=[pos[jids[i]][0] for i in bajo], y=[pos[jids[i]][1] for i in bajo],
+                mode="markers", name=f"Bajo P mín. ({p_min:.0f} m)",
+                marker=dict(symbol="x", size=12 * escala, color="#e34948"),
+                hoverinfo="text",
+                hovertext=[_texto_nodo(jids[i], net_.junctions[jids[i]], pres[i]) for i in bajo]))
+
+    for tipo, nombre, simbolo, color in (("reservorio", "Reservorios", "triangle-up", "#1baf7a"),
+                                         ("tanque", "Tanques", "square", "#eb6834")):
+        fuentes = [s for s in net_.sources.values() if s.tipo == tipo]
+        if fuentes:
+            fig.add_trace(go.Scatter(
+                x=[pos[s.id][0] for s in fuentes], y=[pos[s.id][1] for s in fuentes],
+                mode="markers+text", name=nombre, text=[s.id for s in fuentes],
+                textposition="top center",
+                marker=dict(symbol=simbolo, size=14 * escala, color=color,
+                            line=dict(width=1, color=borde)),
+                hovertext=[f"<b>{s.id}</b><br>{tipo.capitalize()} · cabeza {s.head:.2f} m"
+                           for s in fuentes], hoverinfo="text"))
+
+    fig.update_layout(
+        height=560, margin=dict(l=10, r=10, t=30, b=10), dragmode="pan",
+        hovermode="closest", legend=dict(orientation="h", y=1.02, x=0),
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False,
+                   scaleanchor="x", scaleratio=1))
+    return fig
