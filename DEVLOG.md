@@ -47,6 +47,56 @@ Párrafo libre con contexto crítico que el otro agente necesita saber.
 
 ## Entradas
 
+## [2026-09-26] — Plan v9 completo: EPANET, NPSH, multi-tanque, transitorios MOC + Allievi, mapas, detalles y estudios previos
+
+**Agente:** Claude Code
+**Rama:** claude/elegant-gates-2y7i8w
+**Sesión:** El usuario pidió seguir las recomendaciones del diagnóstico (DEVLOG → Bloque C → Bloque D) y que la app cubra el ciclo completo de diseño: población, caudales, curvas de consumo, tanques con balance entre varios, bombeo con pérdidas y curvas, EPANET, transitorios por el método de las características con Allievi como segundo motor, e informe LaTeX con mapas, esquemas y citas. Se ejecutaron los WP0–WP13 del plan `docs/plans/2026-09-26-acucalc-v9.md`.
+
+### Cambios realizados
+- WP1 `core/project.py`: `_from_dict` genérico recursivo (`metadata={"item": X}`), `SCHEMA_VERSION=3`, `huella(p)`; nuevos: `TransientConfig`/`TramoTransitorio`, `ZonaSpec`/`EnlaceSpec`, `UbicacionConfig`/`MapaGuardado`, `ZanjaConfig`, `EstudioPrevio`/`TablaEstudio`/`FiguraEstudio`, `TankSpec.borde_libre`, NPSH en `PumpSystemData`. `tests/test_project.py` tiene una guarda que exige valor no-default para cada campo nuevo en `_proyecto_completo`
+- WP2 `core/pipeline.py` (`design_flows`), `core/imagenes.py` (imágenes reducidas a 2000 px), caché de `build()` por `huella` en la página Reporte; fix de carga de proyecto (nombre borrado, cargador en bucle)
+- WP3 logo PNG en portada (`scripts/export_logo.py`, `assets/acucalc_logo.png`), mapa de la red en el informe
+- WP4 `core/biblio.py` + `data/referencias.json` (18 refs verificadas, +Esri World Imagery): `\cite` numérico en orden de primera cita, BibTeX del usuario, `[@clave]` en textos
+- WP5 `core/propiedades.py` (IAPWS-IF97 región 4, atmósfera ISA) y NPSH en Bombeo y en la memoria
+- WP6 `core/epanet_engine.py`: EPANET 2.3.05 por ctypes sobre la biblioteca que trae epyt (estático QMH, EPS 24 h, bombas conectadas, avisos 1–6), respaldo GGA; `core/network.py` convierte unidades del .inp (GPM, CFS…) y conserva la columna Status; `core/red_diseno.py`
+- WP7 `core/network_map.py::fig_red_plotly` (Scattergl, hover por nodo/tramo, 1:1) y botón Guardar ubicado por JS tras el último ítem de la barra
+- WP8 `core/tank_network.py`: balance horario en grafo acíclico, conexión "auto" que cierra el balance diario, sugiere el volumen mínimo sin aplicarlo (modo `red` opcional en Almacenamiento)
+- WP9 `core/transients/` (`moc.py`, `allievi.py`, `perfil.py`, `escenario.py`) y `pages/9_Transitorios.py`: MOC semi-implícito con fricción y tramos en serie; fronteras embalse, válvula τ(t), bomba (parada instantánea, con inercia, arranque en rampa) y tanque hidroneumático politrópico; Allievi encadenado, Joukowsky, Michaud; envolventes contra PN y vapor; sección del informe con ecuaciones C+/C−
+- WP10 `core/geo.py` (teselas XYZ, caché, Nominatim) y `core/study_map.py` (red reproyectada con pyproj, escala, norte, atribución); expander en Proyecto; sección «Localización del proyecto»
+- WP11 `core/detalles.py`: zanja a escala (solo con dimensiones del usuario), esquema de estación de bombeo desde los accesorios, corte del tanque con niveles = volumen/área; zanja en Reporte, borde libre en Almacenamiento; sección «Detalles típicos»
+- WP12 `core/estudios.py` y `pages/10_Estudios.py`: estudios previos con texto citado, tablas CSV/Excel (longtable) y figuras (imagen o 1.ª página de PDF); sección «Estudios previos»
+- WP13 alcance de la Introducción según las secciones incluidas; «Acerca de» y limitaciones actualizadas; `tests/test_compilacion.py` compila una memoria con todas las secciones y audita el log; tope `MAX_PASOS` en el MOC; perfil siempre validado; caché de teselas opcional; tabla de tramos de Transitorios con columnas aunque esté vacía
+- `app.py`: páginas Estudios y Transitorios en la navegación; `requirements.txt`: bibtexparser, epyt, plotly, pyproj, requests
+
+### Tests
+- `python3 -m pytest -q` → 464 passed, 0 failed (la sesión empezó con 240)
+- Nuevos: test_imagenes, test_pipeline, test_pagina_proyecto, test_biblio, test_propiedades, test_epanet_engine, test_red_diseno, test_network_map_plotly, test_tank_network, test_transitorios, test_perfil, test_transitorios_escenario, test_geo, test_study_map, test_detalles, test_estudios, test_compilacion
+- Goldens analíticos del MOC: régimen permanente estable, onda cuadrada de Joukowsky (4L/a), MOC = cadena de Allievi (1e-9·H0), Michaud exacto, coeficiente de transmisión en serie, hidroneumático → embalse, empaquetamiento por fricción; IF97 contra la tabla 35; EPSG:9377 (4°N, 73°O) → (5 000 000, 2 000 000); golden de almacenamiento 110 m³ intacto
+- PDF compilado con pdflatex (TeX Live 2023 instalado en el contenedor): 0 errores, 0 Overfull, 0 citas o referencias indefinidas; revisadas visualmente las páginas de transitorios, localización, estudios y detalles
+
+### Decisiones tomadas
+- **Red: el análisis estático usa QMH = K2·QMD repartido por longitud (Art. 47); el EPS usa QMD × patrón.** Cambia resultados de proyectos anteriores que se verificaban con QMD; se avisa si el pico del patrón difiere más de 5 % de K2
+- EPANET por ctypes y no por la API alta de epyt: `ph=True` de epyt fallaba (error 102) y `EN_PRESSURE` salía en psi con archivos GPM; la presión se calcula como cabeza − cota
+- Transitorios: no se modela la separación de columna (se marca instante y abscisa y lo posterior se declara no válido); la parada con inercia usa la curva en zona normal (sin Suter); las protecciones distintas del hidroneumático solo se diagnostican. El arranque solo exige el tiempo de rampa
+- Mapas: solo OSM/Esri (sin Google, por pedido del usuario); nunca se descargan en `build()`; se guardan en el proyecto (PNG/JPEG en base64)
+- Zanja y borde libre: la app no asume valores de norma; sin datos completos no hay figura
+- `babel` con `es-nodecimaldot`: las fórmulas usan punto decimal como el resto del texto (antes un mismo número salía con coma en fórmulas y punto en texto)
+- Desvío del plan: la navegación sigue plana (11 ítems) en lugar de agruparse por secciones
+
+### Pendientes (TODO)
+- [ ] Probar la descarga real de teselas y Nominatim con internet: el contenedor de esta sesión bloquea `tile.openstreetmap.org`, `server.arcgisonline.com` y `nominatim.openstreetmap.org` (se verificó con teselas sintéticas y caché)
+- [ ] Verificar que la biblioteca EPANET de epyt cargue en Railway/Streamlit Cloud (`ldd`); si falla, queda el GGA con aviso
+- [ ] Unificar Python: `.python-version` dice 3.14 y devcontainer/IDX usan 3.11 (las pruebas corrieron en 3.11)
+- [ ] `st.components.v1.html` (script del botón Guardar) está deprecado en Streamlit 1.64: migrar
+- [ ] Deep-link a una página justo después de arrancar el servidor muestra el modo legacy de `pages/` (bajo impacto; no renombrar `pages/`)
+- [ ] Imports sin uso preexistentes (pyflakes): `pages_common.py`, páginas 4/5/6, `core/network.py` (`field`), `core/report_figs.py` (`cx_tanque`)
+- [ ] Agrupar la navegación si se agregan más páginas (en pantallas angostas 11 ítems no caben)
+- [ ] Fuera de alcance, documentado: DVCM, curvas de Suter, dimensionamiento de ventosas/chimeneas/válvulas de alivio
+
+### Contexto para el siguiente agente
+`report_ctx.build()` sigue siendo la única fuente del informe y recalcula todo desde el proyecto, incluido el MOC (rápido; `MAX_PASOS=200 000` evita cuelgues). Orden de secciones: portada, introducción, marco legal, localización, estudios previos, población, caudales, almacenamiento (y balance entre tanques), bombeo (NPSH), transitorios, red (EPANET estático y EPS), detalles típicos, conclusiones, acerca de, recomendaciones, anexos y referencias. Cada campo nuevo del proyecto debe ir en `_proyecto_completo` de `tests/test_project.py`. `tests/test_compilacion.py` se omite sin motor LaTeX; en el contenedor se instaló TeX Live por apt. Para probar la UI se usó Playwright con el demo `scripts/demo_sanjacinto.py` (genera `saves/Acueducto_San_Jacinto.acucalc.json`, que está en `.gitignore`).
+
 ## [2026-09-26] — Registro retroactivo: 21 commits del 22-23 jul sin entrada + plan v9
 
 **Agente:** Claude Code
