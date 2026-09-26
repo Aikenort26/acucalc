@@ -3,11 +3,40 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
-from core import project as pj, report, report_ctx
-from pages_common import page_setup
+import pandas as pd
+
+from core import biblio, project as pj, report, report_ctx
+from pages_common import page_setup, txt_state
 
 p = page_setup()
 st.header("8 · Reporte — memoria de cálculo LaTeX")
+
+# ---------- referencias bibliográficas ----------
+with st.expander("📚 Referencias bibliográficas", expanded=False):
+    st.caption("La memoria cita la biblioteca base y tus referencias propias; la lista "
+               "final del PDF incluye solo las que el texto cita, numeradas por orden "
+               "de aparición. En los textos de estudios previos cita con `[@clave]`.")
+    base = biblio.biblioteca_base()
+    st.dataframe(pd.DataFrame([{"Clave": r.key, "Autor": r.autor, "Año": r.anio,
+                                "Título": r.titulo} for r in base]),
+                 hide_index=True, width="stretch", height=220)
+    up_bib = st.file_uploader("Cargar archivo .bib", type=["bib", "txt"], key="w_up_bib")
+    k_bib = txt_state("txt_bibtex", p.bibtex_usuario)
+    if up_bib is not None and st.session_state.get("bib_upload_id") != up_bib.file_id:
+        st.session_state["bib_upload_id"] = up_bib.file_id
+        st.session_state[k_bib] = up_bib.getvalue().decode("utf-8", errors="replace")
+    p.bibtex_usuario = st.text_area(
+        "Referencias propias (BibTeX)", key=k_bib, height=180,
+        placeholder="@book{perez2021,\n  author = {Pérez, Juan},\n  title = {Estudio de "
+                    "suelos del municipio},\n  publisher = {Alcaldía}, year = {2021}}",
+        help="Una clave igual a una de la biblioteca base la reemplaza.")
+    if p.bibtex_usuario.strip():
+        propias, errores = biblio.parse_bibtex(p.bibtex_usuario)
+        for e in errores:
+            st.warning(e)
+        if propias:
+            st.success(f"{len(propias)} referencia(s) propia(s): "
+                       + ", ".join(f"`{r.key}`" for r in propias))
 
 # build() recalcula todo y dibuja todas las figuras: se hace solo cuando el
 # proyecto cambió, no en cada rerun de la página.

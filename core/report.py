@@ -1,4 +1,5 @@
 """Genera el proyecto LaTeX de la memoria (estructura Res 0330) y lo compila."""
+import re
 import shutil
 import subprocess
 import zipfile
@@ -16,11 +17,34 @@ _env = Environment(
 )
 
 
+_CITE_RE = re.compile(r"\\cite\{([^}]*)\}")
+
+
+def _render_tex(ctx: dict) -> str:
+    """Renderiza en dos pasadas: la bibliografía final lleva solo las
+    referencias que el documento cita, en orden de primera cita (estilo
+    numérico). Qué se cita depende de las secciones activas del proyecto, así
+    que se lee del propio .tex en vez de mantener una lista aparte."""
+    tpl = _env.get_template("main.tex.j2")
+    tex = tpl.render(**ctx)
+    refs = ctx.get("referencias") or []
+    if not refs:
+        return tex
+    orden = []
+    for grupo in _CITE_RE.findall(tex):
+        for k in (x.strip() for x in grupo.split(",")):
+            if k not in orden:
+                orden.append(k)
+    por_clave = {r["key"]: r for r in refs}
+    citadas = [por_clave[k] for k in orden if k in por_clave]
+    return tpl.render(**{**ctx, "referencias": citadas})
+
+
 def render(ctx: dict, out_dir: str | Path) -> Path:
     """Renderiza main.tex + copia figuras a out_dir/figures. Devuelve out_dir."""
     out = Path(out_dir)
     (out / "figures").mkdir(parents=True, exist_ok=True)
-    tex = _env.get_template("main.tex.j2").render(**ctx)
+    tex = _render_tex(ctx)
     (out / "main.tex").write_text(tex, encoding="utf-8")
     for name, src in (ctx.get("figuras") or {}).items():
         shutil.copy(src, out / "figures" / Path(src).name)

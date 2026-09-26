@@ -173,6 +173,7 @@ class Project:
     red_pmax: float = 70.0
     red_en_informe: bool = True   # incluir la sección de red en el reporte (si hay red cargada)
     ruta_guardado: str = ""       # carpeta o archivo .acucalc.json del usuario (vacío = saves/ interno)
+    bibtex_usuario: str = ""      # referencias propias en BibTeX (se suman a la biblioteca base)
 
 
 def save(p: Project, path: str | Path) -> None:

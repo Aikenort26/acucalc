@@ -1,0 +1,156 @@
+[
+ {
+  "key": "res0330",
+  "tipo": "norma",
+  "autor": "Ministerio de Vivienda, Ciudad y Territorio",
+  "anio": "2017",
+  "titulo": "Resolución 0330 de 2017, «Por la cual se adopta el Reglamento Técnico para el Sector de Agua Potable y Saneamiento Básico — RAS»",
+  "lugar": "Bogotá, Colombia"
+ },
+ {
+  "key": "res0844",
+  "tipo": "norma",
+  "autor": "Ministerio de Vivienda, Ciudad y Territorio",
+  "anio": "2018",
+  "titulo": "Resolución 0844 de 2018, por la cual se establecen los requisitos técnicos para los proyectos de agua y saneamiento básico de zonas rurales que se adelanten bajo los esquemas diferenciales definidos en el Capítulo 1, del Título 7, de la Parte 3, del Libro 2 del Decreto 1077 de 2015",
+  "lugar": "Bogotá, Colombia",
+  "url": "https://www.minvivienda.gov.co/normativa/resolucion-0844-2018"
+ },
+ {
+  "key": "dec1575",
+  "tipo": "norma",
+  "autor": "Presidencia de la República",
+  "anio": "2007",
+  "titulo": "Decreto 1575 de 2007, por el cual se establece el Sistema para la Protección y Control de la Calidad del Agua para Consumo Humano",
+  "lugar": "Bogotá, Colombia"
+ },
+ {
+  "key": "nsr10j",
+  "tipo": "norma",
+  "autor": "Asociación Colombiana de Ingeniería Sísmica",
+  "anio": "2010",
+  "titulo": "Reglamento Colombiano de Construcción Sismo Resistente NSR-10, Título J — Requisitos de Protección contra Incendios en Edificaciones",
+  "lugar": "Bogotá, Colombia"
+ },
+ {
+  "key": "t740",
+  "tipo": "norma",
+  "autor": "Corte Constitucional de Colombia",
+  "anio": "2011",
+  "titulo": "Sentencia T-740 de 2011 (mínimo vital de agua potable)"
+ },
+ {
+  "key": "cra750",
+  "tipo": "norma",
+  "autor": "Comisión de Regulación de Agua Potable y Saneamiento Básico (CRA)",
+  "anio": "2016",
+  "titulo": "Resolución CRA 750 de 2016, metodología tarifaria — consumo básico"
+ },
+ {
+  "key": "dane",
+  "tipo": "misc",
+  "autor": "Departamento Administrativo Nacional de Estadística (DANE)",
+  "anio": "s.f.",
+  "titulo": "Proyecciones y retroproyecciones de población municipal para el periodo 1985-2017 y 2018-2042 con base en el CNPV 2018",
+  "lugar": "Bogotá, Colombia",
+  "url": "https://www.dane.gov.co/index.php/estadisticas-por-tema/demografia-y-poblacion/proyecciones-de-poblacion"
+ },
+ {
+  "key": "colebrook1939",
+  "tipo": "article",
+  "autor": "Colebrook, C. F.",
+  "anio": "1939",
+  "titulo": "Turbulent flow in pipes, with particular reference to the transition region between the smooth and rough pipe laws",
+  "revista": "Journal of the Institution of Civil Engineers",
+  "volumen": "11",
+  "numero": "4",
+  "paginas": "133–156"
+ },
+ {
+  "key": "joukowsky1904",
+  "tipo": "article",
+  "autor": "Joukowsky, N.",
+  "anio": "1904",
+  "titulo": "Water hammer (trad. O. Simin del original ruso de 1898)",
+  "revista": "Proceedings of the American Water Works Association",
+  "volumen": "24",
+  "paginas": "341–424"
+ },
+ {
+  "key": "allievi1925",
+  "tipo": "book",
+  "autor": "Allievi, L.",
+  "anio": "1925",
+  "titulo": "Theory of Water-Hammer (trad. E. E. Halmos)",
+  "editorial": "Riccardo Garoni",
+  "lugar": "Roma"
+ },
+ {
+  "key": "wylie1993",
+  "tipo": "book",
+  "autor": "Wylie, E. B., Streeter, V. L. y Suo, L.",
+  "anio": "1993",
+  "titulo": "Fluid Transients in Systems",
+  "editorial": "Prentice Hall",
+  "lugar": "Englewood Cliffs, NJ"
+ },
+ {
+  "key": "chaudhry2014",
+  "tipo": "book",
+  "autor": "Chaudhry, M. H.",
+  "anio": "2014",
+  "titulo": "Applied Hydraulic Transients",
+  "edicion": "3",
+  "editorial": "Springer",
+  "lugar": "Nueva York",
+  "doi": "10.1007/978-1-4614-8538-4"
+ },
+ {
+  "key": "rossman2020",
+  "tipo": "techreport",
+  "autor": "Rossman, L. A., Woo, H., Tryby, M., Shang, F., Janke, R. y Haxton, T.",
+  "anio": "2020",
+  "titulo": "EPANET 2.2 User Manual",
+  "editorial": "U.S. Environmental Protection Agency",
+  "lugar": "Cincinnati, OH",
+  "nota": "EPA/600/R-20/133",
+  "url": "https://cfpub.epa.gov/si/si_public_record_Report.cfm?dirEntryId=348882&Lab=CESER"
+ },
+ {
+  "key": "kyriakou2023",
+  "tipo": "article",
+  "autor": "Kyriakou, M. S., Demetriades, M., Vrachimis, S. G., Eliades, D. G. y Polycarpou, M. M.",
+  "anio": "2023",
+  "titulo": "EPyT: An EPANET-Python Toolkit for Smart Water Network Simulations",
+  "revista": "Journal of Open Source Software",
+  "volumen": "8",
+  "numero": "92",
+  "paginas": "5947",
+  "doi": "10.21105/joss.05947"
+ },
+ {
+  "key": "iapws2012",
+  "tipo": "techreport",
+  "autor": "International Association for the Properties of Water and Steam (IAPWS)",
+  "anio": "2012",
+  "titulo": "Revised Release on the IAPWS Industrial Formulation 1997 for the Thermodynamic Properties of Water and Steam",
+  "nota": "IAPWS R7-97(2012)",
+  "url": "https://iapws.org/documents/release/IF97-Rev"
+ },
+ {
+  "key": "iso2533",
+  "tipo": "norma",
+  "autor": "International Organization for Standardization",
+  "anio": "1975",
+  "titulo": "ISO 2533:1975 Standard Atmosphere",
+  "lugar": "Ginebra"
+ },
+ {
+  "key": "osm",
+  "tipo": "misc",
+  "autor": "OpenStreetMap contributors",
+  "anio": "s.f.",
+  "titulo": "OpenStreetMap — datos cartográficos bajo licencia ODbL",
+  "url": "https://www.openstreetmap.org/copyright"
+ }
+]

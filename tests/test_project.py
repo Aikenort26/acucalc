@@ -395,6 +395,7 @@ def _proyecto_completo():
     p.red_vmax, p.red_pmin, p.red_pmax = 3.0, 10.0, 60.0
     p.red_en_informe = False
     p.ruta_guardado = "/tmp/x"
+    p.bibtex_usuario = "@misc{x, title={t}, year=2020}"
     return p
 
 

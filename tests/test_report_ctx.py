@@ -189,19 +189,15 @@ def test_patron_sin_ventana_de_suministro_marca_guion():
     assert {h["suministro"] for h in ctx["patron_horas"]} == {"—"}
 
 
-def test_referencia_dane_tiene_key_titulo_oficial_y_url():
-    """La serie del DANE es el insumo de toda la proyección: debe citarse con su
-    título oficial y su URL, y tener `key` para la referencia cruzada."""
-    dane = next(r for r in report_ctx.REFERENCIAS if r["key"] == "dane")
-    assert ("Proyecciones y retroproyecciones de población municipal para el "
-            "periodo 1985-2017 y 2018-2042 con base en el CNPV 2018") in dane["cita"]
-    assert dane["url"].startswith("https://www.dane.gov.co/")
-
-
-def test_todas_las_referencias_tienen_key_unica():
-    keys = [r["key"] for r in report_ctx.REFERENCIAS]
-    assert all(keys), "una referencia sin key rompe su \label{ref:}"
-    assert len(keys) == len(set(keys)), "keys duplicadas colisionan en \label"
+def test_referencias_base_y_bibtex_del_usuario():
+    p = _proyecto_minimo()
+    p.bibtex_usuario = (
+        "@book{mio2024, author={Ortega, Aiken}, title={Estudio de suelos}, year={2024}}\n"
+        "@misc{dane, author={{DANE}}, title={Serie corregida}, year={2024}}")
+    refs = {r["key"]: r for r in report_ctx.build(p)[0]["referencias"]}
+    assert "res0330" in refs and "wylie1993" in refs
+    assert refs["mio2024"]["texto"].startswith("Ortega, A. (2024).")
+    assert "Serie corregida" in refs["dane"]["texto"]      # la del usuario reemplaza
 
 
 def test_pob_es_dane_distingue_la_fuente():

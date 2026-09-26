@@ -76,16 +76,19 @@ características.
 
 \section{Marco legal}
 \begin{itemize}
-  \item Resolución 0330 de 2017 (MVCT) --- Reglamento Técnico RAS.
-  \item Resolución 0844 de 2018 (MVCT) --- esquemas diferenciales para zonas rurales.
-  \item Decreto 1575 de 2007 --- calidad del agua para consumo humano.
-  \item NSR-10, Título J --- protección contra incendios.
-  \item Jurisprudencia de mínimo vital (Corte Constitucional, T-740 de 2011).
+  \item Resolución 0330 de 2017 (MVCT) --- Reglamento Técnico RAS~\cite{res0330}.
+  \item Resolución 0844 de 2018 (MVCT) --- requisitos técnicos para zonas rurales
+    bajo esquemas diferenciales~\cite{res0844}.
+  \item Decreto 1575 de 2007 --- calidad del agua para consumo humano~\cite{dec1575}.
+  \item NSR-10, Título J --- protección contra incendios~\cite{nsr10j}.
+  \item Jurisprudencia de mínimo vital (Corte Constitucional, T-740 de
+    2011)~\cite{t740}.
+  \item Resolución CRA 750 de 2016 --- consumo básico~\cite{cra750}.
 \end{itemize}
 
 \section{Proyección de población}
 \label{sec:poblacion}
-Periodo de diseño: 25 años (Art. 40, Res. 0330 de 2017, Ref.~\ref{ref:res0330}),
+Periodo de diseño: 25 años (Art. 40, Res. 0330 de 2017~\cite{res0330}),
 horizonte \VAR{horizonte}. Zona de estudio: \VAR{pob_tipo}. Año base de la
 proyección: \VAR{year0}.
 
@@ -93,7 +96,7 @@ proyección: \VAR{year0}.
 La serie de población empleada corresponde a las \emph{Proyecciones y
 retroproyecciones de población municipal para el periodo 1985-2017 y 2018-2042
 con base en el CNPV 2018}, publicadas por el Departamento Administrativo Nacional
-de Estadística (DANE) --- Ref.~\ref{ref:dane}. Serie de referencia:
+de Estadística (DANE)~\cite{dane}. Serie de referencia:
 \VAR{pob_fuente}.
 \BLOCK{else}
 Serie censal de referencia: \VAR{pob_fuente}.
@@ -493,12 +496,12 @@ para \VAR{s.qb} L/s con altura dinámica de \VAR{s.hd} m.
 Esta memoria fue generada con \textbf{ACUCALC}, una aplicación de
 predimensionamiento hidráulico de sistemas de acueducto desarrollada por
 \textbf{\VAR{autor}} conforme a la metodología de la Resolución 0330 de 2017
-(Ref.~\ref{ref:res0330}).
+\cite{res0330}.
 
 \subsection{Qué hace la aplicación}
 \begin{itemize}
   \item Proyecta la población de diseño a partir de la serie del DANE
-    (Ref.~\ref{ref:dane}) por los métodos aritmético, geométrico, exponencial y
+    \cite{dane} por los métodos aritmético, geométrico, exponencial y
     de Wappaus, y compara sus desviaciones.
   \item Determina dotación neta y bruta, y los caudales de diseño
     $Q_{med}$, $QMD$ y $QMH$ con los coeficientes de mayoración del Art.~47.
@@ -531,7 +534,7 @@ predimensionamiento hidráulico de sistemas de acueducto desarrollada por
 \section{Recomendaciones y limitaciones}
 Este documento es una memoria de predimensionamiento generada de forma
 automatizada a partir de la metodología de la Resolución 0330 de 2017
-(Ref.~\ref{ref:res0330}) y de los datos suministrados por el usuario. En
+\cite{res0330} y de los datos suministrados por el usuario. En
 consecuencia:
 \begin{itemize}
   \item \textbf{Toda la información contenida en este informe, así como en la
@@ -574,16 +577,20 @@ Sistemas de bombeo.
 \BLOCK{endfor}
 \BLOCK{endif}
 
-\section{Referencias}
-% Cada entrada lleva \label{ref:<key>}, así el texto la cita con \ref{} y queda
-% un hipervínculo real (hyperref) en vez de una mención en prosa suelta.
-\begin{enumerate}
+\BLOCK{if referencias}
+\#{ Lista numérica en orden de primera cita (report._render_tex filtra y
+    ordena). Sin biber/bibtex: compila igual con pdflatex, tectonic o MiKTeX.
+    La URL va en \url aparte porque dentro del texto corrido no parte y se
+    salía del margen. }
+\begin{thebibliography}{99}
+\addcontentsline{toc}{section}{\refname}
 \BLOCK{for ref in referencias}
-  \item \label{ref:\VAR{ref.key}} \VAR{ref.cita}
+\bibitem{\VAR{ref.key}} \VAR{ref.texto}
 \BLOCK{if ref.url}
-  Disponible en: \url{\VAR{ref.url}}
+\url{\VAR{ref.url}}
 \BLOCK{endif}
 \BLOCK{endfor}
-\end{enumerate}
+\end{thebibliography}
+\BLOCK{endif}
 
 \end{document}

@@ -9,8 +9,9 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 
-from core import curves as cvs, demand, network, pipeline, pipes, population as pop, pumping as pu
+from core import biblio, curves as cvs, demand, network, pipeline, pipes, population as pop, pumping as pu
 from core import formato as fm, network_map as nm, report_figs as rf, storage
+from core.latex import latex_escape
 from core.project import Project
 
 LOGO_ACUCALC = Path(__file__).resolve().parent.parent / "assets" / "acucalc_logo.png"
@@ -24,74 +25,12 @@ AUTOR_APP = "Aiken H. Ortega-Heredia"
 # asumen.
 HORAS_DIA = 24
 
-# Referencias del informe. `key` alimenta el \label{ref:<key>} de la lista, de
-# modo que el texto puede citarlas con referencia cruzada real (ver la macro
-# \citaref en la plantilla) en vez de nombrarlas en prosa suelta.
-REFERENCIAS = [
-    {"key": "res0330",
-     "cita": "Ministerio de Vivienda, Ciudad y Territorio. Resolución 0330 de 2017, "
-             "\"Por la cual se adopta el Reglamento Técnico para el Sector de Agua "
-             "Potable y Saneamiento Básico — RAS\". Bogotá, Colombia."},
-    {"key": "res0844",
-     "cita": "Ministerio de Vivienda, Ciudad y Territorio. Resolución 0844 de 2018, "
-             "por la cual se establecen esquemas diferenciales de dotación para "
-             "zonas rurales. Bogotá, Colombia."},
-    {"key": "dec1575",
-     "cita": "Presidencia de la República. Decreto 1575 de 2007, por el cual se "
-             "establece el Sistema para la Protección y Control de la Calidad del "
-             "Agua para Consumo Humano. Bogotá, Colombia."},
-    {"key": "nsr10j",
-     "cita": "Asociación Colombiana de Ingeniería Sísmica. Reglamento Colombiano de "
-             "Construcción Sismo Resistente NSR-10, Título J — Requisitos de "
-             "Protección contra Incendios en Edificaciones. Bogotá, Colombia, 2010."},
-    {"key": "t740",
-     "cita": "Corte Constitucional de Colombia. Sentencia T-740 de 2011 (mínimo "
-             "vital de agua potable)."},
-    {"key": "cra750",
-     "cita": "Comisión de Regulación de Agua Potable y Saneamiento Básico (CRA). "
-             "Resolución CRA 750 de 2016, metodología tarifaria — consumo básico."},
-    # Fuente de la serie de población. Es el insumo del que sale toda la
-    # proyección, así que se cita explícitamente con su título oficial.
-    # `url` va aparte de `cita` porque la plantilla lo envuelve en \url{}: una
-    # URL larga dentro del texto corrido no parte y se sale del margen.
-    {"key": "dane",
-     "cita": "Departamento Administrativo Nacional de Estadística (DANE). "
-             "\"Proyecciones y retroproyecciones de población municipal para el "
-             "periodo 1985-2017 y 2018-2042 con base en el CNPV 2018\". Bogotá, "
-             "Colombia.",
-     "url": "https://www.dane.gov.co/index.php/estadisticas-por-tema/"
-            "demografia-y-poblacion/proyecciones-de-poblacion"},
-]
-
-_LATEX_MAP = [
-    ("\\", r"\textbackslash{}"),
-    ("&", r"\&"), ("%", r"\%"), ("$", r"\$"), ("#", r"\#"),
-    ("_", r"\_"), ("{", r"\{"), ("}", r"\}"),
-    ("~", r"\textasciitilde{}"), ("^", r"\textasciicircum{}"),
-    ("→", r"$\to$"), ("×", r"$\times$"), ("Ø", r"\O{}"),
-    ("—", "---"), ("–", "--"),
-    ("“", "``"), ("”", "''"), ("‘", "`"), ("’", "'"),
-]
-
-
-_LATEX_ESCAPE_TABLE = dict(_LATEX_MAP)
-
-
-def latex_escape(s: str) -> str:
-    """Escapa un string de usuario para LaTeX y normaliza unicode frágil
-    (flechas, multiplicación, Ø, guiones y comillas tipográficas) a su forma
-    ASCII/LaTeX robusta — necesario porque el `main.tex` generado puede ser
-    reabierto y re-guardado externamente en un encoding no-UTF8 (bug
-    reportado: tildes y unicode se corrompen a U+FFFD tras ese re-guardado;
-    el ASCII sobrevive).
-
-    Nota: se traduce carácter por carácter (no con `.replace()` encadenado)
-    porque varios reemplazos de `_LATEX_MAP` insertan `{`/`}` literales
-    (p.ej. `\\` -> `\textbackslash{}`); un `.replace()` en cadena volvería a
-    escapar esas llaves recién insertadas y las duplicaría."""
-    if not s:
-        return s
-    return "".join(_LATEX_ESCAPE_TABLE.get(ch, ch) for ch in s)
+def referencias(p: Project) -> list[biblio.Ref]:
+    """Biblioteca base + BibTeX del usuario; una clave del usuario igual a una
+    de la base la reemplaza (permite corregir una entrada base)."""
+    propias = biblio.parse_bibtex(p.bibtex_usuario)[0] if p.bibtex_usuario.strip() else []
+    claves = {r.key for r in propias}
+    return [r for r in biblio.biblioteca_base() if r.key not in claves] + propias
 
 
 def build(p: Project) -> tuple[dict, dict]:
@@ -426,7 +365,7 @@ def build(p: Project) -> tuple[dict, dict]:
         "logo_cliente": logo_cliente,
         "logo_consultor": logo_consultor,
         "logo_acucalc": LOGO_ACUCALC.name,
-        "referencias": REFERENCIAS,
+        "referencias": biblio.bibitems(referencias(p)),
         # Autoría de la aplicación (no del proyecto: eso es `consultor`).
         "autor": AUTOR_APP,
         "red": red_ctx,

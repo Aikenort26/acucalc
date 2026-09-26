@@ -52,8 +52,9 @@ CTX = {
         "bomba_seleccionada": "Bomba A", "fig": ""}],
     "figuras": {},   # sin archivos en el test — los \BLOCK{if} deben omitir las figuras
     "logo_cliente": None, "logo_consultor": None,
-    "referencias": [{"cita": "Resolución 0330 de 2017, MVCT."},
-                    {"cita": "Decreto 1575 de 2007."}],
+    "referencias": [{"key": "res0330", "texto": "Resolución 0330 de 2017, MVCT.", "url": ""},
+                    {"key": "dec1575", "texto": "Decreto 1575 de 2007.", "url": ""},
+                    {"key": "nocitada", "texto": "Obra que el texto no cita.", "url": ""}],
     "red": None,
 }
 
@@ -131,22 +132,42 @@ def test_seccion_red_explica_la_longitud_aferente(tmp_path):
     assert "longitud aferente" in tex
 
 
-def test_referencias_llevan_label_y_url_va_en_url_macro(tmp_path):
-    """Las referencias necesitan \\label para que el texto las cite con \\ref.
-    La URL va en \\url{} aparte: dentro del texto corrido no parte y se salía
-    del margen (medido: 154 pt de Overfull)."""
+def test_bibliografia_thebibliography_solo_citadas_en_orden_de_cita(tmp_path):
+    """La lista final solo trae lo que el texto cita, numerado por orden de
+    primera cita. La URL va en \\url{} aparte: dentro del texto corrido no
+    parte y se salía del margen (medido: 154 pt de Overfull)."""
+    import re
     ctx = dict(CTX)
     ctx["referencias"] = [
-        {"key": "res0330", "cita": "Resolución 0330 de 2017, MVCT."},
-        {"key": "dane", "cita": "DANE. Proyecciones de población.",
+        {"key": "dane", "texto": "DANE. Proyecciones de población.",
          "url": "https://www.dane.gov.co/index.php/estadisticas-por-tema"},
+        {"key": "nocitada", "texto": "Obra que el texto no cita.", "url": ""},
+        {"key": "res0330", "texto": "Resolución 0330 de 2017, MVCT.", "url": ""},
     ]
     tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
-    assert r"\label{ref:res0330}" in tex
-    assert r"\label{ref:dane}" in tex
+    assert r"\begin{thebibliography}" in tex
     assert r"\url{https://www.dane.gov.co/index.php/estadisticas-por-tema}" in tex
-    # sin `url`, no debe emitirse un \url{} vacío
     assert r"\url{}" not in tex
+    assert "nocitada" not in tex
+    items = re.findall(r"\\bibitem\{([^}]+)\}", tex)
+    primeras = []
+    for ks in re.findall(r"\\cite\{([^}]+)\}", tex):
+        for k in ks.split(","):
+            if k not in primeras:
+                primeras.append(k)
+    assert items == [k for k in primeras if k in items]
+    assert set(items) == {"dane", "res0330"}
+
+
+def test_toda_cita_tiene_su_bibitem(tmp_path):
+    import re
+    from core import biblio
+    ctx = dict(CTX)
+    ctx["referencias"] = biblio.bibitems(biblio.biblioteca_base())
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    citadas = {k for ks in re.findall(r"\\cite\{([^}]+)\}", tex) for k in ks.split(",")}
+    items = set(re.findall(r"\\bibitem\{([^}]+)\}", tex))
+    assert citadas and citadas <= items, citadas - items
 
 
 def test_patron_horario_se_documenta_en_el_informe(tmp_path):
