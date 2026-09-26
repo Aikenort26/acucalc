@@ -1,13 +1,14 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
-from core import network as net, network_map as nm, pipes, curves as cv
+from core import network as net, network_map as nm, pipeline, pipes, curves as cv
 from pages_common import (page_setup, num_input, sel_state, SP_CAUDAL,
                           SP_VELOCIDAD, SP_PERDIDA, SP_ALTURA)
 
 p = page_setup()
 st.header("7 · Red de distribución")
-flows = st.session_state.get("flows")
+_diseno = pipeline.design_flows(p)
+flows = _diseno.flows if _diseno else None
 
 up = st.file_uploader("Archivo INP de la red (EPANET)", type=["inp", "txt"])
 if up is not None:
@@ -98,7 +99,7 @@ with st.expander("🗺 Mapa de la red", expanded=False):
 
 st.subheader("Asignación de demandas por longitud aferente")
 if flows is None:
-    st.info("Calcula primero los caudales en la página 3 para asignar demandas.")
+    st.info("Completa Población y Caudales para asignar demandas.")
 else:
     if st.button("Asignar demandas (QMD por longitud aferente)"):
         demandas = net.assign_demands_by_length(red, flows.qmd_lps)

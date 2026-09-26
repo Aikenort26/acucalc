@@ -2,21 +2,30 @@ import shutil
 import tempfile
 from pathlib import Path
 
-# noqa: shutil se usa para which y copy
-
 import streamlit as st
-from core import report, report_ctx
+from core import project as pj, report, report_ctx
 from pages_common import page_setup
 
 p = page_setup()
 st.header("8 · Reporte — memoria de cálculo LaTeX")
 
-try:
-    ctx, figuras = report_ctx.build(p)
-except ValueError:
-    st.info("Completa al menos Proyecto y Población (censo, población base y método) "
-            "antes de generar el reporte.")
-    st.stop()
+# build() recalcula todo y dibuja todas las figuras: se hace solo cuando el
+# proyecto cambió, no en cada rerun de la página.
+_clave = pj.huella(p)
+_cache = st.session_state.get("rep_cache")
+if _cache and _cache[0] == _clave:
+    _, ctx, figuras = _cache
+else:
+    if _cache and _cache[2]:
+        shutil.rmtree(Path(next(iter(_cache[2].values()))).parent, ignore_errors=True)
+    st.session_state.pop("rep_cache", None)
+    try:
+        ctx, figuras = report_ctx.build(p)
+    except ValueError:
+        st.info("Completa al menos Proyecto, Población (censo, población base y "
+                "método) y Caudales (dotación neta) antes de generar el reporte.")
+        st.stop()
+    st.session_state["rep_cache"] = (_clave, ctx, figuras)
 
 st.caption(f"El reporte se genera recalculando todo desde el proyecto: población "
            f"{ctx['pob_final']} hab · QMD {ctx['qmd']} L/s · almacenamiento "

@@ -497,3 +497,11 @@ def test_load_tipos_de_listas(tmp_path):
     assert isinstance(s.bombas[0], pj.PumpData)
     assert isinstance(s.bombas[0].puntos_qh[0], tuple)
     assert isinstance(s.bombas[0].puntos_qe[0], tuple)
+
+
+def test_huella_estable_y_sensible_a_cambios():
+    p = _proyecto_completo()
+    h = pj.huella(p)
+    assert h == pj.huella(_proyecto_completo())
+    p.almacenamiento.tanques[0].volumen += 1
+    assert pj.huella(p) != h

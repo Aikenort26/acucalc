@@ -1,6 +1,6 @@
 import pandas as pd
 import streamlit as st
-from core import catalogs, pipes, pumping as pu
+from core import catalogs, pipeline, pipes, pumping as pu
 from core.project import PumpSystemData, SegmentData, AccessoryData
 from pages_common import (page_setup, num_input, show_issues, i_num, fmt_q,
                           fmt_h, fmt_v, fmt_d, fmt_perdida, fmt_p,
@@ -9,10 +9,12 @@ from pages_common import (page_setup, num_input, show_issues, i_num, fmt_q,
 
 p = page_setup()
 st.header("5 · Sistemas de bombeo")
-flows = st.session_state.get("flows")
-if flows is None:
-    st.info("Calcula primero los caudales en la página 3.")
+_diseno = pipeline.design_flows(p)
+if _diseno is None:
+    st.info("Completa primero Población (censo, población base y método) y "
+            "Caudales (dotación neta).")
     st.stop()
+flows = _diseno.flows
 
 # ---------- selección / creación / eliminación de sistema ----------
 if "sel_sys_next" in st.session_state:
@@ -289,9 +291,6 @@ with st.expander("Golpe de ariete (Joukowsky) — factor de seguridad por tramo"
                "del tramo — criterio conservador (sobreestima en tramos "
                "intermedios).")
     rows_ar, fallan = [], []
-    k_elast_manual = {"PVC": 18.0, "PVC-O": 13.5, "PVC biaxial": 15.5,
-                      "PEAD": 111.11, "HD": 1.0, "Acero comercial": 0.5,
-                      "GRP": 8.3, "Concreto": 5.0, "Hierro galvanizado": 1.0}
     for t, tr in zip(sys_d.tramos, r.tramos):
         if not t.e_mm:
             rows_ar.append({"Tramo": t.nombre, "e [mm]": None, "C [m/s]": None,
@@ -299,11 +298,8 @@ with st.expander("Golpe de ariete (Joukowsky) — factor de seguridad por tramo"
                             "FS (≥1)": None, "Uso [%]": None, "Margen [%]": None,
                             "Cumple": "sin datos"})
             continue
-        if t.cat_material:
-            spec = pipes.pipe(t.cat_material, t.cat_serie, t.cat_dn)
-            k_el, pn_t = spec.k_elast, spec.pn_mca
-        else:
-            k_el = k_elast_manual.get(t.material, 18.0)
+        k_el, pn_t = pipes.k_elast_tramo(t)
+        if pn_t is None:
             pn_t = num_input(f"PN del tramo manual '{t.nombre}' [mca]",
                              f"pn_{K}_{t.nombre}", 100.0, decimals=0,
                              min_value=0.0, max_value=600.0)

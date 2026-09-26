@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
-from core import catalogs, report_figs as rf, storage
+from core import catalogs, pipeline, report_figs as rf, storage
 from core.project import TankSpec
 from pages_common import (SP_ALTURA, SP_VOLUMEN, editor_commit, editor_seed,
                           f_num, fila_incompleta, fmt_vol, get_project, i_num,
@@ -10,10 +10,12 @@ from pages_common import (SP_ALTURA, SP_VOLUMEN, editor_commit, editor_seed,
 p = page_setup()
 st.header("4 · Almacenamiento")
 cfg = p.almacenamiento
-flows = st.session_state.get("flows")
-if flows is None:
-    st.info("Calcula primero los caudales en la página 3.")
+_diseno = pipeline.design_flows(p)
+if _diseno is None:
+    st.info("Completa primero Población (censo, población base y método) y "
+            "Caudales (dotación neta).")
     st.stop()
+flows = _diseno.flows
 qmd_m3d = flows.qmd_lps * 86.4
 
 # ---------- nivel de riesgo contra incendio (catálogo, WP-2b) ----------
@@ -45,9 +47,8 @@ cfg.dias_reserva = num_input("Días de reserva", "reserva", cfg.dias_reserva,
 
 # ---------- patrón de consumo de la población ----------
 st.subheader("Patrón horario de consumo de la población")
-DEFAULT_F = [0.6,0.7,0.8,0.9,1,1.2,1.6,1.2,1,1.1,1.1,1.2,1.1,1.1,1,1.1,1.2,1.1,0.9,0.9,0.9,0.8,0.8,0.7]
 if not cfg.factores_hora:
-    cfg.factores_hora = DEFAULT_F
+    cfg.factores_hora = list(storage.DEFAULT_PATTERN)
 with st.expander("Cargar patrón desde Excel/CSV"):
     st.caption("Columnas requeridas: `Hora` (0-23) y `Factor consumo`. 24 filas.")
     up = st.file_uploader("Archivo de patrón", type=["xlsx", "csv"])

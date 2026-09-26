@@ -7,15 +7,11 @@ import base64
 import tempfile
 from pathlib import Path
 
-from core import curves as cvs, demand, network, pipes, population as pop, pumping as pu
+import matplotlib.pyplot as plt
+
+from core import curves as cvs, demand, network, pipeline, pipes, population as pop, pumping as pu
 from core import formato as fm, report_figs as rf, storage
 from core.project import Project
-
-# k_elast por material de rugosidad para tramos manuales (los del catálogo traen
-# su k_elast en el PipeSpec). Mismo mapa que usa la página 5 de la app.
-K_ELAST_MANUAL = {"PVC": 18.0, "PVC-O": 13.5, "PVC biaxial": 15.5, "PEAD": 111.11,
-                  "HD": 1.0, "Acero comercial": 0.5, "GRP": 8.3, "Concreto": 5.0,
-                  "Hierro galvanizado": 1.0}
 
 # Autor de la aplicación ACUCALC (distinto del `consultor` del proyecto, que es
 # quien firma cada memoria). Va a la sección "Acerca de ACUCALC" del informe.
@@ -101,18 +97,14 @@ def build(p: Project) -> tuple[dict, dict]:
 
     Requiere: nombre, censo (≥2), población base y método seleccionados."""
     cfg = p.poblacion
-    if not (p.nombre and len(p.censo) >= 2 and cfg.p0 > 0 and cfg.metodo):
-        raise ValueError("Faltan datos mínimos: nombre, censo, población base y método")
+    diseno = pipeline.design_flows(p) if p.nombre else None
+    if diseno is None:
+        raise ValueError("Faltan datos mínimos: nombre, censo, población base, "
+                         "método y dotación neta")
 
     # ---------- población y caudales ----------
-    rates = pop.growth_rates(p.censo)
-    proj = pop.project(cfg.p0, int(cfg.year0), int(cfg.horizon_year), rates,
-                       cfg.tasa_res0844)
-    serie_total = [(t, v * (1 + cfg.flotante_pct)) for t, v in proj.series[cfg.metodo]]
-    pob_final = serie_total[-1][1]
-
-    flows = demand.flows(pob_final, p.demanda.dneta, p.demanda.perdidas,
-                         p.demanda.k1, p.demanda.k2)
+    proj, serie_total = diseno.proj, diseno.serie_total
+    pob_final, flows = diseno.pob_final, diseno.flows
     serie_q = demand.flows_series(serie_total, p.demanda.dneta, p.demanda.perdidas,
                                   p.demanda.k1, p.demanda.k2)
     comp = demand.design_flows_by_component(flows)
@@ -191,6 +183,7 @@ def build(p: Project) -> tuple[dict, dict]:
     def _save(fig, name):
         fp = figdir / f"{name}.png"
         fig.savefig(fp, dpi=150, bbox_inches="tight")
+        plt.close(fig)
         figuras[name] = str(fp)
 
     _save(rf.fig_poblacion(proj, cfg.metodo, cfg.flotante_pct), "poblacion")
@@ -241,12 +234,8 @@ def build(p: Project) -> tuple[dict, dict]:
         for t, tr in zip(s.tramos, r.tramos):
             if not t.e_mm:
                 continue
-            if t.cat_material:
-                spec = pipes.pipe(t.cat_material, t.cat_serie, t.cat_dn)
-                k_el, pn_t = spec.k_elast, spec.pn_mca
-            else:
-                k_el = K_ELAST_MANUAL.get(t.material, 18.0)
-                pn_t = 0.0     # tramo manual: sin PN en el reporte (se evalúa en la app)
+            k_el, pn_t = pipes.k_elast_tramo(t)
+            pn_t = pn_t or 0.0     # tramo manual: sin PN en el reporte (se evalúa en la app)
             ar = pu.ariete_tramo(t.nombre, t.D_mm / 1000, t.e_mm / 1000, k_el,
                                  tr.V, r.hd, pn_t)
             ariete_tab.append({

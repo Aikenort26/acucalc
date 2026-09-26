@@ -314,3 +314,11 @@ def load(path: str | Path) -> Project:
     if version == 1:
         d = _migrate_v1(d)
     return _from_dict(Project, d)
+
+
+def huella(p: Project) -> str:
+    """Hash del contenido del proyecto: cambia si y solo si cambia algún dato.
+    Sirve de clave para no recalcular el reporte en cada rerun."""
+    import hashlib
+    blob = json.dumps(asdict(p), sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()

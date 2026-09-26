@@ -110,3 +110,20 @@ def suggest_dn(material: str, serie: str, q_m3s: float,
     if candidato_v is not None:
         return candidato_v
     return diameters(material, serie)[-1]
+
+
+# k_elast (coeficiente de la fórmula de celeridad) por material de rugosidad
+# para tramos ingresados a mano; los del catálogo traen el suyo en el PipeSpec.
+K_ELAST_MANUAL = {"PVC": 18.0, "PVC-O": 13.5, "PVC biaxial": 15.5, "PEAD": 111.11,
+                  "HD": 1.0, "Acero comercial": 0.5, "GRP": 8.3, "Concreto": 5.0,
+                  "Hierro galvanizado": 1.0}
+K_ELAST_DEFAULT = 18.0
+
+
+def k_elast_tramo(t) -> tuple[float, float | None]:
+    """(k_elast, PN [mca]) de un `SegmentData`. PN es None para un tramo
+    manual: no hay serie de catálogo de la que leerla."""
+    if t.cat_material:
+        spec = pipe(t.cat_material, t.cat_serie, t.cat_dn)
+        return spec.k_elast, spec.pn_mca
+    return K_ELAST_MANUAL.get(t.material, K_ELAST_DEFAULT), None

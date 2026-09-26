@@ -10,6 +10,11 @@ propia ventana de suministro y su propia ventana de salida).
 import math
 from dataclasses import dataclass
 
+# Patrón horario de consumo por defecto (24 factores, media 1.0 = QMD, pico
+# 1.6 a las 06 h). Punto de partida editable en la página Almacenamiento.
+DEFAULT_PATTERN = [0.6, 0.7, 0.8, 0.9, 1, 1.2, 1.6, 1.2, 1, 1.1, 1.1, 1.2,
+                   1.1, 1.1, 1, 1.1, 1.2, 1.1, 0.9, 0.9, 0.9, 0.8, 0.8, 0.7]
+
 
 def _round_up_5(v: float) -> int:
     return int(math.ceil(v / 5.0) * 5)
