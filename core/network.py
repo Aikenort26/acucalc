@@ -43,8 +43,46 @@ class Network:
     junctions: dict
     sources: dict
     pipes: list
-    headloss: str = "H-W"     # "H-W" | "D-W"
+    headloss: str = "H-W"     # "H-W" | "D-W" | "C-M"
     raw_text: str = ""
+    unidades: str = "LPS"     # [OPTIONS] Units del archivo; el modelo siempre queda en SI
+    unidades_explicitas: bool = True
+
+
+# Unidades de caudal de EPANET → factor a L/s (Rossman et al., 2020). Con
+# unidades US también longitudes/cotas van en pies, diámetros en pulgadas y la
+# rugosidad Darcy-Weisbach en milipies; con SI en m, mm y mm.
+FACTOR_CAUDAL_LPS = {
+    "LPS": 1.0, "LPM": 1 / 60, "MLD": 1e6 / 86400, "CMH": 1000 / 3600, "CMD": 1000 / 86400,
+    "CFS": 28.316846592, "GPM": 3.785411784 / 60, "MGD": 3785411.784 / 86400,
+    "IMGD": 4546090.0 / 86400, "AFD": 1233481.83754752 / 86400,
+}
+UNIDADES_US = {"CFS", "GPM", "MGD", "IMGD", "AFD"}
+FT_M, IN_MM = 0.3048, 25.4
+
+
+def unidades_inp(text: str) -> tuple[str, bool]:
+    """(unidad de caudal, declarada). Sin `Units` EPANET asumiría GPM; ACUCALC
+    asume LPS (y `epanet_engine` lo declara explícitamente al correr EPANET)."""
+    section = None
+    for raw in text.splitlines():
+        line = raw.split(";")[0].strip()
+        if line.startswith("["):
+            section = line.strip("[]").upper()
+            continue
+        parts = line.split()
+        if section == "OPTIONS" and len(parts) >= 2 and parts[0].upper() == "UNITS":
+            u = parts[1].upper()
+            if u not in FACTOR_CAUDAL_LPS:
+                raise ValueError(f"Unidades de caudal desconocidas en el INP: {parts[1]}")
+            return u, True
+    return "LPS", False
+
+
+def _factores(unidades: str) -> tuple[float, float, float]:
+    """(caudal→L/s, longitud→m, diámetro→mm)."""
+    us = unidades in UNIDADES_US
+    return FACTOR_CAUDAL_LPS[unidades], (FT_M if us else 1.0), (IN_MM if us else 1.0)
 
 
 def parse_inp(text: str) -> Network:
@@ -56,6 +94,13 @@ def parse_inp(text: str) -> Network:
     pipes: list[Pipe] = []
     coords: dict[str, tuple[float, float]] = {}
     headloss = "H-W"
+    unidades, explicitas = unidades_inp(text)
+    fq, fl, fd = _factores(unidades)
+    for raw in text.splitlines():            # la fórmula se necesita para convertir ks
+        line = raw.split(";")[0].strip().split()
+        if len(line) >= 2 and line[0].lower() == "headloss":
+            headloss = {"D": "D-W", "C": "C-M"}.get(line[1][:1].upper(), "H-W")
+    fks = fl if headloss == "D-W" else 1.0   # milipies → mm (US); C y n sin unidades
     section = None
     for raw in text.splitlines():
         line = raw.split(";")[0].strip()
@@ -66,17 +111,18 @@ def parse_inp(text: str) -> Network:
             continue
         parts = line.split()
         if section == "JUNCTIONS":
-            jid, elev = parts[0], float(parts[1])
-            demand = float(parts[2]) if len(parts) > 2 else 0.0
+            jid, elev = parts[0], float(parts[1]) * fl
+            demand = float(parts[2]) * fq if len(parts) > 2 else 0.0
             junctions[jid] = Junction(jid, elev, demand)
         elif section == "RESERVOIRS":
-            sources[parts[0]] = Source(parts[0], float(parts[1]), tipo="reservorio")
+            sources[parts[0]] = Source(parts[0], float(parts[1]) * fl, tipo="reservorio")
         elif section == "TANKS":
-            elevation, initlevel = float(parts[1]), float(parts[2])
+            elevation, initlevel = float(parts[1]) * fl, float(parts[2]) * fl
             sources[parts[0]] = Source(parts[0], elevation + initlevel, tipo="tanque")
         elif section == "PIPES":
             pid, n1, n2 = parts[0], parts[1], parts[2]
-            length, diam, rough = float(parts[3]), float(parts[4]), float(parts[5])
+            length, diam = float(parts[3]) * fl, float(parts[4]) * fd
+            rough = float(parts[5]) * fks
             km = float(parts[6]) if len(parts) > 6 else 0.0
             pipes.append(Pipe(pid, n1, n2, length, diam, rough, km))
         elif section == "COORDINATES" and len(parts) >= 3:
@@ -84,8 +130,6 @@ def parse_inp(text: str) -> Network:
                 coords[parts[0]] = (float(parts[1]), float(parts[2]))
             except ValueError:
                 pass
-        elif section == "OPTIONS" and parts and parts[0].lower() == "headloss":
-            headloss = "D-W" if parts[1].upper().startswith("D") else "H-W"
     if not junctions:
         raise ValueError("El INP no contiene nodos [JUNCTIONS]")
     if not sources:
@@ -95,13 +139,15 @@ def parse_inp(text: str) -> Network:
             junctions[nid].x, junctions[nid].y = x, y
         elif nid in sources:
             sources[nid].x, sources[nid].y = x, y
-    return Network(junctions, sources, pipes, headloss, text)
+    return Network(junctions, sources, pipes, headloss, text, unidades, explicitas)
 
 
 def write_inp_demands(text: str, demands: dict) -> str:
     """Reescribe la columna de demanda en [JUNCTIONS], preservando el resto
     del archivo (otras secciones, comentarios de fin de línea, columnas
-    adicionales como el patrón de demanda) intacto."""
+    adicionales como el patrón de demanda) intacto. `demands` en L/s; se
+    escriben en las unidades de caudal del archivo."""
+    fq = FACTOR_CAUDAL_LPS[unidades_inp(text)[0]]
     out, section = [], None
     for raw in text.splitlines():
         stripped = raw.split(";")[0].strip()
@@ -117,7 +163,7 @@ def write_inp_demands(text: str, demands: dict) -> str:
                 resto = body[3:]
                 extra = ("   " + "   ".join(resto)) if resto else ""
                 sufijo = f"   ;{comentario}" if comentario else ""
-                out.append(f"{jid}   {body[1]}   {demands[jid]:.4f}{extra}{sufijo}")
+                out.append(f"{jid}   {body[1]}   {demands[jid] / fq:.6f}{extra}{sufijo}")
                 continue
         out.append(raw)
     return "\n".join(out)
@@ -166,7 +212,17 @@ def write_inp_pipes(text: str, cambios: dict) -> str:
     `cambios`: {pipe_id: (diametro_mm, rugosidad)}. Solo se tocan las tuberías
     presentes en el dict; las demás quedan como estaban. Corrige el bug de que
     el INP exportado no llevaba ni los diámetros optimizados ni la rugosidad
-    del material elegido (el writer viejo solo reescribía demandas)."""
+    del material elegido (el writer viejo solo reescribía demandas).
+
+    Diámetro en mm y rugosidad en las unidades SI del modelo (C, o ks en mm);
+    se escriben en las unidades del archivo. Las columnas posteriores a
+    minorloss (Status: Open/Closed/CV) se conservan."""
+    unidades = unidades_inp(text)[0]
+    _, fl, fd = _factores(unidades)
+    dw = any(ln.split(";")[0].split()[:1] == ["Headloss"] and
+             ln.split(";")[0].split()[1][:1].upper() == "D"
+             for ln in text.splitlines() if len(ln.split(";")[0].split()) >= 2)
+    fks = fl if dw else 1.0
     out, section = [], None
     for raw in text.splitlines():
         stripped = raw.split(";")[0].strip()
@@ -181,9 +237,10 @@ def write_inp_pipes(text: str, cambios: dict) -> str:
             if pid in cambios and len(body) >= 6:
                 diam, rough = cambios[pid]
                 km = body[6] if len(body) > 6 else "0"
+                resto = ("   " + "   ".join(body[7:])) if len(body) > 7 else ""
                 sufijo = f"    ;{comentario}" if comentario else ""
                 out.append(f"{body[0]}   {body[1]}   {body[2]}   {body[3]}   "
-                           f"{diam:.2f}   {rough:g}   {km}{sufijo}")
+                           f"{diam / fd:.6g}   {rough / fks:.6g}   {km}{resto}{sufijo}")
                 continue
         out.append(raw)
     return "\n".join(out)
@@ -195,32 +252,38 @@ def _curva_id(nombre: str, i: int) -> str:
     return f"C_{base or i}"
 
 
-def write_inp_pump_curves(text: str, curvas: dict) -> str:
-    """Agrega al INP una sección [CURVES] con la curva Q-H de cada bomba y una
-    plantilla [PUMPS] comentada, preservando el resto del archivo. Para que las
-    curvas digitalizadas en ACUCALC se puedan usar en EPANET (ítem 16).
+def write_inp_pump_curves(text: str, curvas: dict, conexiones: dict | None = None) -> str:
+    """Agrega al INP una sección [CURVES] con la curva Q-H de cada bomba y su
+    [PUMPS], preservando el resto del archivo, para usar en EPANET las curvas
+    digitalizadas en ACUCALC.
 
-    `curvas`: {nombre_bomba: [(q, h), ...]} — los puntos DEBEN venir ya con la
-    transformada de afinidad/arreglo aplicada (`core/curves.apply_pump_transform`),
-    no crudos. Q en las unidades de caudal del INP (verificar [OPTIONS] Units),
-    H en m.
+    `curvas`: {nombre_bomba: [(q L/s, h m), ...]} — los puntos DEBEN venir ya
+    con la transformada de afinidad/arreglo aplicada
+    (`core/curves.apply_pump_transform`), no crudos. Se escriben en las
+    unidades del archivo (caudal de `Units`; altura en pies si es US).
 
-    No se autoconecta la bomba a nodos porque la topología (nodo de succión /
-    impulsión) no está en los datos de ACUCALC — se deja una plantilla [PUMPS]
-    comentada para que el proyectista la complete en EPANET."""
+    `conexiones`: {nombre_bomba: (nodo_succión, nodo_impulsión)}. Una bomba con
+    conexión se escribe como línea [PUMPS] real; sin conexión queda una
+    plantilla comentada para completarla en EPANET."""
     if not curvas:
         return text
+    fq, fl, _ = _factores(unidades_inp(text)[0])
+    conexiones = conexiones or {}
     lineas = ["", "[CURVES]", ";ID           X(Caudal)   Y(Altura)"]
-    plantilla_pumps = ["", "[PUMPS]",
-                       ";ID   Nodo1(succión)   Nodo2(impulsión)   Propiedades",
-                       ";  Descomenta y conecta cada bomba a sus nodos en EPANET:"]
+    pumps = ["", "[PUMPS]", ";ID   Nodo1(succión)   Nodo2(impulsión)   Propiedades"]
+    if any(n not in conexiones for n in curvas):
+        pumps.append(";  Descomenta y conecta cada bomba a sus nodos en EPANET:")
     for i, (nombre, pts) in enumerate(curvas.items(), 1):
         cid = _curva_id(nombre, i)
         lineas.append(f";  {nombre}")
         for q, h in pts:
-            lineas.append(f"{cid:<12} {q:<11.4f} {h:.4f}")
-        plantilla_pumps.append(f";PUMP_{i}   n1   n2   HEAD {cid}   ; {nombre}")
-    bloque = "\n".join(lineas + plantilla_pumps) + "\n"
+            lineas.append(f"{cid:<12} {q / fq:<11.6g} {h / fl:.6g}")
+        if nombre in conexiones:
+            n1, n2 = conexiones[nombre]
+            pumps.append(f"PUMP_{i}   {n1}   {n2}   HEAD {cid}   ; {nombre}")
+        else:
+            pumps.append(f";PUMP_{i}   n1   n2   HEAD {cid}   ; {nombre}")
+    bloque = "\n".join(lineas + pumps) + "\n"
     # Inserta antes de [OPTIONS] si existe (EPANET tolera el orden, pero queda
     # más limpio); si no, al final.
     idx = text.find("[OPTIONS]")
@@ -293,6 +356,8 @@ def solve(net_: Network, temperatura: float = 20.0, tol: float = 1e-6,
     la iteración previa (n=2); con Hazen-Williams, r_p es constante
     (n=1.852)."""
     from core import catalogs
+    if net_.headloss == "C-M":
+        raise ValueError("El solver propio no implementa Chezy-Manning; use el motor EPANET.")
     nu = catalogs.water_props(temperatura).nu
     nodes = list(net_.junctions)
     idx = {nid: i for i, nid in enumerate(nodes)}
@@ -419,7 +484,7 @@ def _ruta_desde_fuente(net_: Network, nodo: str) -> list:
 def optimize_diameters(net_: Network, material: str, serie: str,
                        v_max: float = 6.0, p_min: float = 15.0,
                        p_max: float = 70.0, temperatura: float = 20.0,
-                       max_iter: int = 30) -> OptimizeResult:
+                       max_iter: int = 30, solver=None) -> OptimizeResult:
     """Heurística: sube al siguiente DN comercial toda tubería con V>v_max;
     para nodos con presión<p_min, sube el DN de la tubería con mayor pérdida
     en la ruta desde la fuente. Itera hasta estabilizar o `max_iter`.
@@ -429,14 +494,18 @@ def optimize_diameters(net_: Network, material: str, serie: str,
     El DN nominal "actual" de cada tubería se rastrea aparte del
     `diameter_mm` (interno) que usa `solve()` — ver `_dn_inicial` para el
     porqué: comparar el interno contra el catálogo nominal directamente
-    no avanza monótonamente."""
+    no avanza monótonamente.
+
+    `solver(red) -> NetworkResult` permite resolver con EPANET
+    (`epanet_engine.solver_para`); por defecto, el solver propio."""
     from core import pipes as pipe_cat
+    resolver = solver or (lambda red: solve(red, temperatura))
     dn_original = {p.id: p.diameter_mm for p in net_.pipes}
     dn_actual = {p.id: _dn_inicial(material, serie, p.diameter_mm)
                  for p in net_.pipes}
     it = 0
     for it in range(1, max_iter + 1):
-        res = solve(net_, temperatura)
+        res = resolver(net_)
         cambio = False
         for p in net_.pipes:
             if abs(res.velocities[p.id]) > v_max:
@@ -457,7 +526,7 @@ def optimize_diameters(net_: Network, material: str, serie: str,
                         cambio = True
         if not cambio:
             break
-    res = solve(net_, temperatura)
+    res = resolver(net_)
     avisos = []
     for p in net_.pipes:
         if abs(res.velocities[p.id]) > v_max:

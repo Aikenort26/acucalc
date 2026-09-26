@@ -298,3 +298,33 @@ def test_npsh_en_el_informe(tmp_path):
 def test_npsh_no_aplica_a_sumergible():
     ctx, _ = report_ctx.build(_con_bombeo("sumergible"))
     assert ctx["sistemas"][0]["npsh"] is None
+
+
+# --- WP6 v9: resultados hidráulicos de la red en el informe ------------------
+
+from core import epanet_engine as _ee
+
+_con_epanet = __import__("pytest").mark.skipif(not _ee.disponible(), reason="sin EPANET")
+
+
+@_con_epanet
+def test_red_estatico_qmh_y_eps_en_el_informe(tmp_path):
+    p = _proyecto_minimo()
+    p.red_inp = INP_RED
+    p.almacenamiento.factores_hora = [1.0] * 23 + [1.6]
+    ctx, figuras = report_ctx.build(p)
+    e = ctx["red"]["estatico"]
+    assert e["motor"].startswith("EPANET") and e["cumple"] in ("Sí", "No")
+    assert e["multiplicador"] == f"{ctx['k2']:.2f}" and e["nodo_p_min"] in ("J1", "J2")
+    assert ctx["red"]["eps"]["hora"] is not None
+    assert "red_presion" in figuras and "red_eps" in figuras
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    assert r"\cite{rossman2020}" in tex and "figures/red_eps.png" in tex
+    assert "no converge de forma" not in tex          # la limitación vieja ya no aplica
+
+
+def test_red_sin_k2_usa_multiplicador_1():
+    p = _proyecto_minimo()
+    p.red_inp, p.red_aplicar_k2, p.red_motor = INP_RED, False, "gga"
+    e = report_ctx.build(p)[0]["red"]["estatico"]
+    assert e["multiplicador"] == "1.00" and e["motor"] == _ee.MOTOR_GGA

@@ -395,6 +395,8 @@ def _proyecto_completo():
     p.red_material, p.red_serie = "PVC-U", "RDE 21"
     p.red_vmax, p.red_pmin, p.red_pmax = 3.0, 10.0, 60.0
     p.red_en_informe = False
+    p.red_motor, p.red_aplicar_k2 = "gga", False
+    p.red_conexiones = {"Bomba A": ["J1", "J2"]}
     p.ruta_guardado = "/tmp/x"
     p.bibtex_usuario = "@misc{x, title={t}, year=2020}"
     return p

@@ -402,3 +402,106 @@ HEADLOSS  D-W
     # N1 existe pero no toca ninguna tubería: aferencia total 0
     with pytest.raises(ValueError):
         net.assign_demands_by_length(red, 40.0)
+
+
+# --- WP6 v9: unidades del INP ------------------------------------------------
+
+FT, IN, GPM = 0.3048, 25.4, 0.0630901964
+
+INP_SI = """[JUNCTIONS]
+J1 10 0
+J2 8 5.5
+
+[RESERVOIRS]
+R1 50
+
+[TANKS]
+T1 30 5 0 10 5 100
+
+[PIPES]
+P1 R1 J1 200 150 130
+P2 J1 J2 150 100 130
+P3 J2 T1 100 100 130
+
+[OPTIONS]
+Units LPS
+Headloss H-W
+"""
+
+
+def _inp_us():
+    return f"""[JUNCTIONS]
+J1 {10 / FT:.6f} 0
+J2 {8 / FT:.6f} {5.5 / GPM:.6f}
+
+[RESERVOIRS]
+R1 {50 / FT:.6f}
+
+[TANKS]
+T1 {30 / FT:.6f} {5 / FT:.6f} 0 {10 / FT:.6f} {5 / FT:.6f} 100
+
+[PIPES]
+P1 R1 J1 {200 / FT:.6f} {150 / IN:.6f} 130
+P2 J1 J2 {150 / FT:.6f} {100 / IN:.6f} 130
+P3 J2 T1 {100 / FT:.6f} {100 / IN:.6f} 130
+
+[OPTIONS]
+Units GPM
+Headloss H-W
+"""
+
+
+def test_parse_inp_convierte_unidades_us_a_si():
+    si, us = net.parse_inp(INP_SI), net.parse_inp(_inp_us())
+    assert us.unidades == "GPM" and si.unidades == "LPS"
+    assert us.junctions["J2"].demand == pytest.approx(5.5, rel=1e-6)
+    assert us.junctions["J1"].elevation == pytest.approx(10.0, rel=1e-6)
+    assert us.sources["R1"].head == pytest.approx(50.0, rel=1e-6)
+    assert us.sources["T1"].head == pytest.approx(35.0, rel=1e-6)
+    p1 = {p.id: p for p in us.pipes}["P1"]
+    assert p1.length == pytest.approx(200.0, rel=1e-6)
+    assert p1.diameter_mm == pytest.approx(150.0, rel=1e-6)
+
+
+def test_parse_inp_caudal_si_distinto_de_lps():
+    cmh = INP_SI.replace("Units LPS", "Units CMH").replace("J2 8 5.5", "J2 8 19.8")
+    assert net.parse_inp(cmh).junctions["J2"].demand == pytest.approx(5.5)
+
+
+def test_parse_inp_sin_units_asume_lps_y_lo_marca():
+    n = net.parse_inp(INP_SI.replace("Units LPS\n", ""))
+    assert n.unidades == "LPS" and n.unidades_explicitas is False
+    assert net.parse_inp(INP_SI).unidades_explicitas is True
+
+
+def test_write_inp_demands_escribe_en_unidades_del_archivo():
+    txt = net.write_inp_demands(_inp_us(), {"J1": 2.0})
+    assert net.parse_inp(txt).junctions["J1"].demand == pytest.approx(2.0, rel=1e-4)
+
+
+def test_write_inp_pipes_escribe_diametro_en_pulgadas_si_us():
+    txt = net.write_inp_pipes(_inp_us(), {"P1": (200.0, 140)})
+    p1 = {p.id: p for p in net.parse_inp(txt).pipes}["P1"]
+    assert p1.diameter_mm == pytest.approx(200.0, rel=1e-4) and p1.roughness == 140
+
+
+def test_write_inp_pump_curves_convierte_a_unidades_del_archivo():
+    txt = net.write_inp_pump_curves(_inp_us(), {"B1": [(6.30901964, 30.48)]})
+    linea = next(l for l in txt.splitlines() if l.startswith("C_"))
+    q, h = map(float, linea.split()[1:3])
+    assert q == pytest.approx(100.0, rel=1e-6) and h == pytest.approx(100.0, rel=1e-6)
+
+
+def test_write_inp_pump_curves_con_conexiones_escribe_pumps_real():
+    txt = net.write_inp_pump_curves(INP_SI, {"B 1": [(5.0, 30.0)]},
+                                    conexiones={"B 1": ("J1", "J2")})
+    lineas = [l.split(";")[0].split() for l in txt.splitlines()]
+    pump = next(l for l in lineas if l and l[0].startswith("PUMP_"))
+    assert pump[1:3] == ["J1", "J2"] and pump[3] == "HEAD"
+
+
+def test_solver_propio_rechaza_chezy_manning():
+    red = net.parse_inp(INP_SI.replace("Headloss H-W", "Headloss C-M"))
+    assert red.headloss == "C-M"
+    with pytest.raises(ValueError):
+        net.solve(red)

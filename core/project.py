@@ -175,6 +175,9 @@ class Project:
     red_pmin: float = 15.0
     red_pmax: float = 70.0
     red_en_informe: bool = True   # incluir la sección de red en el reporte (si hay red cargada)
+    red_motor: str = "auto"       # auto (EPANET si está disponible) | epanet | gga
+    red_aplicar_k2: bool = True   # estático con QMH = K2·demanda base (Art. 47)
+    red_conexiones: dict = field(default_factory=dict)   # bomba -> [nodo succión, nodo impulsión]
     ruta_guardado: str = ""       # carpeta o archivo .acucalc.json del usuario (vacío = saves/ interno)
     bibtex_usuario: str = ""      # referencias propias en BibTeX (se suman a la biblioteca base)
 

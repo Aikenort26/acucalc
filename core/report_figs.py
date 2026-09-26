@@ -348,3 +348,47 @@ def fig_esquema(sistemas: list[dict], tanques: list) -> "plt.Figure":
     ax.set_ylim(GROUND_Y - 0.4, GROUND_Y + 0.75)
     fig.tight_layout()
     return fig
+
+
+# Paleta categórica (orden fijo, modo claro) y tintas para las figuras nuevas.
+SERIE = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
+TINTA, TINTA_2, GRILLA = "#0b0b0b", "#52514e", "#dcdcd8"
+
+
+def _ejes_sobrios(ax):
+    ax.grid(color=GRILLA, lw=0.6)
+    ax.set_axisbelow(True)
+    for lado in ("top", "right"):
+        ax.spines[lado].set_visible(False)
+    for lado in ("left", "bottom"):
+        ax.spines[lado].set_color(TINTA_2)
+    ax.tick_params(colors=TINTA_2, labelsize=8)
+
+
+@_light
+def fig_eps(horas: list, nodo: str, presion: list, niveles: dict, p_min: float):
+    """Periodo extendido: presión del nodo crítico y nivel de los tanques en
+    paneles separados (magnitudes distintas: nunca en un eje doble)."""
+    paneles = 2 if niveles else 1
+    fig, axes = plt.subplots(paneles, 1, figsize=(8.5, 2.9 * paneles + 0.4), sharex=True,
+                             squeeze=False)
+    ax = axes[0][0]
+    ax.plot(horas, presion, color=SERIE[0], lw=2)
+    ax.axhline(p_min, color=TINTA_2, lw=1, ls="--")
+    ax.annotate(f"P mín. {p_min:.0f} m", (horas[-1], p_min), xytext=(-4, 4),
+                textcoords="offset points", ha="right", fontsize=8, color=TINTA_2)
+    ax.set_ylabel("Presión [m]", color=TINTA)
+    ax.set_title(f"Presión en el nodo crítico {nodo}", fontsize=10, color=TINTA, loc="left")
+    _ejes_sobrios(ax)
+    if niveles:
+        axn = axes[1][0]
+        for i, (t, serie) in enumerate(niveles.items()):
+            axn.plot(horas, serie, color=SERIE[i % len(SERIE)], lw=2, label=t)
+        axn.set_ylabel("Nivel [m]", color=TINTA)
+        axn.set_title("Nivel de los tanques", fontsize=10, color=TINTA, loc="left")
+        axn.legend(fontsize=8, frameon=False, loc="best")
+        _ejes_sobrios(axn)
+    axes[-1][0].set_xlabel("Hora del día", color=TINTA)
+    axes[-1][0].set_xticks(range(0, 25, 3))
+    fig.tight_layout()
+    return fig

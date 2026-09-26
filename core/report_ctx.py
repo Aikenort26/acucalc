@@ -10,7 +10,8 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 from core import biblio, curves as cvs, demand, network, pipeline, pipes, population as pop, pumping as pu
-from core import formato as fm, network_map as nm, report_figs as rf, storage
+from core import epanet_engine as ee, formato as fm, network_map as nm, red_diseno as rd
+from core import report_figs as rf, storage
 from core.latex import latex_escape
 from core.project import Project
 
@@ -31,6 +32,54 @@ def referencias(p: Project) -> list[biblio.Ref]:
     propias = biblio.parse_bibtex(p.bibtex_usuario)[0] if p.bibtex_usuario.strip() else []
     claves = {r.key for r in propias}
     return [r for r in biblio.biblioteca_base() if r.key not in claves] + propias
+
+
+def _red_hidraulica(p: Project, red, inp: str, k2: float, factores_hora: list, _save) -> dict:
+    """Régimen estático con la demanda de diseño (QMH si aplica) y, con
+    EPANET, periodo extendido de 24 h con el patrón horario."""
+    out = {"estatico": None, "eps": None, "error": ""}
+    try:
+        cambios = rd.cambios_red(p, k2)
+        res = ee.correr_estatico(inp, cambios, motor=p.red_motor)
+    except (ee.EngineError, ValueError) as e:
+        out["error"] = latex_escape(str(e))
+        return out
+    r = rd.resumen_estatico(res, p.red_pmin, p.red_pmax, p.red_vmax)
+    out["estatico"] = {
+        "motor": latex_escape(res.motor), "multiplicador": f"{cambios.multiplicador:.2f}",
+        "p_min": fm.fmt_h(r.p_min), "nodo_p_min": latex_escape(r.nodo_p_min),
+        "p_max": fm.fmt_h(r.p_max), "nodo_p_max": latex_escape(r.nodo_p_max),
+        "v_max": fm.fmt_v(r.v_max), "tubo_v_max": latex_escape(r.tubo_v_max),
+        "n_bajo": len(r.bajo_p_min), "n_sobre": len(r.sobre_p_max),
+        "n_vel": len(r.sobre_v_max), "pmin": f"{p.red_pmin:.0f}", "pmax": f"{p.red_pmax:.0f}",
+        "vmax": f"{p.red_vmax:.1f}", "converge": res.converged,
+        "cumple": "Sí" if (r.cumple and res.converged) else "No",
+        "avisos": [latex_escape(a.texto) for a in res.avisos],
+        "bombas": [latex_escape(b.nombre) for b in cambios.bombas],
+        "fig": "red_presion.png"}
+    _save(nm.fig_red(red, res, colorear="presion", dark=False), "red_presion")
+    if res.motor.startswith("EPANET"):
+        patron = (list(factores_hora) if len(factores_hora) == HORAS_DIA
+                  else list(storage.DEFAULT_PATTERN))
+        try:
+            eps = ee.correr_eps(inp, rd.cambios_red(p, k2, patron=patron))
+        except ee.EngineError as e:
+            out["error"] = latex_escape(str(e))
+            return out
+        re_ = rd.resumen_eps(eps, p.red_pmin)
+        out["eps"] = {
+            "p_min": fm.fmt_h(re_.p_min), "nodo": latex_escape(re_.nodo_critico),
+            "hora": f"{re_.hora_critica:02d}", "n_bajo": len(re_.bajo_p_min),
+            "pico": f"{max(patron):.2f}", "aviso_k2": latex_escape(
+                rd.aviso_pico_vs_k2(patron, k2) or ""),
+            "avisos": sorted({latex_escape(a.texto) for a in eps.avisos}),
+            "tanques": [{"id": latex_escape(t), "ini": fm.fmt_h(v["ini"]),
+                         "min": fm.fmt_h(v["min"]), "max": fm.fmt_h(v["max"]),
+                         "fin": fm.fmt_h(v["fin"])} for t, v in re_.tanques.items()],
+            "fig": "red_eps.png"}
+        _save(rf.fig_eps(eps.horas, re_.nodo_critico, eps.presiones[re_.nodo_critico],
+                         eps.niveles, p.red_pmin), "red_eps")
+    return out
 
 
 def build(p: Project) -> tuple[dict, dict]:
@@ -311,6 +360,8 @@ def build(p: Project) -> tuple[dict, dict]:
                 "fig": "red.png",
             }
             _save(nm.fig_red(red, dark=False), "red")
+            red_ctx.update(_red_hidraulica(p, red, network.write_inp_demands(p.red_inp, demandas),
+                                           flows.k2, alm.factores_hora, _save))
             # La optimización de diámetros (heurística iterativa, hasta 30
             # resoluciones densas del sistema) queda deliberadamente fuera del
             # reporte: para una red grande bloqueaba la generación del PDF sin

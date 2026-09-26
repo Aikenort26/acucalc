@@ -83,3 +83,21 @@ def test_fig_esquema_todos_los_tipos_constructivos(tmp_path):
                             tipo_constructivo=tipo)]
         _save_ok(rf.fig_esquema([{"tipo_bomba": "superficie"}], tanques),
                  tmp_path, f"esq_{tipo}")
+
+
+# --- WP6 v9: periodo extendido -----------------------------------------------
+
+def test_fig_eps_dos_paneles_sin_doble_eje():
+    horas = list(range(25))
+    fig = rf.fig_eps(horas, "N5", [40 + (h % 6) for h in horas],
+                     {"T1": [3 + 0.1 * h for h in horas], "T2": [2.0] * 25}, p_min=15.0)
+    assert len(fig.axes) == 2                       # presión y niveles en paneles propios
+    ax_p, ax_n = fig.axes
+    assert any(abs(l.get_ydata()[0] - 15.0) < 1e-9 for l in ax_p.get_lines())   # P mín.
+    assert {t.get_text() for t in ax_n.get_legend().get_texts()} == {"T1", "T2"}
+
+
+def test_fig_eps_sin_tanques_un_panel():
+    horas = list(range(25))
+    fig = rf.fig_eps(horas, "N5", [40.0] * 25, {}, p_min=15.0)
+    assert len(fig.axes) == 1

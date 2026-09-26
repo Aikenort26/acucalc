@@ -12,3 +12,4 @@ tectonic
 .env
 .env.*
 !.env.example
+.epanet_tmp/

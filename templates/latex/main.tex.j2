@@ -482,6 +482,93 @@ Nodo & $q$ [L/s] & Nodo & $q$ [L/s] & Nodo & $q$ [L/s] \\ \midrule
 \BLOCK{endfor}
 \end{longtable}
 }
+\BLOCK{if red.estatico}
+\subsection{Análisis hidráulico en régimen estático (QMH)}
+\label{sec:red_estatico}
+La red se resolvió con \VAR{red.estatico.motor}\BLOCK{if red.estatico.motor.startswith("EPANET")},
+el motor hidráulico oficial de la EPA~\cite{rossman2020}, invocado desde la aplicación
+a través de la biblioteca nativa que distribuye EPyT~\cite{kyriakou2023}\BLOCK{endif}.
+Las demandas base asignadas por longitud aferente se multiplican por
+\VAR{red.estatico.multiplicador}\BLOCK{if red.estatico.multiplicador != "1.00"} ($K_2$),
+de modo que la red se evalúa con el caudal máximo horario, condición de diseño de la
+red de distribución (Art. 47, Res. 0330 de 2017~\cite{res0330})\BLOCK{endif}.
+\BLOCK{if red.estatico.bombas}
+Se incluyen en el modelo las bombas \VAR{red.estatico.bombas|join(", ")}, con sus
+curvas características transformadas por afinidad y arreglo.
+\BLOCK{endif}
+
+\begin{table}[H]\centering
+\caption{Verificación de presiones y velocidades en la red (régimen estático).}
+\begin{tabular}{lrl}\toprule
+Criterio & Valor & Ubicación \\ \midrule
+Presión mínima (límite \VAR{red.estatico.pmin} m) & \VAR{red.estatico.p_min} m & nodo \VAR{red.estatico.nodo_p_min} \\
+Presión máxima (límite \VAR{red.estatico.pmax} m) & \VAR{red.estatico.p_max} m & nodo \VAR{red.estatico.nodo_p_max} \\
+Velocidad máxima (límite \VAR{red.estatico.vmax} m/s) & \VAR{red.estatico.v_max} m/s & tubería \VAR{red.estatico.tubo_v_max} \\
+Nodos bajo la presión mínima & \VAR{red.estatico.n_bajo} & \\
+Nodos sobre la presión máxima & \VAR{red.estatico.n_sobre} & \\
+Tuberías sobre la velocidad máxima & \VAR{red.estatico.n_vel} & \\
+\midrule
+Cumple & \VAR{red.estatico.cumple} & \\
+\bottomrule\end{tabular}\end{table}
+\BLOCK{if not red.estatico.converge}
+\textbf{La solución hidráulica no es válida} (ver avisos del motor): las presiones de
+esta sección no deben usarse para diseño.
+\BLOCK{endif}
+\BLOCK{if red.estatico.avisos}
+Avisos del motor hidráulico:
+\begin{itemize}
+\BLOCK{for a in red.estatico.avisos}
+  \item \VAR{a}
+\BLOCK{endfor}
+\end{itemize}
+\BLOCK{endif}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.9\textwidth]{figures/\VAR{red.estatico.fig}}
+\caption{Presión en los nodos de la red en la condición de diseño.}
+\label{fig:red_presion}
+\end{figure}
+\BLOCK{endif}
+
+\BLOCK{if red.eps}
+\subsection{Simulación de periodo extendido (24 h)}
+Se simularon 24 horas con paso horario: la demanda base (QMD) de cada nodo se modula
+con el patrón horario de consumo (pico \VAR{red.eps.pico}) y los tanques de la red
+varían su nivel según el balance entre entradas y salidas. La presión mínima del día
+es \textbf{\VAR{red.eps.p_min}~m}, en el nodo \VAR{red.eps.nodo} a las
+\VAR{red.eps.hora}~h; \VAR{red.eps.n_bajo} nodo(s) bajan de la presión mínima en
+alguna hora (Figura~\ref{fig:red_eps}).
+\BLOCK{if red.eps.aviso_k2}
+\textbf{Nota:} \VAR{red.eps.aviso_k2}
+\BLOCK{endif}
+\BLOCK{if red.eps.tanques}
+\begin{table}[H]\centering
+\caption{Nivel de los tanques de la red durante el día [m].}
+\begin{tabular}{lrrrr}\toprule
+Tanque & Inicial & Mínimo & Máximo & Final \\ \midrule
+\BLOCK{for t in red.eps.tanques}
+\VAR{t.id} & \VAR{t.ini} & \VAR{t.min} & \VAR{t.max} & \VAR{t.fin} \\
+\BLOCK{endfor}
+\bottomrule\end{tabular}\end{table}
+\BLOCK{endif}
+\BLOCK{if red.eps.avisos}
+Avisos del motor durante la simulación:
+\begin{itemize}
+\BLOCK{for a in red.eps.avisos}
+  \item \VAR{a}
+\BLOCK{endfor}
+\end{itemize}
+\BLOCK{endif}
+\begin{figure}[H]\centering
+\includegraphics[width=0.9\textwidth]{figures/\VAR{red.eps.fig}}
+\caption{Periodo extendido: presión en el nodo crítico\BLOCK{if red.eps.tanques} y nivel de los tanques\BLOCK{endif}.}
+\label{fig:red_eps}
+\end{figure}
+\BLOCK{endif}
+\BLOCK{if red.error}
+\textbf{No fue posible resolver la red:} \VAR{red.error}
+\BLOCK{endif}
+
 \BLOCK{if red.optimizacion}
 Optimización de diámetros con catálogo \VAR{red.optimizacion.material}
 \VAR{red.optimizacion.serie}:
@@ -529,20 +616,19 @@ predimensionamiento hidráulico de sistemas de acueducto desarrollada por
     potencia), verifica el golpe de ariete por Joukowsky y digitaliza curvas de
     bomba de catálogo para hallar el punto de operación.
   \item Asigna demandas a una red de EPANET por longitud aferente
-    (Sección~\ref{sec:aferente}) y exporta el archivo \texttt{.inp}.
+    (Sección~\ref{sec:aferente}), la resuelve con el motor EPANET en régimen
+    estático (QMH) y en periodo extendido de 24 h, y exporta el archivo
+    \texttt{.inp}.
 \end{itemize}
 
 \subsection{Qué NO hace, y limitaciones conocidas}
 \begin{itemize}
-  \item \textbf{El solver hidráulico de red propio no converge de forma
-    confiable en redes grandes} (del orden de cientos de nodos): agota sus
-    iteraciones sin resolver la continuidad. Por eso \textbf{esta memoria no
-    reporta presiones ni velocidades de la red}, y la optimización de diámetros
-    queda fuera del informe: se ofrece solo como herramienta exploratoria dentro
-    de la aplicación. \textbf{La verificación hidráulica de la red debe hacerse
-    en EPANET} con el archivo \texttt{.inp} exportado.
-  \item No realiza simulación de periodo extendido: el reparto de caudales de
-    esta memoria corresponde a la condición estática de caudal máximo diario.
+  \item Si la biblioteca de EPANET no está disponible en el equipo, la red se
+    resuelve con un solver propio que no simula bombas ni válvulas, puede no
+    converger en redes grandes y no permite periodo extendido; la memoria indica
+    en cada caso qué motor se usó.
+  \item La optimización de diámetros es una heurística exploratoria dentro de la
+    aplicación; sus resultados no se incluyen en esta memoria.
   \item No hace análisis de calidad del agua, ni diseño estructural o
     geotécnico, ni análisis de transitorios más allá de la estimación de
     Joukowsky.
