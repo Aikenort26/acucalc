@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from core import biblio, curves as cvs, demand, network, pipeline, pipes, population as pop, pumping as pu
 from core import epanet_engine as ee, formato as fm, geo, network_map as nm, red_diseno as rd
-from core import study_map as sm
+from core import detalles as dt, study_map as sm
 from core import report_figs as rf, storage, tank_network as tn
 from core.transients import escenario as esc, perfil as pf
 from core.latex import latex_escape
@@ -124,6 +124,49 @@ def _localizacion(p: Project, _save) -> dict | None:
         "con_red": bool(segmentos),
         "epsg": latex_escape(sm.EPSG_RED.get(ub.epsg_red, f"EPSG:{ub.epsg_red}")),
     }
+
+
+def _detalles(p: Project, _save) -> dict:
+    """Detalles típicos: zanja (solo con todas sus dimensiones), esquema de
+    cada estación de bombeo y corte de cada tanque con sus niveles."""
+    z = p.zanja
+    faltan = dt.validar_zanja(z)
+    zanja = None
+    if z.en_informe and not faltan:
+        _save(dt.fig_zanja(z), "detalle_zanja")
+        zanja = {"fig": "detalle_zanja.png", "D": f"{z.d_ext_mm:.0f}",
+                 "B": f"{z.ancho_fondo:.2f}", "sup": f"{dt.ancho_superior(z):.2f}",
+                 "H": f"{z.profundidad:.2f}", "talud": f"{z.talud:g}",
+                 "cama": f"{z.cama:.2f}", "atraque": f"{z.atraque:.2f}",
+                 "pavimento": f"{z.pavimento:.2f}", "cobertura": f"{dt.cobertura(z):.2f}",
+                 "mat_cama": latex_escape(z.mat_cama) or "---",
+                 "mat_atraque": latex_escape(z.mat_atraque) or "---",
+                 "mat_relleno": latex_escape(z.mat_relleno) or "---",
+                 "nota": latex_escape(z.nota)}
+    estaciones = []
+    for i, s in enumerate(p.bombeos, 1):
+        fig = dt.fig_estacion(s)
+        if fig is not None:
+            _save(fig, f"detalle_estacion_{i}")
+            estaciones.append({"nombre": latex_escape(s.nombre),
+                               "fig": f"detalle_estacion_{i}.png"})
+    tanques = []
+    frac = p.almacenamiento.frac_incendio
+    for i, t in enumerate(p.almacenamiento.tanques, 1):
+        fig = dt.fig_tanque(t, frac)
+        if fig is None:
+            continue
+        nv = dt.niveles_tanque(t, frac)
+        _save(fig, f"detalle_tanque_{i}")
+        tanques.append({"nombre": latex_escape(t.nombre), "fig": f"detalle_tanque_{i}.png",
+                        "cantidad": max(int(t.cantidad), 1), "area": f"{nv.area:.2f}",
+                        "h_util": f"{nv.h_util:.2f}", "h_max": f"{nv.h_max:.2f}",
+                        "h_inc": f"{nv.h_incendio:.2f}",
+                        "borde_libre": f"{nv.borde_libre:.2f}" if nv.borde_libre > 0 else "",
+                        "v_unidad": f"{nv.v_unidad:.0f}", "v_inc": f"{nv.v_incendio:.0f}"})
+    return {"zanja": zanja, "zanja_faltantes": faltan if zanja is None else [],
+            "estaciones": estaciones, "tanques": tanques,
+            "frac_incendio": f"{frac * 100:.0f}"}
 
 
 def _maniobra(tc) -> str:
@@ -497,6 +540,7 @@ def build(p: Project) -> tuple[dict, dict]:
 
     transitorio = _transitorio(p, _save)
     localizacion = _localizacion(p, _save)
+    detalles = _detalles(p, _save)
 
     # ---------- red de distribución (opcional) ----------
     red_ctx = None
@@ -596,6 +640,7 @@ def build(p: Project) -> tuple[dict, dict]:
         "red": red_ctx,
         "transitorio": transitorio,
         "localizacion": localizacion,
+        "detalles": detalles,
         "anexos_curvas": anexos_curvas,
     }
     return ctx, figuras

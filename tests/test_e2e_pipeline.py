@@ -74,7 +74,9 @@ def test_pipeline_completo(tmp_path):
     assert ctx["v_final"] == 110 and ctx["v_curva"] == 110 and ctx["v_gobierna"] == "Curva integral"
     assert ctx["tanques_balance"] and ctx["tanques_balance"][0]["v_asignado"] == "110"
     # poblacion, metodos, caudales, balance, esquema, sistema_1 + logo ACUCALC de portada
-    assert len(figuras) == 7
+    # + detalles típicos de la estación de bombeo y del tanque
+    assert len(figuras) == 9
+    assert {"detalle_estacion_1", "detalle_tanque_1"} <= set(figuras)
 
     out = report.render(ctx, tmp_path / "memoria")
     tex = (out / "main.tex").read_text(encoding="utf-8")

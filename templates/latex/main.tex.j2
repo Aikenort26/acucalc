@@ -823,6 +823,77 @@ Tubería & DN original [mm] & DN optimizado [mm] \\ \midrule
 \BLOCK{endif}
 \BLOCK{endif}
 
+\BLOCK{if detalles and (detalles.zanja or detalles.estaciones or detalles.tanques)}
+\section{Detalles típicos}
+\label{sec:detalles}
+Los esquemas de esta sección documentan la disposición constructiva adoptada en el
+cálculo; no reemplazan los planos de construcción.
+
+\BLOCK{if detalles.zanja}
+\subsection{Zanja típica}
+Las dimensiones de la zanja son las adoptadas por el proyectista\BLOCK{if detalles.zanja.nota} (\VAR{detalles.zanja.nota})\BLOCK{endif};
+la figura está a escala.
+\begin{table}[H]\centering
+\caption{Dimensiones y materiales de la zanja típica.}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}Xr}\toprule
+Elemento & Valor \\ \midrule
+Diámetro exterior de la tubería & \VAR{detalles.zanja.D} mm \\
+Ancho de fondo / ancho en la rasante & \VAR{detalles.zanja.B} m / \VAR{detalles.zanja.sup} m \\
+Profundidad (rasante a fondo) & \VAR{detalles.zanja.H} m \\
+Talud de las paredes (H:V) & \VAR{detalles.zanja.talud}:1 \\
+Cama bajo la tubería & \VAR{detalles.zanja.cama} m \\
+Relleno seleccionado sobre la clave & \VAR{detalles.zanja.atraque} m \\
+Estructura de pavimento & \VAR{detalles.zanja.pavimento} m \\
+Cobertura sobre la clave & \VAR{detalles.zanja.cobertura} m \\ \midrule
+Material de la cama & \VAR{detalles.zanja.mat_cama} \\
+Relleno seleccionado & \VAR{detalles.zanja.mat_atraque} \\
+Relleno superior & \VAR{detalles.zanja.mat_relleno} \\
+\bottomrule\end{tabularx}\end{table}
+\begin{figure}[H]\centering
+\includegraphics[width=0.9\textwidth]{figures/\VAR{detalles.zanja.fig}}
+\caption{Sección transversal de la zanja típica.}
+\label{fig:zanja}
+\end{figure}
+\BLOCK{endif}
+
+\BLOCK{if detalles.estaciones}
+\subsection{Estaciones de bombeo}
+Cada esquema se arma con los tramos y los accesorios del cálculo de pérdidas del
+sistema, en el orden en que se registraron; no está a escala.
+\BLOCK{for e in detalles.estaciones}
+\begin{figure}[H]\centering
+\includegraphics[width=0.95\textwidth]{figures/\VAR{e.fig}}
+\caption{Esquema de la estación de bombeo --- \VAR{e.nombre}.}
+\end{figure}
+\BLOCK{endfor}
+\BLOCK{endif}
+
+\BLOCK{if detalles.tanques}
+\subsection{Tanques de almacenamiento}
+En cada unidad, el nivel máximo es el volumen asignado dividido por el área en
+planta de las dimensiones constructivas. La reserva de incendio ocupa el fondo:
+es la fracción $f/(1+f)$ del volumen, con $f$ = \VAR{detalles.frac_incendio}~\%,
+porque el volumen total es $(V_{reg}+V_{inc})$ con $V_{inc}=f\,V_{reg}$ (Art. 81,
+Res. 0330 de 2017~\cite{res0330}). El nivel mínimo de operación es el tope de esa
+reserva.
+\begin{table}[H]\centering
+\caption{Niveles de operación por unidad de tanque (m sobre el fondo).}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}Xrrrrrr}\toprule
+Tanque & Unid. & Área [m\textsuperscript{2}] & $h$ útil & Nivel máx. & Nivel mín. & Borde libre \\ \midrule
+\BLOCK{for t in detalles.tanques}
+\VAR{t.nombre} & \VAR{t.cantidad} & \VAR{t.area} & \VAR{t.h_util} & \VAR{t.h_max} & \VAR{t.h_inc} & \BLOCK{if t.borde_libre}\VAR{t.borde_libre}\BLOCK{else}---\BLOCK{endif} \\
+\BLOCK{endfor}
+\bottomrule\end{tabularx}\end{table}
+\BLOCK{for t in detalles.tanques}
+\begin{figure}[H]\centering
+\includegraphics[width=0.9\textwidth]{figures/\VAR{t.fig}}
+\caption{Corte y niveles --- \VAR{t.nombre}.}
+\end{figure}
+\BLOCK{endfor}
+\BLOCK{endif}
+\BLOCK{endif}
+
 \section{Conclusiones}
 El sistema se dimensionó para \VAR{pob_final} habitantes al año \VAR{horizonte},
 con un caudal máximo diario de \VAR{qmd} L/s y un volumen de almacenamiento de

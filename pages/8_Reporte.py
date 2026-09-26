@@ -2,11 +2,12 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import streamlit as st
 import pandas as pd
 
-from core import biblio, project as pj, report, report_ctx
-from pages_common import page_setup, txt_state
+from core import biblio, detalles as dt, project as pj, report, report_ctx
+from pages_common import num_input, page_setup, txt_state
 
 p = page_setup()
 st.header("8 · Reporte — memoria de cálculo LaTeX")
@@ -37,6 +38,45 @@ with st.expander("📚 Referencias bibliográficas", expanded=False):
         if propias:
             st.success(f"{len(propias)} referencia(s) propia(s): "
                        + ", ".join(f"`{r.key}`" for r in propias))
+
+with st.expander("📐 Detalles típicos: zanja", expanded=False):
+    z = p.zanja
+    st.caption("Todas las dimensiones las define el proyectista según la norma o la "
+               "especificación del proyecto; la app no asume valores. Sin datos completos "
+               "la zanja no entra a la memoria. Los esquemas de las estaciones de bombeo y "
+               "de los tanques salen de las páginas Bombeo y Almacenamiento.")
+    z1, z2, z3, z4 = st.columns(4)
+    z.d_ext_mm = num_input("Ø exterior de la tubería [mm]", "zj_d", z.d_ext_mm, decimals=1,
+                           container=z1, min_value=0.0)
+    z.ancho_fondo = num_input("Ancho de fondo [m]", "zj_b", z.ancho_fondo, decimals=2,
+                              container=z2, min_value=0.0)
+    z.profundidad = num_input("Profundidad, rasante a fondo [m]", "zj_h", z.profundidad,
+                              decimals=2, container=z3, min_value=0.0)
+    z.talud = num_input("Talud H:V (0 = vertical)", "zj_t", z.talud, decimals=2,
+                        container=z4, min_value=0.0)
+    z5, z6, z7, z8 = st.columns(4)
+    z.cama = num_input("Cama bajo la tubería [m]", "zj_cama", z.cama, decimals=2,
+                       container=z5, min_value=0.0)
+    z.atraque = num_input("Relleno seleccionado sobre la clave [m]", "zj_atr", z.atraque,
+                          decimals=2, container=z6, min_value=0.0)
+    z.pavimento = num_input("Pavimento [m] (0 = sin)", "zj_pav", z.pavimento, decimals=2,
+                            container=z7, min_value=0.0)
+    z.en_informe = z8.checkbox("Incluir en la memoria", value=z.en_informe, key="w_chk_zj")
+    m1, m2, m3 = st.columns(3)
+    z.mat_cama = m1.text_input("Material de la cama", key=txt_state("txt_zj_mc", z.mat_cama))
+    z.mat_atraque = m2.text_input("Relleno seleccionado",
+                                  key=txt_state("txt_zj_ma", z.mat_atraque))
+    z.mat_relleno = m3.text_input("Relleno superior", key=txt_state("txt_zj_mr", z.mat_relleno))
+    z.nota = st.text_input("Fuente de las dimensiones (norma, especificación)",
+                           key=txt_state("txt_zj_nota", z.nota))
+    faltan = dt.validar_zanja(z)
+    if faltan and any((z.d_ext_mm, z.ancho_fondo, z.profundidad)):
+        for f_ in faltan:
+            st.warning(f_)
+    elif not faltan:
+        fz = dt.fig_zanja(z)
+        st.columns([3, 2])[0].pyplot(fz)
+        plt.close(fz)
 
 # build() recalcula todo y dibuja todas las figuras: se hace solo cuando el
 # proyecto cambió, no en cada rerun de la página.

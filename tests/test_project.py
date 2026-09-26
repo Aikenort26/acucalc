@@ -378,7 +378,7 @@ def _proyecto_completo():
     st.suministro_hora = [1] * 12 + [0] * 12
     st.ventana_captacion = [0] * 24
     st.tanques = [pj.TankSpec("T1", "bajo", "rectangular", 90, 3.0, 2.0, 4, 16, 2,
-                              "enterrado", 5, 21)]
+                              "enterrado", 5, 21, borde_libre=0.3)]
     st.modo_balance = "red"
     st.zonas = [pj.ZonaSpec("Barrio", 0.4)]
     st.enlaces = [pj.EnlaceSpec("Pozo", "T1", "gravedad", 5, 14, 3.5)]
@@ -414,6 +414,10 @@ def _proyecto_completo():
         zoom_zona=14, epsg_red=9377,
         mapas=[pj.MapaGuardado("zona", "esri", 14, 1000, 2000, 1200, 800, "aGk=")],
         en_informe=False)
+    p.zanja = pj.ZanjaConfig(
+        en_informe=False, d_ext_mm=110.0, ancho_fondo=0.5, profundidad=1.2, talud=0.2,
+        cama=0.1, atraque=0.3, pavimento=0.15, mat_cama="Arena", mat_atraque="Seleccionado",
+        mat_relleno="Excavación", nota="Norma X")
     return p
 
 
@@ -435,6 +439,7 @@ def _defaults(cls):
     (lambda p: p.transitorios.tramos[0], pj.TramoTransitorio),
     (lambda p: p.ubicacion, pj.UbicacionConfig),
     (lambda p: p.ubicacion.mapas[0], pj.MapaGuardado),
+    (lambda p: p.zanja, pj.ZanjaConfig),
 ])
 def test_fixture_completo_cubre_todos_los_campos(obtener, cls):
     """Guarda del test de round-trip: si alguien agrega un campo nuevo sin

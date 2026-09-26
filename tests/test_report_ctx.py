@@ -452,3 +452,37 @@ def test_sin_mapas_o_fuera_del_informe_no_hay_localizacion():
     p = _con_mapas()
     p.ubicacion.en_informe = False
     assert report_ctx.build(p)[0]["localizacion"] is None
+
+
+def test_detalles_tipicos_en_el_informe(tmp_path):
+    p = _con_bombeo()
+    p.zanja = pj.ZanjaConfig(d_ext_mm=110.0, ancho_fondo=0.6, profundidad=1.2, cama=0.1,
+                             atraque=0.3, mat_cama="Arena", nota="Especificación EAAB NS-035")
+    p.almacenamiento.tanques = [pj.TankSpec("Elevado", "elevado", "circular", 60, 2.5,
+                                            borde_libre=0.3)]
+    ctx, figuras = report_ctx.build(p)
+    d = ctx["detalles"]
+    assert d["zanja"]["fig"] == "detalle_zanja.png" and "detalle_zanja" in figuras
+    assert d["zanja"]["cobertura"] == "0.99" and "EAAB" in d["zanja"]["nota"]
+    assert [e["fig"] for e in d["estaciones"]] == ["detalle_estacion_1.png"]
+    t = d["tanques"][0]
+    assert t["fig"] == "detalle_tanque_1.png" and t["borde_libre"] == "0.30"
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    sec = tex[tex.index(r"\section{Detalles típicos}"):]
+    assert "figures/detalle_zanja.png" in sec and "figures/detalle_tanque_1.png" in sec
+    assert "Especificación EAAB NS-035" in sec
+
+
+def test_zanja_incompleta_no_entra_y_se_dice_por_que():
+    p = _proyecto_minimo()
+    p.zanja = pj.ZanjaConfig(d_ext_mm=110.0)
+    ctx, figuras = report_ctx.build(p)
+    assert ctx["detalles"]["zanja"] is None and "detalle_zanja" not in figuras
+    assert ctx["detalles"]["zanja_faltantes"]            # la página las muestra
+
+
+def test_sin_zanja_ni_bombeo_la_seccion_solo_trae_tanques():
+    p = _proyecto_minimo()
+    p.almacenamiento.tanques = [pj.TankSpec("T", "elevado", "circular", 60, 2.5)]
+    d = report_ctx.build(p)[0]["detalles"]
+    assert d["zanja"] is None and d["estaciones"] == [] and len(d["tanques"]) == 1

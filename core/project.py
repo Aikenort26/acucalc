@@ -62,6 +62,7 @@ class TankSpec:
     tipo_constructivo: str = "superficial"  # superficial|enterrado|semienterrado|elevado
     salida_ini: int = 6         # ventana de salida (consumo/bombeo hacia adelante)
     salida_fin: int = 22        # inclusive; si fin < ini, la ventana cruza medianoche
+    borde_libre: float = 0.0    # altura de muro sobre el nivel máximo [m] (0 = no se dibuja)
 
     def entrada_flags(self) -> list[int]:
         if self.entrada_fin >= self.entrada_ini:
@@ -237,6 +238,24 @@ class UbicacionConfig:
 
 
 @dataclass
+class ZanjaConfig:
+    """Zanja típica: todas las dimensiones las define el proyectista (norma o
+    especificación del proyecto); la app no asume valores."""
+    en_informe: bool = True
+    d_ext_mm: float = 0.0          # diámetro exterior de la tubería
+    ancho_fondo: float = 0.0       # B [m]
+    profundidad: float = 0.0       # de la rasante al fondo de la zanja [m]
+    talud: float = 0.0             # H:V de las paredes (0 = verticales)
+    cama: float = 0.0              # espesor de la cama bajo la tubería [m]
+    atraque: float = 0.0           # relleno seleccionado sobre la clave [m]
+    pavimento: float = 0.0         # espesor de la estructura de pavimento (0 = sin)
+    mat_cama: str = ""
+    mat_atraque: str = ""
+    mat_relleno: str = ""
+    nota: str = ""                 # fuente de las dimensiones (norma, especificación)
+
+
+@dataclass
 class Project:
     nombre: str = ""
     municipio: str = ""
@@ -267,6 +286,7 @@ class Project:
     bibtex_usuario: str = ""      # referencias propias en BibTeX (se suman a la biblioteca base)
     transitorios: TransientConfig = field(default_factory=TransientConfig)
     ubicacion: UbicacionConfig = field(default_factory=UbicacionConfig)
+    zanja: ZanjaConfig = field(default_factory=ZanjaConfig)
 
 
 def save(p: Project, path: str | Path) -> None:

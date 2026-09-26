@@ -130,7 +130,8 @@ seed_tk = editor_seed("tanques", lambda: pd.DataFrame(
       "Cantidad": t.cantidad, "Altura útil [m]": t.altura, "Largo/ancho": t.ratio,
       "Volumen asignado [m³]": t.volumen,
       "Suministro desde [h]": t.entrada_ini, "Suministro hasta [h]": t.entrada_fin,
-      "Salida desde [h]": t.salida_ini, "Salida hasta [h]": t.salida_fin}
+      "Salida desde [h]": t.salida_ini, "Salida hasta [h]": t.salida_fin,
+      "Borde libre [m]": t.borde_libre}
      for t in cfg.tanques]))
 df_tk = st.data_editor(st.session_state[seed_tk],
     num_rows="dynamic", width="stretch", key="w_ed_tanques",
@@ -144,7 +145,10 @@ df_tk = st.data_editor(st.session_state[seed_tk],
         "Suministro desde [h]": st.column_config.NumberColumn(min_value=0, max_value=23),
         "Suministro hasta [h]": st.column_config.NumberColumn(min_value=0, max_value=23),
         "Salida desde [h]": st.column_config.NumberColumn(min_value=0, max_value=23),
-        "Salida hasta [h]": st.column_config.NumberColumn(min_value=0, max_value=23)})
+        "Salida hasta [h]": st.column_config.NumberColumn(min_value=0, max_value=23),
+        "Borde libre [m]": st.column_config.NumberColumn(
+            min_value=0.0, help="Altura del muro sobre el nivel máximo; se dibuja en el "
+                                "detalle del tanque de la memoria (0 = no se dibuja).")})
 editor_commit(seed_tk, df_tk)
 tipos_previos = {t.nombre: t.tipo for t in cfg.tanques}
 NUM_TK = ["Cantidad", "Altura útil [m]", "Largo/ancho", "Volumen asignado [m³]",
@@ -165,7 +169,8 @@ cfg.tanques = [TankSpec(nombre=s_txt(r["Nombre"]),
                         cantidad=i_num(r["Cantidad"], 1),
                         tipo_constructivo=s_txt(r["Tipo constructivo"], "superficial"),
                         salida_ini=i_num(r["Salida desde [h]"], 0),
-                        salida_fin=i_num(r["Salida hasta [h]"], 23))
+                        salida_fin=i_num(r["Salida hasta [h]"], 23),
+                        borde_libre=f_num(r.get("Borde libre [m]"), 0.0))
                for r in filas_tk]
 
 if not cfg.tanques:
