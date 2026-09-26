@@ -45,7 +45,7 @@ def test_roundtrip_json_v2(tmp_path):
     assert s.tramos[0].cat_serie == "RDE 21" and s.tramos[0].e_mm == 4.3
     assert s.bombas[0].puntos_qh[1] == (4.0, 31.9)
     raw = json.loads(f.read_text(encoding="utf-8"))
-    assert raw["schema_version"] == 2
+    assert raw["schema_version"] == pj.SCHEMA_VERSION
 
 
 def test_tankspec_salida_roundtrip(tmp_path):
@@ -345,3 +345,155 @@ def test_nivel_riesgo_persiste_en_json(tmp_path):
     p2 = pj.load(f)
     assert p2.almacenamiento.nivel_riesgo == "medio"
     assert p2.almacenamiento.frac_incendio == 0.20
+
+
+# --- WP1 v9: carga genérica (_from_dict) y schema v3 -------------------------
+
+import dataclasses as _dc
+
+
+def _proyecto_completo():
+    """Proyecto con TODOS los campos en valores distintos al default, para que
+    un campo que `load()` olvide restaurar se note en el round-trip."""
+    p = _proyecto()
+    p.fecha = "2026-09-26"
+    p.temperatura = 24.0
+    p.poblacion.horizon_year = 2050
+    p.poblacion.tasa_res0844 = 0.006
+    p.poblacion.tipo, p.poblacion.fuente = "municipio", "manual"
+    p.demanda.perdidas, p.demanda.k1, p.demanda.k2 = 0.15, 1.2, 1.5
+    p.bombeos[0].horas = 12.0
+    p.logo_cliente_b64 = "iVBORw0KGgoCLIENTE"
+    p.logo_consultor_b64 = "iVBORw0KGgoCONSULTOR"
+    p.poblacion.year0 = 2025
+    p.demanda.k_auto = False
+    p.demanda.referencia = "res0844"
+    p.demanda.justificacion = "Uso institucional"
+    st = p.almacenamiento
+    st.frac_regulacion = 0.30
+    st.frac_incendio = 0.20
+    st.nivel_riesgo = "medio"
+    st.dias_reserva = 1.5
+    st.factores_hora = [1.0] * 24
+    st.suministro_hora = [1] * 12 + [0] * 12
+    st.ventana_captacion = [0] * 24
+    st.tanques = [pj.TankSpec("T1", "bajo", "rectangular", 90, 3.0, 2.0, 4, 16, 2,
+                              "enterrado", 5, 21)]
+    s = p.bombeos[0]
+    s.sumar_5m_ras = True
+    s.bomba_seleccionada = "Bomba A"
+    b = s.bombas[0]
+    b.puntos_qe = [(2.9, 0.61), (4.0, 0.70)]
+    b.imagen_b64 = "iVBORw0KGgoCURVA"
+    b.cal = {"x": {"X1": {"px": 10, "val": 0}}, "qh": {"Y1": {"px": 5, "val": 20}},
+             "qe": {}}
+    b.modelo, b.fabricante = "M-1", "Fab"
+    b.n_unidades, b.arreglo = 2, "serie"
+    b.n1_nominal, b.n2_objetivo = 3500.0, 3200.0
+    p.red_inp = "[JUNCTIONS]\n"
+    p.red_material, p.red_serie = "PVC-U", "RDE 21"
+    p.red_vmax, p.red_pmin, p.red_pmax = 3.0, 10.0, 60.0
+    p.red_en_informe = False
+    p.ruta_guardado = "/tmp/x"
+    return p
+
+
+def _defaults(cls):
+    return {f.name: (f.default if f.default is not _dc.MISSING else f.default_factory())
+            for f in _dc.fields(cls)
+            if f.default is not _dc.MISSING or f.default_factory is not _dc.MISSING}
+
+
+@pytest.mark.parametrize("obtener,cls", [
+    (lambda p: p, pj.Project),
+    (lambda p: p.poblacion, pj.PopulationConfig),
+    (lambda p: p.demanda, pj.DemandConfig),
+    (lambda p: p.almacenamiento, pj.StorageConfig),
+    (lambda p: p.almacenamiento.tanques[0], pj.TankSpec),
+    (lambda p: p.bombeos[0], pj.PumpSystemData),
+    (lambda p: p.bombeos[0].bombas[0], pj.PumpData),
+])
+def test_fixture_completo_cubre_todos_los_campos(obtener, cls):
+    """Guarda del test de round-trip: si alguien agrega un campo nuevo sin
+    darle valor no-default en `_proyecto_completo`, este test lo señala."""
+    obj = obtener(_proyecto_completo())
+    iguales = [k for k, v in _defaults(cls).items() if getattr(obj, k) == v]
+    assert not iguales, f"campos de {cls.__name__} en default: {iguales}"
+
+
+def test_roundtrip_todos_los_campos(tmp_path):
+    p = _proyecto_completo()
+    f = tmp_path / "full.acucalc.json"
+    pj.save(p, f)
+    assert _dc.asdict(pj.load(f)) == _dc.asdict(p)
+
+
+def test_load_restaura_logos(tmp_path):
+    """Regresión: load() no restauraba logo_cliente_b64/logo_consultor_b64."""
+    p = _proyecto_completo()
+    f = tmp_path / "logos.acucalc.json"
+    pj.save(p, f)
+    p2 = pj.load(f)
+    assert p2.logo_cliente_b64 == "iVBORw0KGgoCLIENTE"
+    assert p2.logo_consultor_b64 == "iVBORw0KGgoCONSULTOR"
+
+
+def test_save_escribe_schema_actual(tmp_path):
+    f = tmp_path / "v.acucalc.json"
+    pj.save(_proyecto(), f)
+    assert json.loads(f.read_text(encoding="utf-8"))["schema_version"] == 3 == pj.SCHEMA_VERSION
+
+
+def test_migracion_v2_a_v3(tmp_path):
+    p = _proyecto_completo()
+    f = tmp_path / "v2.acucalc.json"
+    pj.save(p, f)
+    raw = json.loads(f.read_text(encoding="utf-8"))
+    raw["schema_version"] = 2
+    f.write_text(json.dumps(raw), encoding="utf-8")
+    assert _dc.asdict(pj.load(f)) == _dc.asdict(p)
+
+
+def test_version_futura_rechazada(tmp_path):
+    """Una app vieja no debe cargar (y luego pisar con autosave) un archivo de
+    una versión más nueva; esta app tampoco carga uno de una versión futura."""
+    f = tmp_path / "futuro.json"
+    f.write_text(json.dumps({"schema_version": pj.SCHEMA_VERSION + 1, "project": {}}),
+                 encoding="utf-8")
+    with pytest.raises(pj.SchemaError):
+        pj.load(f)
+
+
+def test_load_ignora_claves_desconocidas_en_todos_los_niveles(tmp_path):
+    p = _proyecto_completo()
+    f = tmp_path / "extra.acucalc.json"
+    pj.save(p, f)
+    raw = json.loads(f.read_text(encoding="utf-8"))
+    d = raw["project"]
+    d["campo_raro"] = 1
+    d["poblacion"]["x"] = 1
+    d["demanda"]["x"] = 1
+    d["almacenamiento"]["tanques"][0]["x"] = 1
+    d["bombeos"][0]["x"] = 1
+    d["bombeos"][0]["tramos"][0]["x"] = 1
+    d["bombeos"][0]["accesorios"][0]["x"] = 1
+    d["bombeos"][0]["bombas"][0]["x"] = 1
+    f.write_text(json.dumps(raw), encoding="utf-8")
+    assert _dc.asdict(pj.load(f)) == _dc.asdict(p)
+
+
+def test_load_tipos_de_listas(tmp_path):
+    """Las listas de pares vuelven como tuplas y las listas de dataclasses
+    como instancias (no dicts)."""
+    f = tmp_path / "t.acucalc.json"
+    pj.save(_proyecto_completo(), f)
+    p = pj.load(f)
+    assert isinstance(p.censo[0], tuple) and isinstance(p.demanda.usos[0], tuple)
+    assert isinstance(p.almacenamiento.tanques[0], pj.TankSpec)
+    s = p.bombeos[0]
+    assert isinstance(s, pj.PumpSystemData)
+    assert isinstance(s.tramos[0], pj.SegmentData)
+    assert isinstance(s.accesorios[0], pj.AccessoryData)
+    assert isinstance(s.bombas[0], pj.PumpData)
+    assert isinstance(s.bombas[0].puntos_qh[0], tuple)
+    assert isinstance(s.bombas[0].puntos_qe[0], tuple)

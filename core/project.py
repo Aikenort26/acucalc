@@ -1,14 +1,18 @@
-"""Modelo de proyecto ACUCALC y persistencia JSON (schema_version=2).
+"""Modelo de proyecto ACUCALC y persistencia JSON (schema_version=3).
 
 v2: el bombeo son N sistemas nombrados (`Project.bombeos`), cada uno un paquete
 completo (tramos, accesorios, parámetros, bombas candidatas). Los proyectos
-schema 1 se migran automáticamente al cargar (un sistema "Bombeo 1")."""
+schema 1 se migran automáticamente al cargar (un sistema "Bombeo 1").
+
+v3: carga genérica `_from_dict` (todos los campos, en todos los niveles). El
+salto de versión existe para que una app v2 rechace un archivo v3 en vez de
+cargarlo sin las secciones nuevas y pisarlo con el autosave."""
 import json
 import os
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields, is_dataclass
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class SchemaError(Exception):
@@ -39,7 +43,7 @@ class DemandConfig:
     k1: float = 1.3
     k2: float = 1.6
     k_auto: bool = True        # False = K1/K2 manuales, nunca se recalculan
-    usos: list = field(default_factory=list)         # [(actividad, L/hab/d)]
+    usos: list = field(default_factory=list, metadata={"item": tuple})  # [(actividad, L/hab/d)]
     referencia: str = ""       # id de data/dotaciones.json (modo manual)
     justificacion: str = ""
 
@@ -83,7 +87,7 @@ class StorageConfig:
     factores_hora: list = field(default_factory=list)
     suministro_hora: list = field(default_factory=list)   # ventana de bombeo bajo→elevado
     ventana_captacion: list = field(default_factory=list)
-    tanques: list = field(default_factory=list)           # TankSpec
+    tanques: list = field(default_factory=list, metadata={"item": TankSpec})
 
 
 @dataclass
@@ -118,8 +122,8 @@ class AxisCalData:
 @dataclass
 class PumpData:
     nombre: str
-    puntos_qh: list = field(default_factory=list)
-    puntos_qe: list = field(default_factory=list)
+    puntos_qh: list = field(default_factory=list, metadata={"item": tuple})
+    puntos_qe: list = field(default_factory=list, metadata={"item": tuple})
     imagen_b64: str = ""
     cal: dict | None = None    # {"qh": {"X1": {...}, ...}, "qe": {"X1": {...}, ...}}
     modelo: str = ""
@@ -133,14 +137,14 @@ class PumpData:
 @dataclass
 class PumpSystemData:
     nombre: str = "Bombeo 1"
-    tramos: list = field(default_factory=list)        # SegmentData
-    accesorios: list = field(default_factory=list)    # AccessoryData
+    tramos: list = field(default_factory=list, metadata={"item": SegmentData})
+    accesorios: list = field(default_factory=list, metadata={"item": AccessoryData})
     horas: float = 10.0
     he: float = 0.0
     sumar_5m_ras: bool = False
     eficiencia: float = 0.70
     tipo_bomba: str = "superficie"    # superficie|sumergible
-    bombas: list = field(default_factory=list)        # PumpData
+    bombas: list = field(default_factory=list, metadata={"item": PumpData})
     bomba_seleccionada: str = ""
 
 
@@ -156,11 +160,11 @@ class Project:
     temperatura: float = 20.0
     logo_cliente_b64: str = ""       # logo para la portada del informe
     logo_consultor_b64: str = ""
-    censo: list = field(default_factory=list)
+    censo: list = field(default_factory=list, metadata={"item": tuple})
     poblacion: PopulationConfig = field(default_factory=PopulationConfig)
     demanda: DemandConfig = field(default_factory=DemandConfig)
     almacenamiento: StorageConfig = field(default_factory=StorageConfig)
-    bombeos: list = field(default_factory=list)       # PumpSystemData
+    bombeos: list = field(default_factory=list, metadata={"item": PumpSystemData})
     red_inp: str = ""             # texto INP cargado (vacío = sin red)
     red_material: str = ""        # material del catálogo usado en la optimización
     red_serie: str = ""
@@ -188,9 +192,33 @@ def _filtered(cls, d: dict) -> dict:
     campo eliminado en una migración) — evita que `Cls(**d)` reviente con
     `TypeError: unexpected keyword argument` al cargar un proyecto guardado
     con una versión anterior de la app."""
-    from dataclasses import fields as _fields
-    validos = {f.name for f in _fields(cls)}
+    validos = {f.name for f in fields(cls)}
     return {k: v for k, v in d.items() if k in validos}
+
+
+def _valor(f, v):
+    if v is None:
+        return None
+    item = f.metadata.get("item")
+    if item is tuple:
+        return [tuple(x) for x in v]
+    if item is not None:
+        return [_from_dict(item, x) for x in v]
+    if isinstance(f.type, type) and is_dataclass(f.type) and isinstance(v, dict):
+        return _from_dict(f.type, v)
+    return v
+
+
+def _from_dict(cls, d: dict):
+    """Reconstruye `cls` desde un dict de JSON, recursivamente. Las claves
+    ausentes toman el default del dataclass y las desconocidas se ignoran, en
+    todos los niveles. Las listas se tipan con `field(metadata={"item": X})`."""
+    kwargs = {f.name: _valor(f, d[f.name]) for f in fields(cls) if f.name in d}
+    obj = cls(**kwargs)
+    post = _POST_LOAD.get(cls)
+    if post:
+        post(obj)
+    return obj
 
 
 def migrate_pump_cal(cal: dict | None) -> dict:
@@ -251,20 +279,11 @@ def migrate_pump_cal_v7(cal: dict | None) -> dict:
     return {"x": x, "qh": qh_y, "qe": qe_y}
 
 
-def _pump_system_from_dict(s: dict) -> PumpSystemData:
-    from dataclasses import fields as _fields
-    validos = {f.name for f in _fields(PumpSystemData)} - {"tramos", "accesorios", "bombas"}
-    sys = PumpSystemData(**{k: v for k, v in s.items() if k in validos})
-    sys.tramos = [SegmentData(**t) for t in s.get("tramos", [])]
-    sys.accesorios = [AccessoryData(**a) for a in s.get("accesorios", [])]
-    sys.bombas = []
-    for b in s.get("bombas", []):
-        pump = PumpData(**b)
-        pump.puntos_qh = [tuple(x) for x in pump.puntos_qh]
-        pump.puntos_qe = [tuple(x) for x in pump.puntos_qe]
-        pump.cal = migrate_pump_cal_v7(pump.cal)
-        sys.bombas.append(pump)
-    return sys
+def _post_pump(b: PumpData) -> None:
+    b.cal = migrate_pump_cal_v7(b.cal)
+
+
+_POST_LOAD = {PumpData: _post_pump}
 
 
 def _migrate_v1(d: dict) -> dict:
@@ -288,29 +307,10 @@ def _migrate_v1(d: dict) -> dict:
 def load(path: str | Path) -> Project:
     raw = json.loads(Path(path).read_text(encoding="utf-8"))
     version = raw.get("schema_version")
-    if version not in (1, SCHEMA_VERSION):
+    if version not in (1, 2, SCHEMA_VERSION):
         raise SchemaError(f"schema_version {version} no soportada "
-                          f"(esperada 1 o {SCHEMA_VERSION})")
+                          f"(esperada 1 a {SCHEMA_VERSION})")
     d = raw["project"]
     if version == 1:
         d = _migrate_v1(d)
-    p = Project(**{k: d.get(k, "") for k in ("nombre", "municipio", "departamento",
-                                             "corregimiento", "consultor", "fecha")},
-                altitud=d.get("altitud", 0.0), temperatura=d.get("temperatura", 20.0))
-    p.censo = [tuple(x) for x in d.get("censo", [])]
-    p.poblacion = PopulationConfig(**_filtered(PopulationConfig, d.get("poblacion", {})))
-    p.demanda = DemandConfig(**_filtered(DemandConfig, d.get("demanda", {})))
-    p.demanda.usos = [tuple(u) for u in p.demanda.usos]
-    p.almacenamiento = StorageConfig(**_filtered(StorageConfig, d.get("almacenamiento", {})))
-    p.almacenamiento.tanques = [TankSpec(**_filtered(TankSpec, t))
-                                for t in p.almacenamiento.tanques]
-    p.bombeos = [_pump_system_from_dict(s) for s in d.get("bombeos", [])]
-    p.red_inp = d.get("red_inp", "")
-    p.red_material = d.get("red_material", "")
-    p.red_serie = d.get("red_serie", "")
-    p.red_vmax = d.get("red_vmax", 6.0)
-    p.red_pmin = d.get("red_pmin", 15.0)
-    p.red_pmax = d.get("red_pmax", 70.0)
-    p.red_en_informe = d.get("red_en_informe", True)
-    p.ruta_guardado = d.get("ruta_guardado", "")
-    return p
+    return _from_dict(Project, d)
