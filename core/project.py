@@ -171,6 +171,45 @@ class PumpSystemData:
 
 
 @dataclass
+class TramoTransitorio:
+    hasta_abscisa: float = 0.0     # fin del tramo en el perfil [m]
+    cat_material: str = ""         # material del catálogo ("" = manual)
+    cat_serie: str = ""
+    cat_dn: float = 0.0
+    D_mm: float = 0.0              # diámetro interno (manual)
+    e_mm: float = 0.0              # espesor (manual)
+    material: str = "PVC"          # clave de rugosidad (data/ks.json) y k_elast (manual)
+    pn_mca: float = 0.0            # PN manual [mca] (0 = sin dato)
+
+
+@dataclass
+class TransientConfig:
+    perfil: list = field(default_factory=list, metadata={"item": tuple})  # (abscisa, z_terreno, z_eje|None)
+    cobertura: float = 0.0         # profundidad a clave, si el perfil no trae cota del eje [m]
+    tramos: list = field(default_factory=list, metadata={"item": TramoTransitorio})
+    escenario: str = "cierre_valvula"   # cierre_valvula|apertura_valvula|parada_bomba|arranque_bomba|hidroneumatico
+    q0_lps: float = 0.0            # caudal de régimen (si no se usa la curva de una bomba)
+    h_arriba: float = 0.0          # nivel del embalse aguas arriba o de la succión [m]
+    h_abajo: float = 0.0           # nivel de descarga (tanque o válvula) [m]
+    tc: float = 0.0                # tiempo de cierre / apertura [s]
+    ley: str = "lineal"            # lineal | potencial
+    em: float = 1.0                # exponente de la ley potencial
+    bomba: str = ""                # "Sistema · Bomba" cuya curva se usa
+    modo_parada: str = "instantanea"   # instantanea | inercia
+    n_rpm: float = 0.0
+    inercia: float = 0.0           # bomba + motor [kg·m²]
+    eta: float = 0.0
+    t_arranque: float = 0.0
+    v_aire: float = 0.0            # volumen de aire del hidroneumático en régimen [m³]
+    n_poli: float = 1.2
+    d_orificio_mm: float = 0.0     # 0 = sin orificio
+    cd_orificio: float = 0.0
+    t_sim: float = 0.0             # 0 = automático
+    n_malla: int = 20
+    en_informe: bool = True
+
+
+@dataclass
 class Project:
     nombre: str = ""
     municipio: str = ""
@@ -199,6 +238,7 @@ class Project:
     red_conexiones: dict = field(default_factory=dict)   # bomba -> [nodo succión, nodo impulsión]
     ruta_guardado: str = ""       # carpeta o archivo .acucalc.json del usuario (vacío = saves/ interno)
     bibtex_usuario: str = ""      # referencias propias en BibTeX (se suman a la biblioteca base)
+    transitorios: TransientConfig = field(default_factory=TransientConfig)
 
 
 def save(p: Project, path: str | Path) -> None:

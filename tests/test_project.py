@@ -402,6 +402,13 @@ def _proyecto_completo():
     p.red_conexiones = {"Bomba A": ["J1", "J2"]}
     p.ruta_guardado = "/tmp/x"
     p.bibtex_usuario = "@misc{x, title={t}, year=2020}"
+    p.transitorios = pj.TransientConfig(
+        perfil=[(0.0, 100.0, 99.0), (500.0, 120.0, None)], cobertura=1.0,
+        tramos=[pj.TramoTransitorio(500.0, "PEAD PE100", "RDE 21", 90, 81.8, 4.1, "PEAD", 110)],
+        escenario="hidroneumatico", q0_lps=12.0, h_arriba=95.0, h_abajo=150.0, tc=5.0,
+        ley="potencial", em=1.5, bomba="S · B", modo_parada="inercia", n_rpm=1750,
+        inercia=2.5, eta=0.7, t_arranque=4.0, v_aire=1.5, n_poli=1.3, d_orificio_mm=80,
+        cd_orificio=0.6, t_sim=30, n_malla=30, en_informe=False)
     return p
 
 
@@ -419,6 +426,8 @@ def _defaults(cls):
     (lambda p: p.almacenamiento.tanques[0], pj.TankSpec),
     (lambda p: p.bombeos[0], pj.PumpSystemData),
     (lambda p: p.bombeos[0].bombas[0], pj.PumpData),
+    (lambda p: p.transitorios, pj.TransientConfig),
+    (lambda p: p.transitorios.tramos[0], pj.TramoTransitorio),
 ])
 def test_fixture_completo_cubre_todos_los_campos(obtener, cls):
     """Guarda del test de round-trip: si alguien agrega un campo nuevo sin

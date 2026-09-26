@@ -439,3 +439,69 @@ def fig_balance_red(resultado, frac_incendio: float, dias_reserva: float):
         ax.set_xlabel("Hora del día", color=TINTA, fontsize=8)
     fig.tight_layout()
     return fig
+
+
+def _abscisa_de_x(res_t, x):
+    return res_t.perfil.abscisa_de_x(x)
+
+
+@_light
+def fig_transitorio_perfil(res_t):
+    """Perfil de la línea con la piezométrica de régimen y las envolventes de
+    cabeza máxima y mínima del transitorio (todo en m s.n.m., un solo eje)."""
+    SERIE, TINTA, TINTA_2, _ = _tintas()
+    r, perfil = res_t.moc, res_t.perfil
+    s = _abscisa_de_x(res_t, r.x)
+    fig, ax = plt.subplots(figsize=(8.5, 4.6))
+    ax.fill_between(perfil.abscisa, perfil.z_terreno, min(perfil.z_eje) - 5,
+                    color=TINTA_2, alpha=0.15, lw=0)
+    ax.plot(perfil.abscisa, perfil.z_terreno, color=TINTA_2, lw=1, label="Terreno")
+    ax.plot(perfil.abscisa, perfil.z_eje, color=TINTA, lw=1.4, label="Eje de la tubería")
+    ax.plot(s, r.H_inicial, color=SERIE[2], lw=2, label="Piezométrica de régimen")
+    ax.plot(s, r.Hmax, color=SERIE[1], lw=2, label="Envolvente máxima")
+    ax.plot(s, r.Hmin, color=SERIE[0], lw=2, label="Envolvente mínima")
+    ax.plot(s, r.z + res_t.h_vapor_rel, color="#e34948", lw=1, ls=":", label="Presión de vapor")
+    for i, t in enumerate(res_t.tramos):
+        if t.pn:
+            sel = (r.x >= t.x0 - 1e-9) & (r.x <= t.x1 + 1e-9)
+            ax.plot(s[sel], r.z[sel] + t.pn, color=SERIE[3], lw=1, ls="--",
+                    label="PN de la tubería" if i == 0 else None)
+    if r.cavitacion:
+        t_c, x_c = r.cavitacion
+        s_c = float(_abscisa_de_x(res_t, x_c))
+        ax.plot([s_c], [float(np.interp(x_c, r.x, r.z)) + res_t.h_vapor_rel], marker="x",
+                color="#e34948", ms=10, mew=2, ls="none", label="Vapor alcanzado")
+    ax.set_xlabel("Abscisa [m]", color=TINTA)
+    ax.set_ylabel("Cota / cabeza piezométrica [m]", color=TINTA)
+    ax.legend(fontsize=7.5, frameon=False, ncol=3, loc="upper center",
+              bbox_to_anchor=(0.5, -0.14))
+    _ejes_sobrios(ax)
+    fig.tight_layout()
+    return fig
+
+
+@_light
+def fig_transitorio_tiempo(res_t):
+    """Cabeza y caudal en el extremo de la maniobra (válvula o bomba) en paneles
+    separados; en el cierre de válvula se superpone la cadena de Allievi."""
+    SERIE, TINTA, TINTA_2, _ = _tintas()
+    r = res_t.moc
+    en_valvula = res_t.escenario in ("cierre_valvula", "apertura_valvula")
+    H = r.H_abajo if en_valvula else r.H_arriba
+    Q = (r.Q_abajo if en_valvula else r.Q_arriba) * 1000
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8.5, 5.2), sharex=True)
+    ax1.plot(r.t, H, color=SERIE[0], lw=1.6, label="MOC")
+    if res_t.serie_allievi:
+        t_a, h_a = res_t.serie_allievi
+        ax1.plot(t_a, h_a, color=SERIE[1], lw=1.2, ls="--", label="Allievi (sin fricción)")
+    ax1.set_ylabel("Cabeza [m]", color=TINTA)
+    ax1.set_title("En la válvula" if en_valvula else "En la bomba", fontsize=10, color=TINTA,
+                  loc="left")
+    ax1.legend(fontsize=8, frameon=False)
+    _ejes_sobrios(ax1)
+    ax2.plot(r.t, Q, color=SERIE[0], lw=1.6)
+    ax2.set_ylabel("Caudal [L/s]", color=TINTA)
+    ax2.set_xlabel("Tiempo [s]", color=TINTA)
+    _ejes_sobrios(ax2)
+    fig.tight_layout()
+    return fig

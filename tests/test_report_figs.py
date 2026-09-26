@@ -112,3 +112,28 @@ def test_fig_balance_red_un_panel_por_tanque():
     fig = rf.fig_balance_red(r, frac_incendio=0.15, dias_reserva=1)
     ejes = [a for a in fig.axes if a.get_visible()]
     assert len(ejes) == 2 and {a.get_title(loc="left") for a in ejes} == {"A", "B"}
+
+
+def _res_transitorio():
+    from core import project as pj
+    from core.transients import escenario as esc
+    p = pj.Project(nombre="T")
+    tc = p.transitorios
+    tc.perfil = [(0.0, 100.0, 99.0), (500.0, 80.0, 79.0), (1000.0, 60.0, 59.0)]
+    tc.tramos = [pj.TramoTransitorio(1000.0, D_mm=200.0, e_mm=9.6, material="PVC", pn_mca=100)]
+    tc.q0_lps, tc.h_arriba, tc.h_abajo, tc.tc = 30.0, 100.0, 60.0, 3.0
+    return esc.ejecutar(p)
+
+
+def test_fig_transitorio_perfil_envolventes_en_un_eje():
+    fig = rf.fig_transitorio_perfil(_res_transitorio())
+    assert len(fig.axes) == 1
+    etiquetas = {t.get_text() for t in fig.axes[0].get_legend().get_texts()}
+    assert {"Terreno", "Eje de la tubería", "Piezométrica de régimen", "Envolvente máxima",
+            "Envolvente mínima", "Presión de vapor"} <= etiquetas
+
+
+def test_fig_transitorio_tiempo_paneles_de_cabeza_y_caudal():
+    fig = rf.fig_transitorio_tiempo(_res_transitorio())
+    assert len(fig.axes) == 2
+    assert any("Allievi" in t.get_text() for t in fig.axes[0].get_legend().get_texts())

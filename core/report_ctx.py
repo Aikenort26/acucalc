@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from core import biblio, curves as cvs, demand, network, pipeline, pipes, population as pop, pumping as pu
 from core import epanet_engine as ee, formato as fm, network_map as nm, red_diseno as rd
 from core import report_figs as rf, storage, tank_network as tn
+from core.transients import escenario as esc, perfil as pf
 from core.latex import latex_escape
 from core.project import Project
 
@@ -80,6 +81,93 @@ def _red_hidraulica(p: Project, red, inp: str, k2: float, factores_hora: list, _
         _save(rf.fig_eps(eps.horas, re_.nodo_critico, eps.presiones[re_.nodo_critico],
                          eps.niveles, p.red_pmin), "red_eps")
     return out
+
+
+def _maniobra(tc) -> str:
+    """Descripción en texto de la maniobra simulada (para el informe)."""
+    bomba = f"la bomba {tc.bomba}" if tc.bomba else "la bomba"
+    if tc.escenario == "cierre_valvula":
+        ley = ("lineal" if tc.ley == "lineal" else f"potencial con exponente Em = {tc.em:.2f}")
+        return (f"cierre {ley} de la válvula de aguas abajo en Tc = {tc.tc:.2f} s, con el "
+                f"embalse de aguas arriba a {tc.h_arriba:.2f} m y la descarga a "
+                f"{tc.h_abajo:.2f} m")
+    if tc.escenario == "apertura_valvula":
+        return (f"apertura lineal de la válvula de aguas abajo en {tc.tc:.2f} s, desde la línea "
+                f"en reposo, con el embalse a {tc.h_arriba:.2f} m y la descarga a "
+                f"{tc.h_abajo:.2f} m")
+    if tc.escenario == "arranque_bomba":
+        return (f"arranque de {bomba} con rampa lineal de velocidad de {tc.t_arranque:.1f} s, "
+                f"desde la línea llena en reposo, succión a {tc.h_arriba:.2f} m y tanque de "
+                f"descarga a {tc.h_abajo:.2f} m")
+    parada = ("instantánea (Q = 0, cota conservadora)" if tc.modo_parada == "instantanea" else
+              f"con la inercia del grupo (I = {tc.inercia:.3f} kg·m², {tc.n_rpm:.0f} rpm, "
+              f"η = {tc.eta:.2f}) y retención ideal")
+    txt = (f"parada súbita de {bomba}, {parada}, con succión a {tc.h_arriba:.2f} m y tanque "
+           f"de descarga a {tc.h_abajo:.2f} m")
+    if tc.escenario == "hidroneumatico":
+        orif = (f"orificio de {tc.d_orificio_mm:.0f} mm (Cd = {tc.cd_orificio:.2f})"
+                if tc.d_orificio_mm > 0 else "conexión sin orificio")
+        txt += (f"; a la salida de la bomba hay un tanque hidroneumático con "
+                f"{tc.v_aire:.3f} m³ de aire en régimen, exponente politrópico "
+                f"n = {tc.n_poli:.2f} y {orif}")
+    return txt
+
+
+def _transitorio(p: Project, _save) -> dict | None:
+    """Sección de transitorios: se recalcula desde el proyecto (MOC + Allievi).
+    Un dato inválido no rompe el informe: se documenta el motivo."""
+    tc = p.transitorios
+    if not (tc.en_informe and len(tc.perfil) >= 2 and tc.tramos):
+        return None
+    try:
+        rt = esc.ejecutar(p)
+    except (ValueError, KeyError) as e:
+        return {"error": latex_escape(str(e))}
+    rs, m = rt.resumen, rt.moc
+    _save(rf.fig_transitorio_perfil(rt, dark=False), "transitorio_perfil")
+    _save(rf.fig_transitorio_tiempo(rt, dark=False), "transitorio_tiempo")
+    cav = None
+    if m.cavitacion:
+        cav = {"t": f"{m.cavitacion[0]:.2f}",
+               "s": pf.formato_abscisa(rt.perfil.abscisa_de_x(m.cavitacion[1]))}
+    return {
+        "error": None,
+        "escenario": latex_escape(rs["escenario"]),
+        "maniobra": latex_escape(_maniobra(tc)),
+        "n_perfil": len(rt.perfil.abscisa),
+        "s_ini": pf.formato_abscisa(rt.perfil.abscisa[0]),
+        "s_fin": pf.formato_abscisa(rt.perfil.abscisa[-1]),
+        "resumen": {
+            "q0": f"{rs['Q0_lps']:.2f}", "v0": f"{rs['V0']:.2f}", "L": f"{rs['L']:.1f}",
+            "a_eq": f"{rs['a_eq']:.0f}", "t_crit": f"{rs['T_crit']:.2f}",
+            "dt": f"{rs['dt']:.4f}", "N": rs["N"], "ajuste": f"{rs['ajuste_a_pct']:.2f}",
+            "t_fin": f"{rs['t_fin']:.1f}", "p_max": f"{rs['p_max']:.2f}",
+            "s_p_max": pf.formato_abscisa(rs["s_p_max"]), "p_min": f"{rs['p_min']:.2f}",
+            "s_p_min": pf.formato_abscisa(rs["s_p_min"]), "h_vapor": f"{rs['h_vapor']:.2f}",
+            "clasificacion": rs["clasificacion"],
+            "v_aire_max": f"{rs['v_aire_max']:.3f}" if "v_aire_max" in rs else ""},
+        "tramos": [{"nombre": latex_escape(t.nombre), "desde": pf.formato_abscisa(
+                        rt.perfil.abscisa_de_x(t.x0)),
+                    "hasta": pf.formato_abscisa(rt.perfil.abscisa_de_x(t.x1)),
+                    "D": f"{t.D * 1000:.1f}", "e": f"{t.e * 1000:.2f}",
+                    "k": f"{t.k_elast:.2f}", "a": f"{t.a:.0f}", "f": f"{t.f:.4f}",
+                    "pn": f"{t.pn:.0f}" if t.pn else "---"} for t in rt.tramos],
+        "metodos": [{"metodo": latex_escape(c["metodo"]), "dh": f"{c['dh']:+.2f}",
+                     "nota": latex_escape(c["nota"])} for c in rt.comparacion],
+        "pn": [{"tramo": latex_escape(v["tramo"]), "p_max": f"{v['p_max']:.2f}",
+                "pn": f"{v['pn']:.0f}" if v["pn"] else "---",
+                "uso": f"{v['uso']:.0f}" if v["uso"] is not None else "---",
+                "cumple": "---" if v["cumple"] is None else ("Sí" if v["cumple"] else "No")}
+               for v in rt.verificacion_pn],
+        "cavitacion": cav,
+        "avisos": [latex_escape(a) for a in rt.avisos],
+        "recomendaciones": [latex_escape(r) for r in rt.recomendaciones],
+        "fig_perfil": "transitorio_perfil.png",
+        "fig_tiempo": "transitorio_tiempo.png",
+        "con_bomba": rt.escenario in ("parada_bomba", "arranque_bomba", "hidroneumatico"),
+        "q0_de_curva": bool(tc.bomba) and rt.escenario in ("parada_bomba", "arranque_bomba",
+                                                         "hidroneumatico"),
+    }
 
 
 def build(p: Project) -> tuple[dict, dict]:
@@ -364,6 +452,8 @@ def build(p: Project) -> tuple[dict, dict]:
             "altura": fm.fmt_h(ct.altura), "volumen": f"{t.volumen:.0f}",
             "volumen_real": fm.fmt_vol(ct.volumen_real * t.cantidad)})
 
+    transitorio = _transitorio(p, _save)
+
     # ---------- red de distribución (opcional) ----------
     red_ctx = None
     if p.red_inp and p.red_en_informe:
@@ -460,6 +550,7 @@ def build(p: Project) -> tuple[dict, dict]:
         # Autoría de la aplicación (no del proyecto: eso es `consultor`).
         "autor": AUTOR_APP,
         "red": red_ctx,
+        "transitorio": transitorio,
         "anexos_curvas": anexos_curvas,
     }
     return ctx, figuras

@@ -10,6 +10,8 @@ _LATEX_MAP = [
     ("“", "``"), ("”", "''"), ("‘", "`"), ("’", "'"),
     ("°", r"\textdegree{}"), ("²", r"\textsuperscript{2}"), ("³", r"\textsuperscript{3}"),
     ("≤", r"$\leq$"), ("≥", r"$\geq$"), ("±", r"$\pm$"), ("µ", r"$\mu$"), ("μ", r"$\mu$"),
+    ("·", r"\textperiodcentered{}"), ("τ", r"$\tau$"), ("η", r"$\eta$"), ("Δ", r"$\Delta$"),
+    ("α", r"$\alpha$"), ("ρ", r"$\rho$"),
 ]
 
 _LATEX_ESCAPE_TABLE = dict(_LATEX_MAP)

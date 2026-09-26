@@ -33,6 +33,11 @@ def test_latex_escape_unicode_fragil():
         "Sistema --- bombeo ``crudo''"
 
 
+def test_latex_escape_griegas_y_punto_medio():
+    assert report_ctx.latex_escape("S · B, τ = 0, η 0.8, ΔH, α, ρ") == \
+        r"S \textperiodcentered{} B, $\tau$ = 0, $\eta$ 0.8, $\Delta$H, $\alpha$, $\rho$"
+
+
 def test_latex_escape_backslash_primero():
     # el backslash debe escaparse antes que los demas simbolos, o se duplica
     assert report_ctx.latex_escape("100\\%") == r"100\textbackslash{}\%"
@@ -351,3 +356,43 @@ def test_balance_red_de_tanques_en_el_informe(tmp_path):
 
 def test_modo_por_tanque_no_genera_balance_red():
     assert report_ctx.build(_proyecto_minimo())[0]["balance_red"] is None
+
+
+def _con_transitorio(escenario="cierre_valvula", **kw):
+    p = _proyecto_minimo()
+    tc = p.transitorios
+    tc.perfil = [(0.0, 100.0, 99.0), (400.0, 90.0, 89.0), (1000.0, 60.0, 59.0)]
+    tc.tramos = [pj.TramoTransitorio(1000.0, D_mm=200.0, e_mm=9.6, material="PVC", pn_mca=100.0)]
+    tc.escenario = escenario
+    tc.q0_lps, tc.h_arriba, tc.h_abajo, tc.tc = 30.0, 100.0, 60.0, 1.0
+    for k, v in kw.items():
+        setattr(tc, k, v)
+    return p
+
+
+def test_transitorio_en_el_informe(tmp_path):
+    ctx, figuras = report_ctx.build(_con_transitorio())
+    t = ctx["transitorio"]
+    assert t["metodos"][0]["metodo"].startswith("MOC") and len(t["metodos"]) >= 3
+    assert t["tramos"][0]["a"] and t["pn"][0]["cumple"] in ("Sí", "No")
+    assert t["fig_perfil"] == "transitorio_perfil.png" and "transitorio_perfil" in figuras
+    assert "transitorio_tiempo" in figuras
+    assert t["resumen"]["s_p_max"].startswith("K")
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    sec = tex[tex.index(r"\section{Transitorios hidráulicos}"):]
+    import re
+    citadas = {k.strip() for g in re.findall(r"\\cite\{([^}]*)\}", sec) for k in g.split(",")}
+    assert {"wylie1993", "chaudhry2014", "allievi1925", "joukowsky1904"} <= citadas
+    assert "figures/transitorio_perfil.png" in sec and "Allievi" in sec
+
+
+def test_transitorio_fuera_del_informe_o_sin_perfil():
+    assert report_ctx.build(_con_transitorio(en_informe=False))[0]["transitorio"] is None
+    assert report_ctx.build(_proyecto_minimo())[0]["transitorio"] is None
+
+
+def test_transitorio_con_datos_invalidos_documenta_el_error(tmp_path):
+    ctx, figuras = report_ctx.build(_con_transitorio(q0_lps=0.0))
+    assert "caudal" in ctx["transitorio"]["error"] and "transitorio_perfil" not in figuras
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    assert r"\section{Transitorios hidráulicos}" in tex

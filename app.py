@@ -17,8 +17,9 @@ Flujo de trabajo (barra superior):
 4. **Almacenamiento** — volumen y tanques
 5. **Bombeo** — tramos, accesorios y potencia
 6. **Curvas de bomba** — digitalización y punto de operación
-7. **Red** — trazado y verificación hidráulica
-8. **Reporte** — memoria LaTeX
+7. **Transitorios** — golpe de ariete en la aducción (MOC y Allievi)
+8. **Red** — trazado y verificación hidráulica (EPANET)
+9. **Reporte** — memoria LaTeX
 """
     )
     if p.nombre:
@@ -35,6 +36,7 @@ pg = st.navigation([
     st.Page("pages/4_Almacenamiento.py", title="Almacenamiento", icon="🛢️"),
     st.Page("pages/5_Bombeo.py", title="Bombeo", icon="⚙️"),
     st.Page("pages/6_Curvas_de_bomba.py", title="Curvas de bomba", icon="📈"),
+    st.Page("pages/9_Transitorios.py", title="Transitorios", icon="🌊"),
     st.Page("pages/7_Red.py", title="Red", icon="🗺️"),
     st.Page("pages/8_Reporte.py", title="Reporte", icon="📄"),
 ], position="top")

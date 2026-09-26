@@ -1,6 +1,9 @@
 \documentclass[12pt,letterpaper]{article}
 \usepackage[utf8]{inputenc}
-\usepackage[spanish]{babel}
+% es-nodecimaldot: babel en español convierte el punto decimal en coma dentro de
+% las fórmulas; los valores del texto y de las tablas salen con punto desde Python,
+% así que se desactiva para que un mismo número no aparezca con dos separadores.
+\usepackage[spanish,es-nodecimaldot]{babel}
 \usepackage[margin=3cm]{geometry}
 \usepackage{graphicx,booktabs,amsmath,siunitx,float}
 % longtable: tablas que se parten entre páginas repitiendo el encabezado. La de
@@ -444,6 +447,157 @@ eficiencia en el punto de operación).
 \end{figure}
 \BLOCK{endif}
 \BLOCK{endfor}
+
+\BLOCK{if transitorio}
+\section{Transitorios hidráulicos}
+\label{sec:transitorios}
+\BLOCK{if transitorio.error}
+El análisis de transitorios está activado, pero no pudo ejecutarse con los datos
+del proyecto: \VAR{transitorio.error}. Complete la información en la página
+\emph{Transitorios} y genere de nuevo la memoria.
+\BLOCK{else}
+Se analiza el golpe de ariete producido por \VAR{transitorio.maniobra}. El perfil
+de la conducción tiene \VAR{transitorio.n_perfil} puntos entre las abscisas
+\VAR{transitorio.s_ini} y \VAR{transitorio.s_fin}; las abscisas son horizontales y
+la longitud se mide sobre el eje de la tubería, $L=\sum\sqrt{\Delta s^2+\Delta z^2}
+=\VAR{transitorio.resumen.L}$~m. El caudal de régimen es
+$Q_0=\VAR{transitorio.resumen.q0}$~L/s\BLOCK{if transitorio.q0_de_curva} (punto de
+operación de la curva de la bomba contra la línea)\BLOCK{endif}, con velocidad de
+referencia $V_0=\VAR{transitorio.resumen.v0}$~m/s.
+
+\subsection{Método de las características}
+El flujo transitorio en una tubería elástica se describe con las ecuaciones de
+continuidad y de cantidad de movimiento~\cite{wylie1993,chaudhry2014}:
+\begin{equation*}
+\frac{\partial H}{\partial t}+\frac{a^2}{gA}\frac{\partial Q}{\partial x}=0,
+\qquad
+\frac{\partial Q}{\partial t}+gA\frac{\partial H}{\partial x}+\frac{f\,Q\lvert Q\rvert}{2DA}=0 .
+\end{equation*}
+Sobre las características $\mathrm{d}x/\mathrm{d}t=\pm a$ se reducen a ecuaciones
+ordinarias que, en la malla $\Delta x=a\,\Delta t$ y con la fricción evaluada en el
+paso anterior (esquema semi-implícito), dan en cada sección interior $P$:
+\begin{align*}
+C^{+}&:\; H_P=C_P-B_P\,Q_P, & C_P&=H_A+B\,Q_A, & B_P&=B+R\lvert Q_A\rvert,\\
+C^{-}&:\; H_P=C_M+B_M\,Q_P, & C_M&=H_B-B\,Q_B, & B_M&=B+R\lvert Q_B\rvert,
+\end{align*}
+con $B=a/(gA)$ y $R=f\,\Delta x/(2gDA^2)$, de donde
+$Q_P=(C_P-C_M)/(B_P+B_M)$. El factor de fricción de Darcy se obtiene con
+Colebrook--White al caudal de régimen (fricción cuasi-estacionaria). La celeridad
+de cada tramo se calcula con la expresión de Allievi
+$a=9900/\sqrt{48.3+k\,D/e}$~\cite{allievi1925}, donde $k$ depende del módulo de
+elasticidad del material, $D$ es el diámetro interno y $e$ el espesor. El paso de
+tiempo es $\Delta t=\VAR{transitorio.resumen.dt}$~s, con
+\VAR{transitorio.resumen.N} tramos de malla\BLOCK{if transitorio.tramos|length > 1};
+los tramos en serie comparten ese paso y, para ello, su celeridad se ajusta como
+máximo un \VAR{transitorio.resumen.ajuste}\,\%\BLOCK{endif}. Se simulan
+\VAR{transitorio.resumen.t_fin}~s.
+
+Las fronteras son el embalse o tanque (cabeza constante), la válvula con ley de
+cierre o apertura $\tau(t)$, la bomba (curva $H=\alpha^2A_0+\alpha A_1Q+A_2Q^2$ con
+retención, donde $\alpha$ es la velocidad relativa) y el tanque hidroneumático, con
+el aire como gas politrópico, $H^{*}V^{n}=\text{cte}$ (cabeza absoluta). Las
+envolventes de cabeza máxima y mínima se comparan con la presión nominal (PN) de
+cada tramo y con la presión de vapor del agua a \VAR{temperatura}~°C
+($\VAR{transitorio.resumen.h_vapor}$~m manométricos)~\cite{iapws2012}.
+
+\subsection{Contraste con Allievi, Joukowsky y Michaud}
+El resultado del MOC se contrasta con soluciones clásicas sobre una conducción
+equivalente de celeridad $a_{eq}=L/\sum(L_i/a_i)=\VAR{transitorio.resumen.a_eq}$~m/s,
+cuyo periodo crítico es $2L/a=\VAR{transitorio.resumen.t_crit}$~s. Para un cierre
+de válvula, las ecuaciones encadenadas de Allievi~\cite{allievi1925} relacionan la
+cabeza en la válvula al final de intervalos sucesivos de $2L/a$, sin fricción:
+\begin{equation*}
+\zeta_i^2+\zeta_{i-1}^2-2=2\rho\left(\tau_{i-1}\zeta_{i-1}-\tau_i\zeta_i\right),
+\qquad \zeta^2=\frac{H}{H_0},\quad \rho=\frac{aV_0}{2gH_0}.
+\end{equation*}
+La maniobra instantánea da la sobrepresión de Joukowsky~\cite{joukowsky1904},
+$\Delta H=a\,\Delta V/g$, y una maniobra lenta ($T_c>2L/a$) con reducción lineal
+de la velocidad, la de Michaud, $\Delta H=2LV_0/(gT_c)$.
+\BLOCK{if transitorio.resumen.clasificacion}
+La maniobra analizada es \textbf{\VAR{transitorio.resumen.clasificacion}}.
+\BLOCK{endif}
+
+\subsection{Resultados}
+\begin{table}[H]\centering
+\caption{Tramos de tubería del análisis de transitorios.}
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}Xllrrrrrr}\toprule
+Tramo & Desde & Hasta & $D$ & $e$ & $k$ & $a$ & $f$ & PN \\
+      &       &       & [mm] & [mm] & & [m/s] & & [mca] \\ \midrule
+\BLOCK{for t in transitorio.tramos}
+\VAR{t.nombre} & \VAR{t.desde} & \VAR{t.hasta} & \VAR{t.D} & \VAR{t.e} & \VAR{t.k} & \VAR{t.a} & \VAR{t.f} & \VAR{t.pn} \\
+\BLOCK{endfor}
+\bottomrule\end{tabularx}\end{table}
+
+\begin{table}[H]\centering
+\caption{Variación de cabeza en el extremo de la maniobra según cada método.}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}Xr>{\raggedright\arraybackslash}p{4.8cm}}\toprule
+Método & $\Delta H$ [m] & Nota \\ \midrule
+\BLOCK{for c in transitorio.metodos}
+\VAR{c.metodo} & \VAR{c.dh} & \VAR{c.nota} \\
+\BLOCK{endfor}
+\bottomrule\end{tabularx}\end{table}
+
+La presión máxima es \textbf{\VAR{transitorio.resumen.p_max}~m} en la abscisa
+\VAR{transitorio.resumen.s_p_max}\BLOCK{if transitorio.cavitacion}; la presión
+cae a la de vapor en $t=\VAR{transitorio.cavitacion.t}$~s, en la abscisa
+\VAR{transitorio.cavitacion.s}\BLOCK{else} y la mínima es
+\textbf{\VAR{transitorio.resumen.p_min}~m} en la abscisa
+\VAR{transitorio.resumen.s_p_min}\BLOCK{endif} (Figuras~\ref{fig:tr_perfil}
+y~\ref{fig:tr_tiempo}).
+\BLOCK{if transitorio.resumen.v_aire_max}
+El aire del tanque hidroneumático alcanza un volumen máximo de
+\VAR{transitorio.resumen.v_aire_max}~m\textsuperscript{3}.
+\BLOCK{endif}
+
+\begin{table}[H]\centering
+\caption{Presión máxima del transitorio frente a la presión nominal.}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}Xrrrl}\toprule
+Tramo & $P_{max}$ [m] & PN [mca] & Uso [\%] & Cumple \\ \midrule
+\BLOCK{for v in transitorio.pn}
+\VAR{v.tramo} & \VAR{v.p_max} & \VAR{v.pn} & \VAR{v.uso} & \BLOCK{if v.cumple == "No"}\textbf{No}\BLOCK{else}\VAR{v.cumple}\BLOCK{endif} \\
+\BLOCK{endfor}
+\bottomrule\end{tabularx}\end{table}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.95\textwidth]{figures/\VAR{transitorio.fig_perfil}}
+\caption{Perfil de la conducción con la piezométrica de régimen y las envolventes
+de cabeza máxima y mínima del transitorio.}
+\label{fig:tr_perfil}
+\end{figure}
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.85\textwidth]{figures/\VAR{transitorio.fig_tiempo}}
+\caption{Cabeza y caudal en el extremo de la maniobra\BLOCK{if not transitorio.con_bomba}; en
+el cierre de válvula se superpone la cadena de Allievi\BLOCK{endif}.}
+\label{fig:tr_tiempo}
+\end{figure}
+
+\BLOCK{if transitorio.avisos}
+\textbf{Avisos del cálculo:}
+\begin{itemize}
+\BLOCK{for a in transitorio.avisos}
+  \item \VAR{a}
+\BLOCK{endfor}
+\end{itemize}
+\BLOCK{endif}
+\BLOCK{if transitorio.recomendaciones}
+\paragraph{Diagnóstico de protecciones.}
+\begin{itemize}
+\BLOCK{for r in transitorio.recomendaciones}
+  \item \VAR{r}
+\BLOCK{endfor}
+\end{itemize}
+\BLOCK{endif}
+
+\paragraph{Alcance.} No se modela la separación de columna: si la presión llega a la
+de vapor, los resultados posteriores a ese instante no son válidos. La parada con
+inercia usa la curva de la bomba en su zona normal (sin curvas de cuatro cuadrantes)
+y una válvula de retención ideal. Las protecciones distintas del tanque
+hidroneumático (ventosas, chimeneas, válvulas de alivio o anticipadoras) solo se
+diagnostican; su dimensionamiento requiere un análisis específico.
+\BLOCK{endif}
+\BLOCK{endif}
 
 \BLOCK{if red}
 \section{Red de distribución}
