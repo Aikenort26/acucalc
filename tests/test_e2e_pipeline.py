@@ -73,7 +73,8 @@ def test_pipeline_completo(tmp_path):
     # flujo norma-first: v_final = max(art81 QMD/3, curva integral) = 110 (golden)
     assert ctx["v_final"] == 110 and ctx["v_curva"] == 110 and ctx["v_gobierna"] == "Curva integral"
     assert ctx["tanques_balance"] and ctx["tanques_balance"][0]["v_asignado"] == "110"
-    assert len(figuras) == 6   # poblacion, metodos, caudales, balance, esquema, sistema_1
+    # poblacion, metodos, caudales, balance, esquema, sistema_1 + logo ACUCALC de portada
+    assert len(figuras) == 7
 
     out = report.render(ctx, tmp_path / "memoria")
     tex = (out / "main.tex").read_text(encoding="utf-8")

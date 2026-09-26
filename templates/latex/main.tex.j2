@@ -37,7 +37,7 @@
 \BLOCK{if logo_consultor}
 \includegraphics[height=2.2cm]{figures/\VAR{logo_consultor}}
 \BLOCK{endif}
-\end{minipage}
+\end{minipage}\par
 \BLOCK{endif}
 % El \vspace va FUERA del condicional de logos: antes vivía dentro, así que un
 % proyecto sin logos arrancaba con el título pegado al margen superior.
@@ -50,6 +50,10 @@
 \vspace{0.3cm}
 {\large \VAR{fecha}\par}
 \vfill
+\BLOCK{if logo_acucalc}
+\includegraphics[height=1.4cm]{figures/\VAR{logo_acucalc}}\par
+\vspace{0.2cm}
+\BLOCK{endif}
 {\small Documento generado con ACUCALC --- ver Recomendaciones y limitaciones\par}
 \end{titlepage}
 
@@ -208,7 +212,7 @@ simulación de periodo extendido de la red, por lo que se documenta aquí de for
 explícita para que el cálculo sea reproducible.
 
 \#{ `longtable` ya se centra solo; envolverlo en `center` solo agregaría espacio
-    vertical espurio. El grupo {} acota el \small a esta tabla. }
+    vertical espurio. El grupo entre llaves acota el \small a esta tabla. }
 {\small
 \begin{longtable}{crc@{\hskip 2.5em}crc}
 \caption{Patrón horario de consumo y ventana de suministro adoptados.}
@@ -286,13 +290,13 @@ líquido --- añadir 0.30 m de borde libre adicional en la construcción).}
 % + encabezado a dos filas. Con \small seguía saliéndose 20 pt del margen
 % (medido en el log), porque "rectangular"/"superficial" son celdas anchas.
 \footnotesize
-\begin{tabular}{llcllrr}\toprule
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}Xlcl>{\raggedright\arraybackslash}p{2.3cm}rr}\toprule
 Tanque & Tipo & Cant. & Forma & Dim. (c/u) & $V$ requerido & $V$ real total \\
        & constructivo & & & & [m³] & [m³] \\ \midrule
 \BLOCK{for t in tanques}
 \VAR{t.nombre} & \VAR{t.tipo_constructivo} & \VAR{t.cantidad} & \VAR{t.forma} & \VAR{t.dim} & \VAR{t.volumen} & \VAR{t.volumen_real} \\
 \BLOCK{endfor}
-\bottomrule\end{tabular}\end{table}
+\bottomrule\end{tabularx}\end{table}
 \BLOCK{endif}
 
 \BLOCK{if "esquema" in figuras}
@@ -347,13 +351,13 @@ Tramo & $C$ & $\Delta H$ & $H_d+\Delta H$ & $PN$ & FS & Uso & Cumple \\
 % que el texto del arreglo ("8x paralelo @ N2=2996") se envuelva en vez de
 % empujar la tabla fuera del margen.
 \small
-\begin{tabular}{lrrrrrrp{2.2cm}}\toprule
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}Xrrrrrr>{\raggedright\arraybackslash}p{2.2cm}}\toprule
 Bomba & $Q_{op}$ & $H_{op}$ & $\eta(Q_{op})$ & $Q_{BEP}$ & Desv. BEP & $P$ & Arreglo \\
       & [L/s] & [m] & & [L/s] & [\%] & [HP] & \\ \midrule
 \BLOCK{for b in s.bombas}
 \VAR{b.nombre} & \VAR{b.q_op} & \VAR{b.h_op} & \VAR{b.eta_op} & \VAR{b.bep_q} & \VAR{b.desv_bep} & \VAR{b.p_hp} & \VAR{b.arreglo} \\
 \BLOCK{endfor}
-\bottomrule\end{tabular}\end{table}
+\bottomrule\end{tabularx}\end{table}
 Regresiones polinómicas de las curvas características (Q en L/s):
 \begin{itemize}
 \BLOCK{for b in s.bombas}
@@ -375,7 +379,14 @@ eficiencia en el punto de operación).
 \section{Red de distribución}
 \label{sec:red}
 La red cargada tiene \VAR{red.n_nodos} nodos de consumo y \VAR{red.n_tuberias}
-tuberías.
+tuberías (Figura~\ref{fig:red}).
+
+\begin{figure}[H]\centering
+\includegraphics[width=0.9\textwidth]{figures/\VAR{red.fig}}
+\caption{Esquema de la red de distribución (triángulo: reservorio; cuadrado:
+tanque; círculo: nodo de consumo).}
+\label{fig:red}
+\end{figure}
 
 \subsection{Asignación de demandas por longitud aferente}
 \label{sec:aferente}
@@ -412,8 +423,11 @@ En esta red se reparten \VAR{red.q_asignado} L/s entre \VAR{red.n_nodos} nodos
 de consumo.
 \BLOCK{endif}
 
-El caudal repartido es el máximo diario, $Q_{MD} = \VAR{qmd}$~L/s
-(Art. 47, Res. 0330 de 2017), que es la condición de diseño de la red.
+El caudal repartido es el máximo diario, $Q_{MD} = \VAR{qmd}$~L/s, como
+demanda base de los nodos. La condición de diseño de la red de distribución es
+el caudal máximo horario, $QMH = K_2 \cdot QMD = \VAR{qmh}$~L/s (Art. 47,
+Res. 0330 de 2017), que se obtiene aplicando el factor $K_2 = \VAR{k2}$ a estas
+demandas base.
 
 \subsection{Demandas resultantes por nodo}
 La Tabla~\ref{tab:demandas} lista la demanda asignada a cada uno de los

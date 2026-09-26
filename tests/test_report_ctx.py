@@ -215,3 +215,66 @@ def test_pob_es_dane_distingue_la_fuente():
 def test_autor_de_la_app_va_al_contexto():
     ctx, _ = report_ctx.build(_proyecto_minimo())
     assert ctx["autor"] == "Aiken H. Ortega-Heredia"
+
+
+# --- WP3 v9: marca ACUCALC y mapa de la red en el informe -------------------
+
+from pathlib import Path
+
+INP_RED = """[JUNCTIONS]
+J1 10 0
+J2 8 0
+
+[RESERVOIRS]
+R1 50
+
+[PIPES]
+P1 R1 J1 200 150 130
+P2 J1 J2 150 100 130
+
+[COORDINATES]
+J1 100 200
+J2 150 200
+R1 0 200
+
+[OPTIONS]
+Units LPS
+Headloss H-W
+"""
+
+
+def test_logo_acucalc_en_figuras_y_portada(tmp_path):
+    ctx, figuras = report_ctx.build(_proyecto_minimo())
+    assert ctx["logo_acucalc"] == "acucalc_logo.png"
+    assert Path(figuras["acucalc_logo"]).is_file()
+    tex = (report.render(ctx, tmp_path / "out") / "main.tex").read_text(encoding="utf-8")
+    assert "figures/acucalc_logo.png" in tex
+    assert (tmp_path / "out" / "figures" / "acucalc_logo.png").is_file()
+
+
+def test_mapa_de_red_en_informe(tmp_path):
+    p = _proyecto_minimo()
+    p.red_inp = INP_RED
+    ctx, figuras = report_ctx.build(p)
+    assert ctx["red"]["fig"] == "red.png"
+    assert Path(figuras["red"]).is_file()
+    tex = (report.render(ctx, tmp_path / "out") / "main.tex").read_text(encoding="utf-8")
+    assert "figures/red.png" in tex
+
+
+def test_sin_red_en_informe_no_hay_mapa():
+    p = _proyecto_minimo()
+    p.red_inp, p.red_en_informe = INP_RED, False
+    ctx, figuras = report_ctx.build(p)
+    assert ctx["red"] is None and "red" not in figuras
+
+
+def test_texto_red_declara_qmh_como_condicion_de_diseno(tmp_path):
+    """Art. 47: la red de distribución se diseña con QMH; el QMD es la demanda
+    base que se reparte por longitud."""
+    p = _proyecto_minimo()
+    p.red_inp = INP_RED
+    ctx, _ = report_ctx.build(p)
+    tex = (report.render(ctx, tmp_path / "o") / "main.tex").read_text(encoding="utf-8")
+    assert "que es la condición de diseño de la red" not in tex
+    assert "QMH" in tex[tex.index(r"\section{Red de distribución}"):]

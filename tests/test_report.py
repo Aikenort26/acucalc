@@ -295,3 +295,27 @@ def test_engine_cmd_pdflatex_sin_poder_consultar_version_no_revienta(monkeypatch
     cmd, runs = report._engine_cmd("pdflatex", "pdflatex")
     assert "--enable-installer" not in cmd
     assert runs == 2
+
+
+def test_comentarios_jinja_no_contienen_llaves():
+    """Un comentario `\\#{ ... }` termina en la PRIMERA `}`: si su texto trae
+    `{}` el resto se filtra al .tex (pasaba con "El grupo {} acota el \\small":
+    LaTeX abortaba el párrafo con "! Too many }'s")."""
+    from pathlib import Path
+    tpl = (Path(__file__).resolve().parent.parent / "templates" / "latex"
+           / "main.tex.j2").read_text(encoding="utf-8")
+    i = tpl.find("\\#{")
+    while i != -1:
+        fin = tpl.index("}", i + 3)
+        assert "{" not in tpl[i + 3:fin], f"comentario Jinja con llave: {tpl[i:fin + 1]!r}"
+        i = tpl.find("\\#{", fin)
+
+
+def test_portada_cierra_parrafo_tras_logos(tmp_path):
+    """Sin \\par tras los minipages de logos, el título quedaba en la misma
+    línea que los logos y se partía ("Memoria de Cálculo" / "Hidráulico")."""
+    ctx = dict(CTX)
+    ctx["logo_cliente"] = "logo_cliente.png"
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    tras_logos = tex[tex.index(r"\end{minipage}", tex.index(r"\end{minipage}") + 1):]
+    assert tras_logos.index(r"\par") < tras_logos.index(r"\LARGE")

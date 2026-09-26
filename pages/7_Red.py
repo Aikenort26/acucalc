@@ -18,6 +18,8 @@ if up is not None:
         st.session_state.pop("red_demandas", None)
         st.session_state.pop("red_optim", None)
         st.session_state.pop("red_optim_inp", None)
+        st.session_state.pop("red_map_solve", None)     # resultados de la red anterior
+        st.session_state.pop("red_inp_export", None)
 
 if not p.red_inp:
     st.info("Carga un archivo .inp (EPANET) con [JUNCTIONS], [RESERVOIRS]/[TANKS] "
@@ -181,6 +183,7 @@ if opt:
     coef = net.coef_rugosidad(p.red_material, red.headloss)
     cambios = {pp.id: (pp.diameter_mm, coef) for pp in red_opt.pipes}
     inp_final = net.write_inp_pipes(p.red_inp, cambios)
+    st.session_state["red_inp_export"] = inp_final   # base de la exportación de curvas
     st.download_button(
         "⬇️ INP optimizado (demandas + diámetros internos + rugosidad del material)",
         data=inp_final, file_name="red_optimizada.inp", type="primary")

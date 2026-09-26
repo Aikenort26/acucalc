@@ -10,8 +10,10 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 from core import curves as cvs, demand, network, pipeline, pipes, population as pop, pumping as pu
-from core import formato as fm, report_figs as rf, storage
+from core import formato as fm, network_map as nm, report_figs as rf, storage
 from core.project import Project
+
+LOGO_ACUCALC = Path(__file__).resolve().parent.parent / "assets" / "acucalc_logo.png"
 
 # Autor de la aplicación ACUCALC (distinto del `consultor` del proyecto, que es
 # quien firma cada memoria). Va a la sección "Acerca de ACUCALC" del informe.
@@ -212,6 +214,7 @@ def build(p: Project) -> tuple[dict, dict]:
         return fp.name
 
     logo_cliente = _save_b64_image(p.logo_cliente_b64, "logo_cliente")
+    figuras["acucalc_logo"] = str(LOGO_ACUCALC)
     logo_consultor = _save_b64_image(p.logo_consultor_b64, "logo_consultor")
 
     # ---------- sistemas de bombeo ----------
@@ -354,7 +357,9 @@ def build(p: Project) -> tuple[dict, dict]:
                              for jid, q in demandas.items()],
                 "q_asignado": fm.fmt_q(q_asignado),
                 "optimizacion": None,
+                "fig": "red.png",
             }
+            _save(nm.fig_red(red, dark=False), "red")
             # La optimización de diámetros (heurística iterativa, hasta 30
             # resoluciones densas del sistema) queda deliberadamente fuera del
             # reporte: para una red grande bloqueaba la generación del PDF sin
@@ -420,6 +425,7 @@ def build(p: Project) -> tuple[dict, dict]:
         "figuras": figuras,
         "logo_cliente": logo_cliente,
         "logo_consultor": logo_consultor,
+        "logo_acucalc": LOGO_ACUCALC.name,
         "referencias": REFERENCIAS,
         # Autoría de la aplicación (no del proyecto: eso es `consultor`).
         "autor": AUTOR_APP,
