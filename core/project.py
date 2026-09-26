@@ -256,6 +256,32 @@ class ZanjaConfig:
 
 
 @dataclass
+class TablaEstudio:
+    titulo: str = ""
+    csv: str = ""                  # primera fila = encabezados
+
+
+@dataclass
+class FiguraEstudio:
+    leyenda: str = ""
+    img_b64: str = ""              # PNG/JPEG reducido (un PDF entra como su 1.ª página)
+    fuente: str = ""               # crédito de la figura
+
+
+@dataclass
+class EstudioPrevio:
+    """Sección editable de estudios previos (población, social, económico,
+    topografía, suelos, materiales…): texto con citas [@clave], tablas y figuras."""
+    id: str = ""                   # estable: da nombre a los widgets y a las figuras
+    tipo: str = "otro"
+    titulo: str = ""
+    texto: str = ""
+    tablas: list = field(default_factory=list, metadata={"item": TablaEstudio})
+    figuras: list = field(default_factory=list, metadata={"item": FiguraEstudio})
+    en_informe: bool = True
+
+
+@dataclass
 class Project:
     nombre: str = ""
     municipio: str = ""
@@ -287,6 +313,7 @@ class Project:
     transitorios: TransientConfig = field(default_factory=TransientConfig)
     ubicacion: UbicacionConfig = field(default_factory=UbicacionConfig)
     zanja: ZanjaConfig = field(default_factory=ZanjaConfig)
+    estudios: list = field(default_factory=list, metadata={"item": EstudioPrevio})
 
 
 def save(p: Project, path: str | Path) -> None:

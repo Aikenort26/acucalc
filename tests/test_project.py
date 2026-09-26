@@ -418,6 +418,10 @@ def _proyecto_completo():
         en_informe=False, d_ext_mm=110.0, ancho_fondo=0.5, profundidad=1.2, talud=0.2,
         cama=0.1, atraque=0.3, pavimento=0.15, mat_cama="Arena", mat_atraque="Seleccionado",
         mat_relleno="Excavación", nota="Norma X")
+    p.estudios = [pj.EstudioPrevio(
+        id="x1", tipo="suelos", titulo="Estudio geotécnico", texto="Ver [@res0330].",
+        tablas=[pj.TablaEstudio("Sondeos", "S,Prof\n1,2\n")],
+        figuras=[pj.FiguraEstudio("Perfil", "aGk=", "Lab. X")], en_informe=False)]
     return p
 
 
@@ -440,6 +444,9 @@ def _defaults(cls):
     (lambda p: p.ubicacion, pj.UbicacionConfig),
     (lambda p: p.ubicacion.mapas[0], pj.MapaGuardado),
     (lambda p: p.zanja, pj.ZanjaConfig),
+    (lambda p: p.estudios[0], pj.EstudioPrevio),
+    (lambda p: p.estudios[0].tablas[0], pj.TablaEstudio),
+    (lambda p: p.estudios[0].figuras[0], pj.FiguraEstudio),
 ])
 def test_fixture_completo_cubre_todos_los_campos(obtener, cls):
     """Guarda del test de round-trip: si alguien agrega un campo nuevo sin

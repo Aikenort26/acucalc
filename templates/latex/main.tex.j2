@@ -122,6 +122,44 @@ La cartografía base es \VAR{localizacion.fuente}~\cite{\VAR{localizacion.cita}}
 \BLOCK{endif}
 \BLOCK{endif}
 
+\BLOCK{if estudios}
+\section{Estudios previos}
+\label{sec:estudios}
+\BLOCK{for e in estudios}
+\subsection{\VAR{e.titulo}}
+\BLOCK{for par in e.parrafos}
+\VAR{par}
+
+\BLOCK{endfor}
+\BLOCK{for t in e.tablas}
+\small
+\begin{longtable}{@{}\BLOCK{for a in t.alineacion}>{\BLOCK{if a == "r"}\raggedleft\BLOCK{else}\raggedright\BLOCK{endif}\arraybackslash}p{\VAR{t.ancho}\linewidth}\BLOCK{endfor}@{}}
+\BLOCK{if t.titulo}
+\caption{\VAR{t.titulo}}\\
+\BLOCK{endif}
+\toprule
+\VAR{t.encabezados|join(" & ")} \\ \midrule
+\endfirsthead
+\toprule
+\VAR{t.encabezados|join(" & ")} \\ \midrule
+\endhead
+\bottomrule
+\endfoot
+\BLOCK{for f in t.filas}
+\VAR{f|join(" & ")} \\
+\BLOCK{endfor}
+\end{longtable}
+\normalsize
+\BLOCK{endfor}
+\BLOCK{for f in e.figuras}
+\begin{figure}[H]\centering
+\includegraphics[width=0.85\textwidth,height=0.42\textheight,keepaspectratio]{figures/\VAR{f.archivo}}
+\caption{\VAR{f.leyenda}\BLOCK{if f.fuente}. Fuente: \VAR{f.fuente}\BLOCK{endif}.}
+\end{figure}
+\BLOCK{endfor}
+\BLOCK{endfor}
+\BLOCK{endif}
+
 \section{Proyección de población}
 \label{sec:poblacion}
 Periodo de diseño: 25 años (Art. 40, Res. 0330 de 2017~\cite{res0330}),

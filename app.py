@@ -11,15 +11,16 @@ def _inicio():
     st.markdown(
         """
 Flujo de trabajo (barra superior):
-1. **Proyecto** — datos generales, guardar/cargar
-2. **Población** — censo y proyección
-3. **Caudales** — dotación y caudales de diseño
-4. **Almacenamiento** — volumen y tanques
-5. **Bombeo** — tramos, accesorios y potencia
-6. **Curvas de bomba** — digitalización y punto de operación
-7. **Transitorios** — golpe de ariete en la aducción (MOC y Allievi)
-8. **Red** — trazado y verificación hidráulica (EPANET)
-9. **Reporte** — memoria LaTeX
+1. **Proyecto** — datos generales, localización y mapas, guardar/cargar
+2. **Estudios** — estudios previos con texto, tablas, figuras y citas
+3. **Población** — censo y proyección
+4. **Caudales** — dotación y caudales de diseño
+5. **Almacenamiento** — volumen, tanques y balance entre tanques
+6. **Bombeo** — tramos, accesorios, potencia y NPSH
+7. **Curvas de bomba** — digitalización y punto de operación
+8. **Transitorios** — golpe de ariete en la aducción (MOC y Allievi)
+9. **Red** — trazado y verificación hidráulica (EPANET)
+10. **Reporte** — memoria LaTeX, referencias y detalles típicos
 """
     )
     if p.nombre:
@@ -31,6 +32,7 @@ Flujo de trabajo (barra superior):
 pg = st.navigation([
     st.Page(_inicio, title="Inicio", icon="💧", default=True),
     st.Page("pages/1_Proyecto.py", title="Proyecto", icon="📋"),
+    st.Page("pages/10_Estudios.py", title="Estudios", icon="🗂️"),
     st.Page("pages/2_Poblacion.py", title="Población", icon="👥"),
     st.Page("pages/3_Caudales.py", title="Caudales", icon="🚰"),
     st.Page("pages/4_Almacenamiento.py", title="Almacenamiento", icon="🛢️"),

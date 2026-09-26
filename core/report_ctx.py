@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 from core import biblio, curves as cvs, demand, network, pipeline, pipes, population as pop, pumping as pu
 from core import epanet_engine as ee, formato as fm, geo, network_map as nm, red_diseno as rd
-from core import detalles as dt, study_map as sm
+from core import detalles as dt, estudios as est, study_map as sm
 from core import report_figs as rf, storage, tank_network as tn
 from core.transients import escenario as esc, perfil as pf
 from core.latex import latex_escape
@@ -405,6 +405,8 @@ def build(p: Project) -> tuple[dict, dict]:
     logo_cliente = _save_b64_image(p.logo_cliente_b64, "logo_cliente")
     figuras["acucalc_logo"] = str(LOGO_ACUCALC)
     logo_consultor = _save_b64_image(p.logo_consultor_b64, "logo_consultor")
+    estudios_ctx, estudios_faltantes = est.contexto(
+        p.estudios, {r.key for r in referencias(p)}, _save_b64_image)
 
     # ---------- sistemas de bombeo ----------
     sistemas_ctx = []
@@ -641,6 +643,8 @@ def build(p: Project) -> tuple[dict, dict]:
         "transitorio": transitorio,
         "localizacion": localizacion,
         "detalles": detalles,
+        "estudios": estudios_ctx,
+        "estudios_faltantes": estudios_faltantes,
         "anexos_curvas": anexos_curvas,
     }
     return ctx, figuras

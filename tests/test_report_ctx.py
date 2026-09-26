@@ -486,3 +486,34 @@ def test_sin_zanja_ni_bombeo_la_seccion_solo_trae_tanques():
     p.almacenamiento.tanques = [pj.TankSpec("T", "elevado", "circular", 60, 2.5)]
     d = report_ctx.build(p)[0]["detalles"]
     assert d["zanja"] is None and d["estaciones"] == [] and len(d["tanques"]) == 1
+
+
+def test_estudios_previos_en_el_informe(tmp_path):
+    import base64 as _b64
+    import io as _io
+    from PIL import Image as _Image
+    buf = _io.BytesIO()
+    _Image.new("RGB", (60, 40), (90, 140, 60)).save(buf, "PNG")
+    p = _proyecto_minimo()
+    p.bibtex_usuario = "@misc{igac2020, author={IGAC}, title={Mapa de suelos}, year={2020}}"
+    e = pj.EstudioPrevio(id="t1", tipo="suelos", titulo="",
+                         texto="Suelos arcillosos según [@igac2020]; ver [@nada].")
+    e.tablas = [pj.TablaEstudio("Sondeos", "Sondeo,Prof. [m]\nS-1,1.5\n")]
+    e.figuras = [pj.FiguraEstudio("Mapa de suelos", _b64.b64encode(buf.getvalue()).decode(),
+                                  "IGAC")]
+    p.estudios = [e]
+    ctx, figuras = report_ctx.build(p)
+    assert ctx["estudios"][0]["titulo"] == "Estudio de suelos"
+    assert ctx["estudios_faltantes"] == ["nada"] and "estudio_t1_1" in figuras
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    sec = tex[tex.index(r"\section{Estudios previos}"):tex.index(r"\section{Proyección de población}")]
+    assert r"\subsection{Estudio de suelos}" in sec and r"\cite{igac2020}" in sec
+    assert r"\begin{longtable}" in sec and "figures/estudio_t1_1.png" in sec
+    assert r"\bibitem{igac2020}" in tex
+
+
+def test_sin_estudios_no_hay_seccion(tmp_path):
+    ctx, _ = report_ctx.build(_proyecto_minimo())
+    assert ctx["estudios"] == []
+    tex = (report.render(ctx, tmp_path) / "main.tex").read_text(encoding="utf-8")
+    assert r"\section{Estudios previos}" not in tex
